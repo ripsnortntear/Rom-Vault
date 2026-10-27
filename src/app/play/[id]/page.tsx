@@ -1097,7 +1097,7 @@ export default function EmulatorPlayPage(): React.ReactElement {
           <div className="bg-blue-950/40 border border-blue-500/20 rounded-xl p-3 text-left flex items-start gap-2.5 text-xs text-zinc-400">
             <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <strong className="text-zinc-300">Browser Note:</strong> WebGPU requires a secure context. Play over HTTPS (<code className="text-blue-300">https://www.oldsmarchaos.com/roms/</code>) or, if playing over direct local HTTP IP (<code className="text-zinc-300">192.168.0.43</code>), enable the Chrome/Edge flag <code className="text-amber-300">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.
+              <strong className="text-zinc-300">Browser Note:</strong> WebGPU requires a secure context. Play over HTTPS (e.g. <code className="text-blue-300">https://your-domain.com/roms/</code>) or, if testing over local development HTTP, enable the browser flag <code className="text-amber-300">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.
             </div>
           </div>
         </div>

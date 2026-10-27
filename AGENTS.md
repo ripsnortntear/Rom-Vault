@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Next.js 16 App Router — ROM Vault Project Guidelines
 
-ROM Vault (https://www.oldsmarchaos.com/roms) is a high-performance web-based retro gaming preservation portal and in-browser emulation system built with Next.js 16 (App Router), React 19, and TypeScript. All code must strictly match the versions and conventions defined in package.json, discarding legacy patterns from Next.js 13–15.
+ROM Vault (https://your-domain.com/roms) is a high-performance web-based retro gaming preservation portal and in-browser emulation system built with Next.js 16 (App Router), React 19, and TypeScript. All code must strictly match the versions and conventions defined in package.json, discarding legacy patterns from Next.js 13–15.
 
 ## 1. Project Overview & Architecture
 - Archive: >8,220 games across 15 retro platforms (~1.25 TB across Sony PS1/PS2, Nintendo NES–GCN, and Sega systems) paired with in-browser WebGL/WASM/WebAudio emulation, cloud-synchronized memory cards, and IGDB metadata enrichment.

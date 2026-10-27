@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     if (user.account_status === "suspended") {
       return NextResponse.json(
-        { error: "This account has been suspended. Please contact support@oldsmarchaos.com for assistance." },
+        { error: "This account has been suspended. Please contact an administrator for assistance." },
         { status: 403 }
       );
     }

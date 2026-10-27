@@ -1,10 +1,10 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.oldsmarchaos.com/roms";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com/roms";
 const SMTP_HOST = process.env.SMTP_HOST || "smtp.zoho.com";
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_SECURE = process.env.SMTP_SECURE === "true" || SMTP_PORT === 465;
-const SMTP_USER = process.env.SMTP_USER || "support@oldsmarchaos.com";
+const SMTP_USER = process.env.SMTP_USER || "support@your-domain.com";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || `"ROM Vault Support" <${SMTP_USER}>`;
 
@@ -52,7 +52,7 @@ This verification link will expire in 24 hours. If you did not create a ROM Vaul
 
 Best regards,
 The ROM Vault Team
-https://www.oldsmarchaos.com/roms
+${APP_URL}
 `;
 
   const html = `
@@ -92,7 +92,7 @@ https://www.oldsmarchaos.com/roms
       <p style="margin-top: 24px; font-size: 12px; color: #71717a;">This link is valid for 24 hours. If you did not create this account, please disregard this message.</p>
     </div>
     <div class="footer">
-      ROM Vault &bull; Multi-Console Retro Archive &bull; <a href="https://www.oldsmarchaos.com/roms" style="color: #ef4444; text-decoration: none;">oldsmarchaos.com/roms</a>
+      ROM Vault &bull; Multi-Console Retro Archive &bull; <a href="${APP_URL}" style="color: #ef4444; text-decoration: none;">ROM Vault</a>
     </div>
   </div>
 </body>
@@ -146,7 +146,7 @@ If you did not request this password reset, please ignore this email. Your passw
 
 Best regards,
 The ROM Vault Team
-https://www.oldsmarchaos.com/roms
+${APP_URL}
 `;
 
   const html = `
@@ -186,7 +186,7 @@ https://www.oldsmarchaos.com/roms
       <p style="margin-top: 24px; font-size: 12px; color: #71717a;">This link is valid for <strong>1 hour</strong>. If you did not make this request, you can safely ignore this email.</p>
     </div>
     <div class="footer">
-      ROM Vault &bull; Multi-Console Retro Archive &bull; <a href="https://www.oldsmarchaos.com/roms" style="color: #ef4444; text-decoration: none;">oldsmarchaos.com/roms</a>
+      ROM Vault &bull; Multi-Console Retro Archive &bull; <a href="${APP_URL}" style="color: #ef4444; text-decoration: none;">ROM Vault</a>
     </div>
   </div>
 </body>

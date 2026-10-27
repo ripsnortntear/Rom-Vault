@@ -1,27 +1,28 @@
-# Nintendo Vault (`retro-gaming-interface`)
+# ROM Vault (`retro-gaming-interface`)
 
-Full-stack Next.js retro gaming interface and in-browser NES emulator designed to run behind Nginx at `https://www.oldsmarchaos.com/roms` on port `39254`.
+High-performance retro gaming preservation portal and in-browser multi-console emulation platform built with Next.js 16 (App Router), React 19, and TypeScript. Designed to run behind an Nginx/Apache reverse proxy at `https://your-domain.com/roms` on port `39254`.
 
 ---
 
 ## Directory Layout on the Production Server
 
-Keep Nintendo ROMs and artwork inside `/var/www/html/roms/nintendo/` (or set `ROMS_DIR` and `ARTWORK_DIR` environment variables in `systemd`):
+Keep ROMs and multi-layer artwork inside `/mnt/storage/roms/` (or configure paths via environment variables):
 
 ```text
-/var/www/html/roms/
-├── nintendo/
+/mnt/storage/roms/
+├── psx/
 │   ├── artwork/
 │   │   ├── artwork_3d/
 │   │   ├── artwork_front/
 │   │   ├── logo/
-│   │   ├── medium_front/
 │   │   ├── screenshot/
-│   │   ├── screentitle/
 │   │   ├── story/
 │   │   └── video/
 │   └── roms/
-│       └── *.zip (721 NES ROM archives)
+│       └── *.chd (PlayStation disc archives)
+├── nintendo/
+│   ├── artwork/
+│   └── roms/
 ├── deploy/
 │   ├── install-ubuntu.sh
 │   ├── nginx-roms.conf
@@ -35,20 +36,20 @@ Keep Nintendo ROMs and artwork inside `/var/www/html/roms/nintendo/` (or set `RO
 
 ## Quick Production Setup on Ubuntu
 
-1. **Place your Nintendo `roms/` & `artwork/` folders in `/var/www/html/roms/nintendo/`**:
+1. **Configure Environment Variables**:
    ```bash
-   mkdir -p /var/www/html/roms/nintendo
+   cp .env.example .env.local
+   # Edit .env.local with your MariaDB credentials, SMTP settings, and session secret
+   nano .env.local
    ```
-   *(Place `roms` and `artwork` inside `/var/www/html/roms/nintendo/` so `/var/www/html/roms/nintendo/roms` and `/var/www/html/roms/nintendo/artwork` exist.)*
 
 2. **Run the automated installer script** (installs dependencies, builds Next.js, and registers/starts the `retro-gaming` systemd service on port `39254`):
    ```bash
-   cd /var/www/html/roms
    chmod +x deploy/install-ubuntu.sh
    ./deploy/install-ubuntu.sh
    ```
 
-3. **Add the Nginx reverse proxy block** to your `oldsmarchaos.com` site config:
+3. **Add the Nginx reverse proxy block** to your site configuration (e.g., `/etc/nginx/sites-available/your-domain.com`):
    ```nginx
    location ^~ /roms {
        proxy_pass http://127.0.0.1:39254;
@@ -64,6 +65,7 @@ Keep Nintendo ROMs and artwork inside `/var/www/html/roms/nintendo/` (or set `RO
        proxy_buffering off;
        proxy_read_timeout 300s;
        proxy_cache_bypass $http_upgrade;
+       client_max_body_size 0;
    }
    ```
    Then reload Nginx:
