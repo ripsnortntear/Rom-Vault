@@ -161,31 +161,39 @@ export default function EmulatorPlayPage(): React.ReactElement {
 
     // Block WebHID/WebUSB device grabs and neuter Gamepad vibration prototypes
     if (typeof window !== "undefined") {
-      if ("GamepadHapticActuator" in window) {
-        (window as unknown as { GamepadHapticActuator: unknown }).GamepadHapticActuator = undefined;
-      }
-      if (typeof Gamepad !== "undefined" && Gamepad.prototype) {
-        try {
-          Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
-            get: () => null,
-            configurable: true,
-          });
-          Object.defineProperty(Gamepad.prototype, "hapticActuators", {
-            get: () => [],
-            configurable: true,
-          });
-        } catch {}
-      }
-      if (typeof navigator !== "undefined") {
-        try {
-          if ("hid" in navigator) {
-            Object.defineProperty(navigator, "hid", { get: () => undefined, configurable: true });
-          }
-          if ("usb" in navigator) {
-            Object.defineProperty(navigator, "usb", { get: () => undefined, configurable: true });
-          }
-        } catch {}
-      }
+      try {
+        if ("GamepadHapticActuator" in window) {
+          try {
+            Object.defineProperty(window, "GamepadHapticActuator", {
+              value: undefined,
+              writable: true,
+              configurable: true,
+            });
+          } catch {}
+        }
+        if (typeof Gamepad !== "undefined" && Gamepad.prototype) {
+          try {
+            Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+              get: () => null,
+              configurable: true,
+            });
+            Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+              get: () => [],
+              configurable: true,
+            });
+          } catch {}
+        }
+        if (typeof navigator !== "undefined") {
+          try {
+            if ("hid" in navigator) {
+              Object.defineProperty(navigator, "hid", { get: () => undefined, configurable: true });
+            }
+            if ("usb" in navigator) {
+              Object.defineProperty(navigator, "usb", { get: () => undefined, configurable: true });
+            }
+          } catch {}
+        }
+      } catch {}
     }
 
     // 1. Sanitize stale localStorage settings left by previous runs so they don't corrupt retroarch core options

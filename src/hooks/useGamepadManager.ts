@@ -64,9 +64,17 @@ export function useGamepadManager({
   // Neutralize GamepadHapticActuator to prevent firmware trip across browser sessions
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if ("GamepadHapticActuator" in window) {
-      (window as unknown as { GamepadHapticActuator: unknown }).GamepadHapticActuator = undefined;
-    }
+    try {
+      if ("GamepadHapticActuator" in window) {
+        try {
+          Object.defineProperty(window, "GamepadHapticActuator", {
+            value: undefined,
+            writable: true,
+            configurable: true,
+          });
+        } catch {}
+      }
+    } catch {}
   }, []);
 
   // Frame polling loop

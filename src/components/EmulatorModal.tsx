@@ -37,22 +37,30 @@ export function EmulatorModal({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Neutralize GamepadHapticActuator / vibrationActuator to prevent firmware trip
-    if ("GamepadHapticActuator" in window) {
-      (window as unknown as { GamepadHapticActuator: unknown }).GamepadHapticActuator = undefined;
-    }
-    if (typeof Gamepad !== "undefined" && Gamepad.prototype) {
-      try {
-        Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
-          get: () => null,
-          configurable: true,
-        });
-        Object.defineProperty(Gamepad.prototype, "hapticActuators", {
-          get: () => [],
-          configurable: true,
-        });
-      } catch {}
-    }
+    try {
+      // Neutralize GamepadHapticActuator / vibrationActuator to prevent firmware trip
+      if ("GamepadHapticActuator" in window) {
+        try {
+          Object.defineProperty(window, "GamepadHapticActuator", {
+            value: undefined,
+            writable: true,
+            configurable: true,
+          });
+        } catch {}
+      }
+      if (typeof Gamepad !== "undefined" && Gamepad.prototype) {
+        try {
+          Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+            get: () => null,
+            configurable: true,
+          });
+          Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+            get: () => [],
+            configurable: true,
+          });
+        } catch {}
+      }
+    } catch {}
   }, []);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showFullscreenBars, setShowFullscreenBars] = useState<boolean>(false);
@@ -261,7 +269,7 @@ export function EmulatorModal({
 
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
   const playerUrl = `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName)}&system=${encodeURIComponent(game.system)}`;
-  const downloadUrl = `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1`;
+  const downloadUrl = activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
 
   const renderControls = () => {
     switch (game.system) {

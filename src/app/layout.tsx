@@ -37,11 +37,13 @@ export default function RootLayout({
   try {
     // 1. Strip Gamepad haptic actuators & rumble prototypes
     if ("GamepadHapticActuator" in window) {
-      Object.defineProperty(window, "GamepadHapticActuator", {
-        value: undefined,
-        writable: false,
-        configurable: true,
-      });
+      try {
+        Object.defineProperty(window, "GamepadHapticActuator", {
+          value: undefined,
+          writable: true,
+          configurable: true,
+        });
+      } catch (e) {}
     }
     if ("Gamepad" in window && window.Gamepad && window.Gamepad.prototype) {
       Object.defineProperty(window.Gamepad.prototype, "vibrationActuator", {
