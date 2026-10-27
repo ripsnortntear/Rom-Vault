@@ -22,6 +22,11 @@ declare global {
     EJS_sampleRate?: number;
     EJS_coreSettings?: Record<string, string>;
     EJS_defaultOptions?: Record<string, string>;
+    EJS_virtualGamepadSettings?: {
+      shoulders?: number;
+      buttonLabels?: Record<string, string>;
+      [key: string]: unknown;
+    };
     EJS_emulator?: {
       stop?: () => void;
       [key: string]: unknown;
@@ -112,7 +117,30 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       "pcsx_rearmed_cdfs_cache": "async",
       "pcsx_rearmed_async_cd": "sync",
       "pcsx_rearmed_memcard2": "disabled",
+      "input_player1_l_btn": "4",
+      "input_player1_r_btn": "5",
+      "input_player1_l2_btn": "6",
+      "input_player1_r2_btn": "7",
     };
+
+    // Enable secondary shoulder triggers (L2/R2) in the virtual controller configuration
+    if (game.system === "psx" || game.system === "ps1") {
+      window.EJS_virtualGamepadSettings = {
+        ...window.EJS_virtualGamepadSettings,
+        shoulders: 4, // Explicitly configure 4 shoulder buttons (L1, L2, R1, R2)
+        buttonLabels: {
+          ...window.EJS_virtualGamepadSettings?.buttonLabels,
+          b: "○",
+          a: "✕",
+          y: "△",
+          x: "□",
+          l: "L1",
+          r: "R1",
+          l2: "L2",
+          r2: "R2",
+        },
+      };
+    }
 
     // 5. Inject EmulatorJS loader cleanly (check local path or fallback to CDN)
     const localLoader = "/roms/emulatorjs/data/loader.js";
@@ -181,7 +209,94 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center bg-black">
+    <div
+      className={`relative w-full h-full flex flex-col items-center justify-center bg-black ${
+        game.system === "psx" || game.system === "ps1" ? "psx-touch-controls" : ""
+      }`}
+    >
+      <style>{`
+        /* PS1 Shoulder Buttons Styling & Ergonomic Placement */
+        .psx-touch-controls .ejs_button_l,
+        .psx-touch-controls .ejs_button_l2,
+        .psx-touch-controls .ejs_button_r,
+        .psx-touch-controls .ejs_button_r2,
+        .psx-touch-controls [data-button="l"],
+        .psx-touch-controls [data-button="l2"],
+        .psx-touch-controls [data-button="r"],
+        .psx-touch-controls [data-button="r2"] {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          font-weight: 800 !important;
+          font-size: 13px !important;
+          border-radius: 8px !important;
+          color: #e4e4e7 !important;
+          background-color: rgba(39, 39, 42, 0.6) !important;
+          border: 1px solid rgba(113, 113, 122, 0.5) !important;
+          backdrop-filter: blur(4px) !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          user-select: none !important;
+          touch-action: none !important;
+        }
+
+        /* Ergonomic Min Size & Proportions */
+        .psx-touch-controls .ejs_button_l,
+        .psx-touch-controls [data-button="l"],
+        .psx-touch-controls .ejs_button_l2,
+        .psx-touch-controls [data-button="l2"],
+        .psx-touch-controls .ejs_button_r,
+        .psx-touch-controls [data-button="r"],
+        .psx-touch-controls .ejs_button_r2,
+        .psx-touch-controls [data-button="r2"] {
+          min-width: 48px !important;
+          min-height: 34px !important;
+        }
+
+        /* Pressed States */
+        .psx-touch-controls .ejs_button_l:active,
+        .psx-touch-controls .ejs_button_l2:active,
+        .psx-touch-controls .ejs_button_r:active,
+        .psx-touch-controls .ejs_button_r2:active,
+        .psx-touch-controls [data-button="l"]:active,
+        .psx-touch-controls [data-button="l2"]:active,
+        .psx-touch-controls [data-button="r"]:active,
+        .psx-touch-controls [data-button="r2"]:active {
+          background-color: rgba(91, 141, 249, 0.5) !important;
+          border-color: #5b8df9 !important;
+        }
+
+        /* Explicit Button Content Labeling */
+        .psx-touch-controls .ejs_button_l::after,
+        .psx-touch-controls [data-button="l"]::after {
+          content: "L1" !important;
+        }
+        .psx-touch-controls .ejs_button_l2::after,
+        .psx-touch-controls [data-button="l2"]::after {
+          content: "L2" !important;
+        }
+        .psx-touch-controls .ejs_button_r::after,
+        .psx-touch-controls [data-button="r"]::after {
+          content: "R1" !important;
+        }
+        .psx-touch-controls .ejs_button_r2::after,
+        .psx-touch-controls [data-button="r2"]::after {
+          content: "R2" !important;
+        }
+
+        /* Hide fallback text if inner spans are injected */
+        .psx-touch-controls .ejs_button_l *,
+        .psx-touch-controls .ejs_button_l2 *,
+        .psx-touch-controls .ejs_button_r *,
+        .psx-touch-controls .ejs_button_r2 *,
+        .psx-touch-controls [data-button="l"] *,
+        .psx-touch-controls [data-button="l2"] *,
+        .psx-touch-controls [data-button="r"] *,
+        .psx-touch-controls [data-button="r2"] * {
+          display: none !important;
+        }
+      `}</style>
+
       {/* Top Navigation & Controls Header (rendered in standalone mobile view) */}
       {!isInIframe && (
         <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-3 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
