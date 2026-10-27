@@ -170,7 +170,27 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     }
   }, [game.system]);
 
+  // Listen for parent iframe messages (e.g. from modal wrapper)
   useEffect(() => {
+    const handleParentMessage = (e: MessageEvent) => {
+      if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
+        updatePadMode(true);
+      } else if (e.data?.type === "VAULT_SAVE_AND_EXIT") {
+        stopEmulator();
+        if (window.parent) {
+          window.parent.postMessage({ type: "VAULT_EXIT_READY" }, "*");
+        }
+      }
+    };
+
+    window.addEventListener("message", handleParentMessage);
+    return () => window.removeEventListener("message", handleParentMessage);
+  }, [bootState, updatePadMode, stopEmulator]);
+
+  // Strictly gate physical gamepad listeners until the emulator is actively running
+  useEffect(() => {
+    if (bootState !== "running") return;
+
     const handleGamepadConnected = (e: GamepadEvent) => {
       const pad = e.gamepad;
       if (pad && pad.axes && pad.axes.length >= 2) {
@@ -183,27 +203,14 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       updatePadMode(stillConnected);
     };
 
-    const handleParentMessage = (e: MessageEvent) => {
-      if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected) {
-        updatePadMode(true);
-      } else if (e.data?.type === "VAULT_SAVE_AND_EXIT") {
-        stopEmulator();
-        if (window.parent) {
-          window.parent.postMessage({ type: "VAULT_EXIT_READY" }, "*");
-        }
-      }
-    };
-
     window.addEventListener("gamepadconnected", handleGamepadConnected);
     window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
-    window.addEventListener("message", handleParentMessage);
 
     return () => {
       window.removeEventListener("gamepadconnected", handleGamepadConnected);
       window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
-      window.removeEventListener("message", handleParentMessage);
     };
-  }, [updatePadMode, stopEmulator]);
+  }, [bootState, updatePadMode]);
 
   const handleStartGame = () => {
     if (bootState !== "idle") return;

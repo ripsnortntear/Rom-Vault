@@ -1,5 +1,4 @@
 import "server-only";
-
 import { notFound } from "next/navigation";
 import type { Metadata, Viewport } from "next";
 import { getGameById } from "@/lib/scanner";
@@ -13,19 +12,29 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export async function generateMetadata(
-  props: PageProps<"/play/[id]">
-): Promise<Metadata> {
-  const { id } = await props.params;
+interface PlayPageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export async function generateMetadata({ params }: PlayPageProps): Promise<Metadata> {
+  const { id } = await params;
   const game = await getGameById(id);
-  if (!game) return { title: "Game Not Found | ROM Vault" };
+
+  if (!game) {
+    return { title: "Game Not Found | ROM Vault" };
+  }
+
+  const title = game.displayTitle || game.baseName;
   return {
-    title: `Playing ${game.displayTitle || game.baseName} | ROM Vault`,
+    title: `Playing ${title} (${game.system.toUpperCase()}) | ROM Vault`,
+    description: `Direct browser emulation for ${title} on ROM Vault.`,
   };
 }
 
-export default async function PlayPage(props: PageProps<"/play/[id]">) {
-  const { id } = await props.params;
+export default async function PlayPage({ params }: PlayPageProps) {
+  const { id } = await params;
   const game = await getGameById(id);
 
   if (!game) {
@@ -34,93 +43,84 @@ export default async function PlayPage(props: PageProps<"/play/[id]">) {
 
   return (
     <>
+      {/* 
+        SYNCHRONOUS ROOT SANITIZATION:
+        Executes immediately in initial HTML parser before React hydration 
+        or EmulatorJS can probe haptics/WebHID.
+      */}
       <script
         dangerouslySetInnerHTML={{
           __html: `
-(function() {
-  if (typeof window === "undefined") return;
-  try {
-    // 1. Freeze and wipe GamepadHapticActuator
-    window.GamepadHapticActuator = undefined;
-    if (window.Gamepad && window.Gamepad.prototype) {
-      Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
-        get: function() { return null; },
-        set: function() {},
-        configurable: false,
-        enumerable: false
-      });
-      Object.defineProperty(Gamepad.prototype, "hapticActuators", {
-        get: function() { return []; },
-        set: function() {},
-        configurable: false,
-        enumerable: false
-      });
-    }
-    if (navigator.getGamepads) {
-      const origGetGamepads = navigator.getGamepads.bind(navigator);
-      navigator.getGamepads = function() {
-        const pads = origGetGamepads();
-        if (pads) {
-          for (let i = 0; i < pads.length; i++) {
-            if (pads[i]) {
+            (function() {
               try {
-                Object.defineProperty(pads[i], "vibrationActuator", {
-                  get: () => null,
-                  set: () => {},
-                  configurable: false,
-                  enumerable: false
-                });
-                Object.defineProperty(pads[i], "hapticActuators", {
-                  get: () => [],
-                  set: () => {},
-                  configurable: false,
-                  enumerable: false
-                });
-              } catch(e) {}
-            }
-          }
-        }
-        return pads;
-      };
-    }
-    // 2. Kill WebHID and WebUSB device enumeration that resets XInput controllers
-    if (navigator.hid) {
-      navigator.hid.getDevices = () => Promise.resolve([]);
-      navigator.hid.requestDevice = () => Promise.reject(new Error("WebHID disabled"));
-    }
-    if (navigator.usb) {
-      navigator.usb.getDevices = () => Promise.resolve([]);
-      navigator.usb.requestDevice = () => Promise.reject(new Error("WebUSB disabled"));
-    }
-    if (navigator.vibrate) {
-      navigator.vibrate = () => false;
-    }
-    // 3. Suppress visibility/fullscreen rejections
-    window.addEventListener("unhandledrejection", function(e) {
-      var reason = e.reason;
-      if (
-        reason &&
-        (reason.name === "NotAllowedError" ||
-         reason.name === "SecurityError" ||
-         (reason.message && (
-           reason.message.indexOf("not visible") !== -1 ||
-           reason.message.indexOf("requestFullscreen") !== -1 ||
-           reason.message.indexOf("user gesture") !== -1
-         )))
-      ) {
-        e.preventDefault();
-      }
-    });
-  } catch(e) {}
-})();
+                // 1. Wipe GamepadHapticActuator
+                window.GamepadHapticActuator = undefined;
+
+                // 2. Lock Gamepad prototype getters
+                if (window.Gamepad && window.Gamepad.prototype) {
+                  Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+                    get: function() { return null; },
+                    set: function() {},
+                    configurable: false,
+                    enumerable: false
+                  });
+                  Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+                    get: function() { return []; },
+                    set: function() {},
+                    configurable: false,
+                    enumerable: false
+                  });
+                }
+
+                // 3. Patch navigator.getGamepads to sanitize returned pad objects
+                if (navigator.getGamepads) {
+                  const origGetGamepads = navigator.getGamepads.bind(navigator);
+                  navigator.getGamepads = function() {
+                    const pads = origGetGamepads();
+                    if (pads) {
+                      for (let i = 0; i < pads.length; i++) {
+                        const pad = pads[i];
+                        if (pad) {
+                          try {
+                            Object.defineProperty(pad, "vibrationActuator", {
+                              get: () => null,
+                              configurable: false
+                            });
+                            Object.defineProperty(pad, "hapticActuators", {
+                              get: () => [],
+                              configurable: false
+                            });
+                          } catch(e) {}
+                        }
+                      }
+                    }
+                    return pads;
+                  };
+                }
+
+                // 4. Neutralize WebHID, WebUSB, and navigator.vibrate
+                if (navigator.hid) {
+                  navigator.hid.getDevices = () => Promise.resolve([]);
+                  navigator.hid.requestDevice = () => Promise.reject(new Error("WebHID blocked"));
+                }
+                if (navigator.usb) {
+                  navigator.usb.getDevices = () => Promise.resolve([]);
+                  navigator.usb.requestDevice = () => Promise.reject(new Error("WebUSB blocked"));
+                }
+                if (navigator.vibrate) {
+                  navigator.vibrate = () => false;
+                }
+              } catch (e) {}
+            })();
           `,
         }}
       />
-      <main className="fixed inset-0 bg-black flex flex-col justify-center items-center overflow-hidden">
+
+      <main className="fixed inset-0 w-screen h-screen bg-black overflow-hidden flex flex-col">
         <MobileEmulatorView
           game={{
             id: game.id,
-            title: game.displayTitle,
+            title: game.displayTitle || game.baseName,
             system: game.system,
             romFileName: game.romFileName,
             discs: game.discs,
