@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User } from "lucide-react";
+import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User, Trophy, ShieldAlert } from "lucide-react";
 import type { CoverArtStyle, GameItem, LibraryStats } from "@/types/game";
 import { HeroSpotlight } from "@/components/HeroSpotlight";
 import {
@@ -558,6 +558,26 @@ export function RetroLibraryClient({
               <Shuffle className="w-3.5 h-3.5 text-red-400" />
               <span className="hidden sm:inline">Random Game</span>
             </button>
+
+            <a
+              href="/roms/leaderboards"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+              title="Community Leaderboards"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Leaderboards</span>
+            </a>
+
+            {currentUser?.role === "admin" && (
+              <a
+                href="/roms/admin"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 transition cursor-pointer"
+                title="Open Admin Dashboard"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden sm:inline">Admin</span>
+              </a>
+            )}
 
             {currentUser ? (
               <button

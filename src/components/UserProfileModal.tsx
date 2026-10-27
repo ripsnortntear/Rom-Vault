@@ -18,6 +18,8 @@ import {
   Plus,
   Edit2,
   Gamepad2,
+  Trophy,
+  ShieldAlert,
 } from "lucide-react";
 import type { UserMemoryCard } from "@/types/auth";
 
@@ -370,41 +372,62 @@ export function UserProfileModal({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-white/10 px-6 bg-zinc-950/40 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab("profile")}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition cursor-pointer ${
-              activeTab === "profile"
-                ? "border-red-500 text-white"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            Profile Details
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("cards")}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === "cards"
-                ? "border-red-500 text-white"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Gamepad2 className="w-3.5 h-3.5 text-red-400" />
-            <span>PS1 Memory Cards</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("password")}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition cursor-pointer ${
-              activeTab === "password"
-                ? "border-red-500 text-white"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            Security &amp; Password
-          </button>
+        <div className="flex flex-wrap items-center justify-between border-b border-white/10 px-6 bg-zinc-950/40 shrink-0 gap-2">
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => setActiveTab("profile")}
+              className={`py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition cursor-pointer ${
+                activeTab === "profile"
+                  ? "border-red-500 text-white"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Profile Details
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("cards")}
+              className={`py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "cards"
+                  ? "border-red-500 text-white"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <Gamepad2 className="w-3.5 h-3.5 text-red-400" />
+              <span>PS1 Memory Cards</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("password")}
+              className={`py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition cursor-pointer ${
+                activeTab === "password"
+                  ? "border-red-500 text-white"
+                  : "border-transparent text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Security &amp; Password
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 py-2 sm:py-0">
+            <a
+              href="/roms/leaderboards"
+              className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 border border-amber-500/30 flex items-center gap-1.5 transition"
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span>Leaderboards</span>
+            </a>
+            {isAdmin && (
+              <a
+                href="/roms/admin"
+                className="px-2.5 py-1 rounded-lg text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/40 flex items-center gap-1.5 transition"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>Admin Panel</span>
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Body */}

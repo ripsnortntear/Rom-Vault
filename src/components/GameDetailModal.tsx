@@ -14,6 +14,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
+import { GameSocialSection } from "@/components/community/GameSocialSection";
 
 interface GameDetailModalProps {
   game: GameItem | null;
@@ -395,6 +396,13 @@ export function GameDetailModal({
                   {game.story || "No story text available for this title."}
                 </div>
               </div>
+
+              {/* Community Ratings, High Scores & Comments */}
+              <GameSocialSection
+                gameId={game.id}
+                gameTitle={game.displayTitle}
+                system={game.system}
+              />
             </div>
 
             <div className="flex flex-col gap-3 pt-2 border-t border-white/10">

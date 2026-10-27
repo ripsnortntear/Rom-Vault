@@ -7,6 +7,7 @@ const SESSION_COOKIE_NAME = process.env.AUTH_SESSION_COOKIE_NAME || "rom_vault_s
 const PUBLIC_PREFIXES = [
   "/auth",
   "/api/auth",
+  "/scores",
   "/_next",
   "/favicon.ico",
 ];
@@ -56,7 +57,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 5. Build sanitized request headers with user context & pass-through streaming headers
+  // 5. Restrict admin routes strictly to users with administrator role
+  if (pathname.startsWith("/admin")) {
+    if (sessionData.role !== "admin") {
+      return new NextResponse("Forbidden: Administrator privileges required.", { status: 403 });
+    }
+  }
+
+  // 6. Build sanitized request headers with user context & pass-through streaming headers
   const requestHeaders = new Headers(request.headers);
   if (sessionData.userId) {
     requestHeaders.set("x-user-id", sessionData.userId);
