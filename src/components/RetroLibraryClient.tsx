@@ -334,7 +334,6 @@ export function RetroLibraryClient({
   }, []);
 
   const handlePlayGame = useCallback((game: GameItem): void => {
-    setPlayingGame(game);
     setRecentIds((prev) => {
       const next = [game.id, ...prev.filter((id) => id !== game.id)].slice(
         0,
@@ -347,6 +346,18 @@ export function RetroLibraryClient({
       }
       return next;
     });
+
+    // Detect mobile viewports (< 768px or coarse touch) to avoid dual-tree memory overhead
+    const isMobile =
+      typeof window !== "undefined" &&
+      (window.innerWidth < 768 || window.matchMedia("(pointer: coarse)").matches);
+
+    if (isMobile) {
+      window.location.assign(`/roms/play/${encodeURIComponent(game.id)}`);
+      return;
+    }
+
+    setPlayingGame(game);
   }, []);
 
   const handleShuffleFeatured = useCallback((): void => {

@@ -559,3 +559,20 @@ export function updateCachedGameMetadata(id: string, meta: Partial<GameItem>): v
     if (meta.story !== undefined && !game.story) game.story = meta.story;
   }
 }
+
+export async function getGameById(id: string): Promise<GameItem | null> {
+  const { games } = await scanGameLibrary();
+  const decodedId = decodeURIComponent(id);
+  const found = games.find(
+    (g) => g.id === id || g.id === decodedId || decodeURIComponent(g.id) === decodedId
+  );
+  if (found) return found;
+
+  const withoutPrefix = decodedId.includes("__")
+    ? decodedId.split("__").slice(1).join("__")
+    : decodedId;
+  const match = games.find(
+    (g) => g.baseName === withoutPrefix || g.romFileName === withoutPrefix
+  );
+  return match ?? null;
+}
