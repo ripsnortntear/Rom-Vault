@@ -96,6 +96,7 @@ export function EmulatorModal({
 
   const { connected: gamepadConnected, id: gamepadId, needsActivation: gamepadNeedsActivation } = useGamepadManager({
     enabled: Boolean(game),
+    deadzone: 0.15,
     onPoll: (pad) => {
       try {
         if (iframeRef.current && iframeRef.current.contentWindow) {

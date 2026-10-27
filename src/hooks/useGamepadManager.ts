@@ -9,6 +9,13 @@ export interface GamepadState {
   needsActivation: boolean;
 }
 
+export interface SanitizedGamepadAxes {
+  leftStick: { x: number; y: number };
+  rightStick: { x: number; y: number };
+  l3: boolean;
+  r3: boolean;
+}
+
 export interface UseGamepadManagerOptions {
   /**
    * Whether gamepad polling and event listeners should be active.
@@ -21,7 +28,7 @@ export interface UseGamepadManagerOptions {
    */
   onPoll?: (gamepad: Gamepad) => void;
   /**
-   * Fallback deadzone threshold for analog sticks [0.0 - 1.0]. Defaults to 0.1.
+   * Fallback deadzone threshold for analog sticks [0.0 - 1.0]. Defaults to 0.15.
    */
   deadzone?: number;
 }
@@ -29,7 +36,7 @@ export interface UseGamepadManagerOptions {
 export function useGamepadManager({
   enabled = true,
   onPoll,
-  deadzone = 0.1,
+  deadzone = 0.15,
 }: UseGamepadManagerOptions = {}) {
   const [controllerState, setControllerState] = useState<GamepadState>({
     connected: false,
@@ -236,16 +243,47 @@ export function useGamepadManager({
     };
   }, [enabled, getLiveGamepad]);
 
-  // Utility to map standard axes with deadzone filtering
+  // Utility to map standard axes with deadzone filtering & radial scaling
   const normalizeAxis = useCallback(
-    (value: number) => {
-      return Math.abs(value) < deadzone ? 0 : value;
+    (value: number, customDeadzone?: number): number => {
+      const dz = customDeadzone ?? deadzone;
+      const abs = Math.abs(value);
+      if (abs < dz) return 0;
+      // Rescale from [dz, 1.0] to [0.0, 1.0] to preserve full dynamic range
+      const sign = Math.sign(value);
+      const scaled = (abs - dz) / (1 - dz);
+      return Math.max(-1, Math.min(1, sign * scaled));
     },
     [deadzone]
+  );
+
+  // Pure digital/analog button & axis reads with L3/R3 extraction
+  const getSanitizedAxes = useCallback(
+    (pad: Gamepad): SanitizedGamepadAxes => {
+      const lx = pad.axes[0] ?? 0;
+      const ly = pad.axes[1] ?? 0;
+      const rx = pad.axes[2] ?? 0;
+      const ry = pad.axes[3] ?? 0;
+
+      return {
+        leftStick: {
+          x: normalizeAxis(lx, 0.15),
+          y: normalizeAxis(ly, 0.15),
+        },
+        rightStick: {
+          x: normalizeAxis(rx, 0.15),
+          y: normalizeAxis(ry, 0.15),
+        },
+        l3: Boolean(pad.buttons[10]?.pressed),
+        r3: Boolean(pad.buttons[11]?.pressed),
+      };
+    },
+    [normalizeAxis]
   );
 
   return {
     ...controllerState,
     normalizeAxis,
+    getSanitizedAxes,
   };
 }

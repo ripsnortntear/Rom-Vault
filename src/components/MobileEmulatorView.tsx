@@ -51,6 +51,18 @@ interface MobileEmulatorViewProps {
   };
 }
 
+function checkPhysicalGamepadConnected(): boolean {
+  if (typeof navigator === "undefined" || !navigator.getGamepads) return false;
+  try {
+    const pads = navigator.getGamepads();
+    return Array.from(pads).some(
+      (pad) => Boolean(pad && pad.connected && pad.axes && pad.axes.length >= 2)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -103,12 +115,22 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     window.EJS_sampleRate = 44100;
 
     // 4. PCSX ReARMed Dynamic Core Settings: Disable aggressive dynarec buffers and heavy shaders
+    const hasPhysicalController = checkPhysicalGamepadConnected();
+
     window.EJS_coreSettings = {
       pcsx_rearmed_cdfs_cache: "async",
       pcsx_rearmed_async_cd: "sync",
       pcsx_rearmed_drc: "enabled",
       pcsx_rearmed_neon_enhancement_enable: "disabled", // Drop high-overhead neon shaders
       pcsx_rearmed_neon_enhancement_no_main: "disabled",
+      ...(game.system === "psx" || game.system === "ps1"
+        ? {
+            // Switch port 1 from standard digital pad to DualShock when controller is attached
+            pcsx_rearmed_pad1type: hasPhysicalController ? "dualshock" : "standard",
+            // Map left analog stick to D-Pad for digital-only games
+            pcsx_rearmed_analog_to_digital: hasPhysicalController ? "left_analog" : "disabled",
+          }
+        : {}),
     };
 
     window.EJS_defaultOptions = {
@@ -121,7 +143,75 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       "input_player1_r_btn": "5",
       "input_player1_l2_btn": "6",
       "input_player1_r2_btn": "7",
+      "input_player1_l3_btn": "10",
+      "input_player1_r3_btn": "11",
+      ...(game.system === "psx" || game.system === "ps1"
+        ? {
+            "input_player1_analog_dpad_mode": hasPhysicalController ? "1" : "0",
+            "input_libretro_device_p1": hasPhysicalController ? "5" : "1",
+          }
+        : {}),
     };
+
+    // Dynamic runtime gamepad connection hook
+    const updatePadMode = (connected: boolean) => {
+      if (game.system !== "psx" && game.system !== "ps1") return;
+
+      if (window.EJS_coreSettings) {
+        window.EJS_coreSettings.pcsx_rearmed_pad1type = connected ? "dualshock" : "standard";
+        window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = connected ? "left_analog" : "disabled";
+      }
+
+      if (window.EJS_defaultOptions) {
+        window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = connected ? "1" : "0";
+        window.EJS_defaultOptions["input_libretro_device_p1"] = connected ? "5" : "1";
+      }
+
+      const emu = window.EJS_emulator;
+      if (emu) {
+        try {
+          if (typeof emu.setCoreSetting === "function") {
+            emu.setCoreSetting("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
+            emu.setCoreSetting("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+          }
+          if (emu.gameManager) {
+            const gm = emu.gameManager as Record<string, unknown>;
+            if (typeof gm.setOption === "function") {
+              (gm.setOption as (k: string, v: string) => void)("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
+              (gm.setOption as (k: string, v: string) => void)("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+              (gm.setOption as (k: string, v: string) => void)("input_player1_analog_dpad_mode", connected ? "1" : "0");
+              (gm.setOption as (k: string, v: string) => void)("input_libretro_device_p1", connected ? "5" : "1");
+            }
+            if (typeof gm.setVariable === "function") {
+              (gm.setVariable as (k: string, v: string) => void)("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
+              (gm.setVariable as (k: string, v: string) => void)("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+            }
+          }
+        } catch {}
+      }
+    };
+
+    const handleGamepadConnected = (e: GamepadEvent) => {
+      const pad = e.gamepad;
+      if (pad && pad.axes && pad.axes.length >= 2) {
+        updatePadMode(true);
+      }
+    };
+
+    const handleGamepadDisconnected = () => {
+      const stillConnected = checkPhysicalGamepadConnected();
+      updatePadMode(stillConnected);
+    };
+
+    const handleParentMessage = (e: MessageEvent) => {
+      if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected) {
+        updatePadMode(true);
+      }
+    };
+
+    window.addEventListener("gamepadconnected", handleGamepadConnected);
+    window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
+    window.addEventListener("message", handleParentMessage);
 
     // Enable secondary shoulder triggers (L2/R2) in the virtual controller configuration
     if (game.system === "psx" || game.system === "ps1") {
@@ -177,6 +267,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       });
 
     return () => {
+      window.removeEventListener("gamepadconnected", handleGamepadConnected);
+      window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
+      window.removeEventListener("message", handleParentMessage);
       script.remove();
       if (window.EJS_emulator?.stop) {
         try {
