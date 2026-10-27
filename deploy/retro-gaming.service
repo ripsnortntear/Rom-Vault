@@ -1,0 +1,17 @@
+[Unit]
+Description=ROM Vault Retro Gaming Interface (Next.js on port 39254)
+After=network.target
+
+[Service]
+Type=simple
+User=cfw34683
+WorkingDirectory=/var/www/html/roms
+Environment=NODE_ENV=production
+Environment=PORT=39254
+Environment=STORAGE_ROOT=/mnt/storage/roms
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
