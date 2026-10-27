@@ -11,7 +11,7 @@ import type { AuthSession } from "@/types/auth";
 export async function requireUser(): Promise<AuthSession["user"]> {
   const session = await getCurrentSession();
   if (!session || !session.user) {
-    redirect("/roms/auth/login");
+    redirect("/auth/login");
   }
   return session.user;
 }

@@ -20,6 +20,7 @@ export interface VerifiedSessionData {
   token: string;
   userId?: string;
   role?: "admin" | "user";
+  username?: string;
 }
 
 // In-memory LRU verification cache for ultra-fast Range requests (e.g. ROM chunk streaming)
@@ -30,12 +31,14 @@ const CACHE_TTL_MS = 60 * 1000; // 60 seconds
  * Sign a token using HMAC-SHA256 (compatible with Edge and Node.js runtimes).
  */
 export async function signSessionValue(
-  tokenOrPayload: string | { userId: string; role: "admin" | "user"; token: string }
+  tokenOrPayload: string | { userId: string; role: "admin" | "user"; token: string; username?: string }
 ): Promise<string> {
   const payloadStr =
     typeof tokenOrPayload === "string"
       ? tokenOrPayload
-      : `${tokenOrPayload.userId}:${tokenOrPayload.role}:${tokenOrPayload.token}`;
+      : `${tokenOrPayload.userId}:${tokenOrPayload.role}:${tokenOrPayload.token}${
+          tokenOrPayload.username ? `:${tokenOrPayload.username}` : ""
+        }`;
 
   const enc = new TextEncoder();
   const key = await getHmacKey();
@@ -89,11 +92,16 @@ export async function verifySessionTokenFast(
 
     let result: VerifiedSessionData;
     if (payload.includes(":")) {
-      const [userId, role, token] = payload.split(":");
+      const parts = payload.split(":");
+      const userId = parts[0];
+      const role = parts[1];
+      const token = parts[2];
+      const username = parts[3];
       result = {
         token: token || payload,
         userId: userId || undefined,
-        role: (role === "admin" ? "admin" : "user"),
+        role: role === "admin" ? "admin" : "user",
+        username: username || undefined,
       };
     } else {
       result = { token: payload };

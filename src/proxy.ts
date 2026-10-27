@@ -15,56 +15,93 @@ const PUBLIC_PREFIXES = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Handle redundant /roms/ prefix if triggered by legacy or external reverse-proxy paths
-  if (pathname.startsWith("/roms/")) {
-    const cleanUrl = request.nextUrl.clone();
-    cleanUrl.pathname = pathname.replace(/^\/roms/, "");
-    return NextResponse.redirect(cleanUrl);
-  }
-
-  // 2. Allow public authentication routes, static assets, and preflight CORS requests
-  const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  // 1. Allow public authentication routes, static assets, and preflight CORS requests
+  const isPublic = PUBLIC_PREFIXES.some(
+    (prefix) => pathname.startsWith(prefix) || pathname.startsWith(`/roms${prefix}`)
+  );
   if (isPublic || request.method === "OPTIONS") {
     return NextResponse.next();
   }
 
-  // 3. Fast-path HMAC-SHA256 session verification without hitting the database
-  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME);
-  let sessionData: { token: string; userId?: string; role?: "admin" | "user" } | null = null;
+  // 2. Identify administrative protected paths
+  const isAdminPath = pathname.startsWith("/admin") || pathname.startsWith("/roms/admin");
 
-  if (sessionCookie?.value) {
-    sessionData = await verifySessionTokenFast(sessionCookie.value);
-  }
+  // Helper to construct Stage 1 307 login redirect preserving target path
+  const buildLoginRedirect = (shouldClearCookies = false) => {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/auth/login";
 
-  // 4. Block or redirect unauthenticated requests
-  if (!sessionData) {
+    // Normalize attempted target path ensuring /roms base path is preserved
+    const targetPath = pathname.startsWith("/roms")
+      ? pathname
+      : `/roms${pathname === "/" ? "" : pathname}`;
+    const returnPath = targetPath + (request.nextUrl.search || "");
+
+    if (returnPath && returnPath !== "/roms" && !returnPath.startsWith("/roms/auth")) {
+      loginUrl.searchParams.set("redirect", returnPath);
+    }
+
+    const response = NextResponse.redirect(loginUrl, 307);
+    if (shouldClearCookies) {
+      response.cookies.delete("session_token");
+      response.cookies.delete(SESSION_COOKIE_NAME);
+      response.cookies.delete("rom_vault_session");
+    }
+    return response;
+  };
+
+  // 3. Stage 1: Authentication Check (Login Redirect)
+  // Check session cookie across supported parameter names
+  const sessionCookie =
+    request.cookies.get("session_token") ||
+    request.cookies.get(SESSION_COOKIE_NAME) ||
+    request.cookies.get("rom_vault_session");
+
+  const rawToken = sessionCookie?.value;
+
+  // If cookie is missing or empty -> redirect to login
+  if (!rawToken) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: "Authentication required to access the ROM Vault library." },
         { status: 401 }
       );
     }
-
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/auth/login";
-    let returnPath = pathname + (request.nextUrl.search || "");
-    if (returnPath.startsWith("/roms/")) {
-      returnPath = returnPath.replace(/^\/roms/, "");
-    }
-    if (returnPath && returnPath !== "/" && !returnPath.startsWith("/auth")) {
-      loginUrl.searchParams.set("redirect", returnPath);
-    }
-    return NextResponse.redirect(loginUrl);
+    return buildLoginRedirect(false);
   }
 
-  // 5. Restrict admin routes strictly to users with administrator role
-  if (pathname.startsWith("/admin")) {
+  // Cryptographically validate the session token
+  const sessionData = await verifySessionTokenFast(rawToken);
+
+  // If signature verification fails (corrupted, tampered, or expired) -> clear cookie & redirect
+  if (!sessionData) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "Invalid or expired session token." },
+        { status: 401 }
+      );
+    }
+    return buildLoginRedirect(true);
+  }
+
+  // 4. Stage 2: Authorization Check (Role Enforcement)
+  // Reaching this point guarantees the user has a cryptographically verified identity
+  if (isAdminPath) {
     if (sessionData.role !== "admin") {
-      return new NextResponse("Forbidden: Administrator privileges required.", { status: 403 });
+      return new NextResponse(
+        JSON.stringify({
+          error: "Forbidden",
+          message: "Administrator privileges required to access this resource.",
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
   }
 
-  // 6. Build sanitized request headers with user context & pass-through streaming headers
+  // 5. Stage 3: Downstream Context Pass-Through
   const requestHeaders = new Headers(request.headers);
   if (sessionData.userId) {
     requestHeaders.set("x-user-id", sessionData.userId);
@@ -72,7 +109,21 @@ export async function proxy(request: NextRequest) {
   if (sessionData.role) {
     requestHeaders.set("x-user-role", sessionData.role);
   }
+  if (sessionData.username) {
+    requestHeaders.set("x-user-username", sessionData.username);
+  }
   requestHeaders.set("x-session-token", sessionData.token);
+
+  // Ensure downstream Server Components read the session under all alias cookie names
+  const existingCookieHeader = request.headers.get("cookie") || "";
+  if (!existingCookieHeader.includes("rom_vault_session=") && rawToken) {
+    requestHeaders.set(
+      "cookie",
+      existingCookieHeader
+        ? `${existingCookieHeader}; rom_vault_session=${rawToken}`
+        : `rom_vault_session=${rawToken}`
+    );
+  }
 
   // Preserve critical HTTP Range headers explicitly
   const range = request.headers.get("range");

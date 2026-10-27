@@ -134,7 +134,10 @@ export async function revokeAllUserSessions(userId: string): Promise<void> {
 export async function getCurrentSession(): Promise<AuthSession | null> {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+    const sessionCookie =
+      cookieStore.get("session_token") ||
+      cookieStore.get(SESSION_COOKIE_NAME) ||
+      cookieStore.get("rom_vault_session");
     if (!sessionCookie?.value) {
       return null;
     }
