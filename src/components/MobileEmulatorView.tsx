@@ -10,6 +10,8 @@ declare global {
     EJS_gameName?: string;
     EJS_gameUrl?: string;
     EJS_pathtodata?: string;
+    EJS_language?: string;
+    EJS_disableAutoLang?: boolean;
     EJS_startOnLoaded?: boolean;
     EJS_fullscreenOnLoad?: boolean;
     EJS_rumble?: boolean;
@@ -221,6 +223,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_gameName = game.title;
         window.EJS_gameUrl = streamUrl;
         window.EJS_pathtodata = "/roms/emulatorjs/data/";
+        window.EJS_language = "en-US";
+        window.EJS_disableAutoLang = true;
 
         // Deterministic Auto-Start: EmulatorJS starts on load because we already captured user gesture
         window.EJS_startOnLoaded = true;
