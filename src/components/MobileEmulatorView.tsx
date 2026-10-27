@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Maximize2, Disc3 } from "lucide-react";
+import { ArrowLeft, Maximize2, Disc3, Play } from "lucide-react";
 
 declare global {
   interface Window {
@@ -69,6 +69,54 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedDiscIndex, setSelectedDiscIndex] = useState<number>(0);
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
+  const [hasStarted, setHasStarted] = useState<boolean>(false);
+
+  const handleStartEmulation = () => {
+    setHasStarted(true);
+
+    // 1. Resume AudioContext if suspended
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        const tempCtx = new AudioCtx();
+        if (tempCtx.state === "suspended") {
+          tempCtx.resume();
+        }
+      }
+    } catch {}
+
+    // 2. Trigger EmulatorJS startup
+    try {
+      const emu = window.EJS_emulator as Record<string, unknown> | undefined;
+      if (emu) {
+        if (typeof emu.start === "function") {
+          (emu.start as () => void)();
+        } else if (typeof emu.play === "function") {
+          (emu.play as () => void)();
+        } else if (
+          emu.gameManager &&
+          typeof (emu.gameManager as Record<string, unknown>).start === "function"
+        ) {
+          ((emu.gameManager as Record<string, unknown>).start as () => void)();
+        }
+      }
+
+      // Also trigger any internal start button EmulatorJS created
+      const startBtn =
+        document.getElementById("ejs_start_button") ||
+        document.querySelector<HTMLElement>(".ejs_start_btn") ||
+        document.querySelector<HTMLElement>("#ejs_parent button") ||
+        document.querySelector<HTMLElement>("#mobile-emulator-container button");
+
+      if (startBtn && typeof startBtn.click === "function") {
+        startBtn.click();
+      }
+    } catch (err) {
+      console.warn("Failed to trigger emulator start:", err);
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -282,6 +330,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   }, [game.id, game.system]);
 
   useEffect(() => {
+    setHasStarted(false);
+    setLoadState("loading");
     const discNum = activeDisc ? activeDisc.discNumber : undefined;
     const fileName = activeDisc ? activeDisc.fileName : game.romFileName;
     return initEmulator(discNum, fileName);
@@ -388,6 +438,29 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         .psx-touch-controls [data-button="r2"] * {
           display: none !important;
         }
+
+        /* Ensure EmulatorJS canvas mount is centered without horizontal shift */
+        #mobile-emulator-container {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: 100% !important;
+          height: 100% !important;
+          position: relative !important;
+          margin: 0 auto !important;
+        }
+
+        #mobile-emulator-container > div,
+        #mobile-emulator-container #ejs_parent,
+        #mobile-emulator-container canvas {
+          margin: 0 auto !important;
+        }
+
+        /* Suppress internal EmulatorJS start button in favor of dead-centered prompt */
+        #mobile-emulator-container #ejs_start_button,
+        #mobile-emulator-container .ejs_start_btn {
+          display: none !important;
+        }
       `}</style>
 
       {/* Top Navigation & Controls Header (rendered in standalone mobile view) */}
@@ -436,35 +509,68 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         </div>
       )}
 
-      {/* Primary Emulator Mount Point */}
-      <div
-        id="mobile-emulator-container"
-        ref={containerRef}
-        className="w-full h-full flex items-center justify-center bg-black"
-      />
+      {/* Dedicated Isolated Viewport Sub-Container with Exact Relative Anchoring */}
+      <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+        {/* Dedicated Emulator Canvas Mount */}
+        <div
+          id="mobile-emulator-container"
+          ref={containerRef}
+          className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden"
+        />
 
-      {/* Loading Overlay */}
-      {loadState === "loading" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-40 text-center px-4">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-          <p className="text-sm font-medium text-zinc-200">Initializing Mobile WASM Engine...</p>
-          <p className="text-xs text-zinc-500 mt-1">Applying 1x Native Canvas Resolution</p>
-        </div>
-      )}
+        {/* Loading Overlay */}
+        {loadState === "loading" && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/90 text-center px-4">
+            <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm font-medium text-zinc-200">Initializing Mobile WASM Engine...</p>
+            <p className="text-xs text-zinc-500 mt-1">Applying 1x Native Canvas Resolution</p>
+          </div>
+        )}
 
-      {/* Error Boundary Overlay */}
-      {loadState === "error" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-40 text-center px-6">
-          <p className="text-sm font-semibold text-rose-400 mb-2">Emulation Crash Averted</p>
-          <p className="text-xs text-zinc-400 mb-4">{errorMessage}</p>
-          <Link
-            className="text-xs px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-md font-semibold transition"
-            href="/roms"
-          >
-            Return to Library
-          </Link>
-        </div>
-      )}
+        {/* Pre-launch Interaction Shield & Start Prompt */}
+        {loadState === "ready" && !hasStarted && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm p-4 text-center">
+            <div className="flex flex-col items-center justify-center max-w-sm w-full mx-auto space-y-4">
+              {/* Game System / Disc Info */}
+              <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                {game.system.toUpperCase()} • Ready to Launch
+              </div>
+
+              <h3 className="text-lg font-bold text-zinc-100 truncate max-w-full">
+                {game.title}
+              </h3>
+
+              {/* Centered Start Button */}
+              <button
+                type="button"
+                onClick={handleStartEmulation}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-sm tracking-wide shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>Start Game</span>
+              </button>
+
+              <p className="text-xs text-zinc-500">
+                Tap to initialize audio and hardware controls
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Error Boundary Overlay */}
+        {loadState === "error" && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/95 text-center px-6">
+            <p className="text-sm font-semibold text-rose-400 mb-2">Emulation Crash Averted</p>
+            <p className="text-xs text-zinc-400 mb-4">{errorMessage}</p>
+            <Link
+              className="text-xs px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-md font-semibold transition"
+              href="/roms"
+            >
+              Return to Library
+            </Link>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
