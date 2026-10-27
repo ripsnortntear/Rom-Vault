@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/api/auth",
   "/scores",
+  "/emulatorjs",
   "/_next",
   "/favicon.ico",
 ];
