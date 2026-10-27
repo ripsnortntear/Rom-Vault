@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User } from "lucide-react";
 import type { CoverArtStyle, GameItem, LibraryStats } from "@/types/game";
@@ -13,6 +14,7 @@ import {
 import { GameCard } from "@/components/GameCard";
 import { GameDetailModal } from "@/components/GameDetailModal";
 import { EmulatorModal } from "@/components/EmulatorModal";
+import { EmulatorErrorBoundary } from "@/components/EmulatorErrorBoundary";
 import { UserProfileModal } from "@/components/UserProfileModal";
 
 interface RetroLibraryClientProps {
@@ -43,14 +45,56 @@ export function RetroLibraryClient({
   initialGames,
   stats,
 }: RetroLibraryClientProps): React.ReactElement {
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedSystem, setSelectedSystem] = useState<SystemFilter>("ALL");
-  const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
-  const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
-  const [coverStyle, setCoverStyle] = useState<CoverArtStyle>("artwork_front");
-  const [collectionFilter, setCollectionFilter] =
-    useState<CollectionFilter>("all");
-  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const searchParams = useSearchParams();
+
+  // Read initial filter values from URL parameters
+  const initialSystem = useMemo<SystemFilter>(() => {
+    const sys = searchParams?.get("system");
+    if (sys) {
+      const lower = sys.toLowerCase();
+      if (lower in (stats.systems ?? {}) || lower === "all") {
+        return lower === "all" ? "ALL" : (lower as SystemFilter);
+      }
+    }
+    return "ALL";
+  }, [searchParams, stats.systems]);
+
+  const initialSearch = useMemo<string>(() => {
+    return searchParams?.get("q") || searchParams?.get("search") || "";
+  }, [searchParams]);
+
+  const initialLetter = useMemo<string>(() => {
+    return searchParams?.get("letter") || "ALL";
+  }, [searchParams]);
+
+  const initialRegion = useMemo<string>(() => {
+    return searchParams?.get("region") || "ALL";
+  }, [searchParams]);
+
+  const initialCollection = useMemo<CollectionFilter>(() => {
+    const col = searchParams?.get("collection");
+    if (col === "favorites" || col === "recent") return col;
+    return "all";
+  }, [searchParams]);
+
+  const initialCoverStyle = useMemo<CoverArtStyle>(() => {
+    const s = searchParams?.get("style") as CoverArtStyle;
+    if (s === "artwork_3d" || s === "medium_front" || s === "screentitle") return s;
+    return "artwork_front";
+  }, [searchParams]);
+
+  const initialLimit = useMemo<number>(() => {
+    const l = searchParams?.get("limit");
+    return l ? parseInt(l, 10) || PAGE_SIZE : PAGE_SIZE;
+  }, [searchParams]);
+
+  const [searchQuery, setSearchQuery] = useState<string>(initialSearch);
+  const [selectedSystem, setSelectedSystem] = useState<SystemFilter>(initialSystem);
+  const [selectedLetter, setSelectedLetter] = useState<string>(initialLetter);
+  const [selectedRegion, setSelectedRegion] = useState<string>(initialRegion);
+  const [coverStyle, setCoverStyle] = useState<CoverArtStyle>(initialCoverStyle);
+  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>(initialCollection);
+  const [visibleCount, setVisibleCount] = useState<number>(initialLimit);
 
   const [favorites, setFavorites] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
@@ -86,6 +130,87 @@ export function RetroLibraryClient({
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
+  // Synchronize active filters bidirectionally with URL search parameters
+  const syncUrlParams = useCallback(
+    (updates: {
+      system?: SystemFilter;
+      q?: string;
+      letter?: string;
+      region?: string;
+      collection?: CollectionFilter;
+      style?: CoverArtStyle;
+      limit?: number;
+    }) => {
+      if (typeof window === "undefined") return;
+
+      const currentParams = new URLSearchParams(window.location.search);
+
+      if (updates.system !== undefined) {
+        if (updates.system === "ALL") {
+          currentParams.delete("system");
+        } else {
+          currentParams.set("system", updates.system);
+        }
+      }
+
+      if (updates.q !== undefined) {
+        const trimmed = updates.q.trim();
+        if (!trimmed) {
+          currentParams.delete("q");
+          currentParams.delete("search");
+        } else {
+          currentParams.set("q", trimmed);
+          currentParams.delete("search");
+        }
+      }
+
+      if (updates.letter !== undefined) {
+        if (updates.letter === "ALL") {
+          currentParams.delete("letter");
+        } else {
+          currentParams.set("letter", updates.letter);
+        }
+      }
+
+      if (updates.region !== undefined) {
+        if (updates.region === "ALL") {
+          currentParams.delete("region");
+        } else {
+          currentParams.set("region", updates.region);
+        }
+      }
+
+      if (updates.collection !== undefined) {
+        if (updates.collection === "all") {
+          currentParams.delete("collection");
+        } else {
+          currentParams.set("collection", updates.collection);
+        }
+      }
+
+      if (updates.style !== undefined) {
+        if (updates.style === "artwork_front") {
+          currentParams.delete("style");
+        } else {
+          currentParams.set("style", updates.style);
+        }
+      }
+
+      if (updates.limit !== undefined) {
+        if (updates.limit <= PAGE_SIZE) {
+          currentParams.delete("limit");
+        } else {
+          currentParams.set("limit", updates.limit.toString());
+        }
+      }
+
+      const queryString = currentParams.toString();
+      const newUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+      window.history.replaceState(null, "", newUrl);
+    },
+    []
+  );
+
   useEffect(() => {
     try {
       const savedFavs = localStorage.getItem(FAVORITES_STORAGE_KEY);
@@ -96,26 +221,102 @@ export function RetroLibraryClient({
       if (savedRecent) {
         setRecentIds(JSON.parse(savedRecent) as string[]);
       }
-
-      // Read initial system or search filter from URL if present
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const sysParam = params.get("system");
-        if (sysParam) {
-          const lower = sysParam.toLowerCase();
-          if (lower in stats.systems || lower === "all") {
-            setSelectedSystem(lower === "all" ? "ALL" : (lower as SystemFilter));
-          }
-        }
-        const searchParam = params.get("q") || params.get("search");
-        if (searchParam) {
-          setSearchQuery(searchParam);
-        }
-      }
     } catch (error) {
       console.error("[RetroLibraryClient] Failed reading localStorage:", error);
     }
+  }, []);
+
+  // Update component filter state if browser navigates back/forward
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const sys = params.get("system");
+      if (sys) {
+        const lower = sys.toLowerCase();
+        if (lower in (stats.systems ?? {}) || lower === "all") {
+          setSelectedSystem(lower === "all" ? "ALL" : (lower as SystemFilter));
+        }
+      } else {
+        setSelectedSystem("ALL");
+      }
+      setSearchQuery(params.get("q") || params.get("search") || "");
+      setSelectedLetter(params.get("letter") || "ALL");
+      setSelectedRegion(params.get("region") || "ALL");
+      setCollectionFilter((params.get("collection") as CollectionFilter) || "all");
+      setCoverStyle((params.get("style") as CoverArtStyle) || "artwork_front");
+      const limit = params.get("limit");
+      if (limit) setVisibleCount(parseInt(limit, 10) || PAGE_SIZE);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, [stats.systems]);
+
+  const handleSearchChange = useCallback(
+    (val: string) => {
+      setSearchQuery(val);
+      syncUrlParams({ q: val });
+    },
+    [syncUrlParams]
+  );
+
+  const handleSystemChange = useCallback(
+    (sys: SystemFilter) => {
+      setSelectedSystem(sys);
+      setVisibleCount(PAGE_SIZE);
+      syncUrlParams({ system: sys, limit: PAGE_SIZE });
+    },
+    [syncUrlParams]
+  );
+
+  const handleLetterChange = useCallback(
+    (letter: string) => {
+      setSelectedLetter(letter);
+      syncUrlParams({ letter });
+    },
+    [syncUrlParams]
+  );
+
+  const handleRegionChange = useCallback(
+    (region: string) => {
+      setSelectedRegion(region);
+      syncUrlParams({ region });
+    },
+    [syncUrlParams]
+  );
+
+  const handleCoverStyleChange = useCallback(
+    (style: CoverArtStyle) => {
+      setCoverStyle(style);
+      syncUrlParams({ style });
+    },
+    [syncUrlParams]
+  );
+
+  const handleCollectionFilterChange = useCallback(
+    (col: CollectionFilter) => {
+      setCollectionFilter(col);
+      syncUrlParams({ collection: col });
+    },
+    [syncUrlParams]
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedSystem("ALL");
+    setSelectedLetter("ALL");
+    setSelectedRegion("ALL");
+    setCollectionFilter("all");
+    setVisibleCount(PAGE_SIZE);
+    syncUrlParams({
+      q: "",
+      system: "ALL",
+      letter: "ALL",
+      region: "ALL",
+      collection: "all",
+      limit: PAGE_SIZE,
+    });
+  }, [syncUrlParams]);
 
   const toggleFavorite = useCallback((gameId: string): void => {
     setFavorites((prev) => {
@@ -386,19 +587,19 @@ export function RetroLibraryClient({
 
         <FilterBar
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={handleSearchChange}
           selectedSystem={selectedSystem}
-          onSystemChange={setSelectedSystem}
+          onSystemChange={handleSystemChange}
           systemCounts={stats.systems ?? {}}
           selectedLetter={selectedLetter}
-          onLetterChange={setSelectedLetter}
+          onLetterChange={handleLetterChange}
           selectedRegion={selectedRegion}
-          onRegionChange={setSelectedRegion}
+          onRegionChange={handleRegionChange}
           availableRegions={availableRegions}
           coverStyle={coverStyle}
-          onCoverStyleChange={setCoverStyle}
+          onCoverStyleChange={handleCoverStyleChange}
           collectionFilter={collectionFilter}
-          onCollectionFilterChange={setCollectionFilter}
+          onCollectionFilterChange={handleCollectionFilterChange}
           totalFiltered={filteredGames.length}
           totalLibrary={initialGames.length}
           favoritesCount={favorites.length}
@@ -417,13 +618,7 @@ export function RetroLibraryClient({
             </p>
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedSystem("ALL");
-                setSelectedLetter("ALL");
-                setSelectedRegion("ALL");
-                setCollectionFilter("all");
-              }}
+              onClick={handleResetFilters}
               className="mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white transition cursor-pointer"
             >
               Reset All Filters
@@ -452,11 +647,13 @@ export function RetroLibraryClient({
               >
                 <button
                   type="button"
-                  onClick={() =>
-                    setVisibleCount((prev) =>
-                      Math.min(prev + PAGE_SIZE, filteredGames.length)
-                    )
-                  }
+                  onClick={() => {
+                    setVisibleCount((prev) => {
+                      const next = Math.min(prev + PAGE_SIZE, filteredGames.length);
+                      syncUrlParams({ limit: next });
+                      return next;
+                    });
+                  }}
                   className="px-6 py-2.5 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10 transition cursor-pointer"
                 >
                   Load More ({filteredGames.length - visibleCount} remaining)
@@ -479,10 +676,16 @@ export function RetroLibraryClient({
       />
 
       {playingGame && (
-        <EmulatorModal
-          game={playingGame}
-          onClose={() => setPlayingGame(null)}
-        />
+        <EmulatorErrorBoundary
+          onReset={() => setPlayingGame(null)}
+          gameTitle={playingGame.displayTitle}
+          downloadUrl={playingGame.media.rom ? `${playingGame.media.rom}&download=1` : undefined}
+        >
+          <EmulatorModal
+            game={playingGame}
+            onClose={() => setPlayingGame(null)}
+          />
+        </EmulatorErrorBoundary>
       )}
 
       {currentUser && (

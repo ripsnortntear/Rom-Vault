@@ -62,6 +62,29 @@ export function EmulatorModal({
       }
     } catch {}
   }, []);
+  // Trap unhandled fullscreen rejections to prevent crashing the modal on mobile
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleUnhandledRejection = (e: PromiseRejectionEvent) => {
+      const reason = e.reason;
+      const isFsError =
+        reason?.name === "NotAllowedError" ||
+        reason?.name === "SecurityError" ||
+        reason?.message?.includes("requestFullscreen") ||
+        reason?.message?.includes("user gesture") ||
+        reason?.message?.includes("Permissions check failed");
+
+      if (isFsError) {
+        e.preventDefault();
+        console.warn("[EmulatorModal] Suppressed unhandled fullscreen rejection:", reason?.message || reason);
+      }
+    };
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+  }, []);
+
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showFullscreenBars, setShowFullscreenBars] = useState<boolean>(false);
   const hideBarsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,7 +291,7 @@ export function EmulatorModal({
   const activeDiscNum = activeDisc ? activeDisc.discNumber : 1;
 
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
-  const playerUrl = `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName)}&system=${encodeURIComponent(game.system)}`;
+  const playerUrl = `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName)}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
   const downloadUrl = activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
 
   const renderControls = () => {

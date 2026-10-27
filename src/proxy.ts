@@ -21,9 +21,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(cleanUrl);
   }
 
-  // 2. Allow public authentication routes and static assets
+  // 2. Allow public authentication routes, static assets, and preflight CORS requests
   const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-  if (isPublic) {
+  if (isPublic || request.method === "OPTIONS") {
     return NextResponse.next();
   }
 

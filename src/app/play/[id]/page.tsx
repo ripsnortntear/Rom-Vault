@@ -28,6 +28,7 @@ declare global {
     EJS_gameID?: string | number;
     EJS_color?: string;
     EJS_startOnLoaded?: boolean;
+    EJS_fullscreenOnLoad?: boolean;
     EJS_pathtodata?: string;
     EJS_gameUrl?: string;
     EJS_biosUrl?: string;
@@ -268,12 +269,33 @@ export default function EmulatorPlayPage(): React.ReactElement {
 
     // Detect actual file name from searchParams or baseName
     const fileParam = searchParams.get("file");
+    const discParam = searchParams.get("disc");
     const romFileName = fileParam || (baseName.includes(".") ? baseName : `${baseName}.zip`);
-    const slug = toCleanSlug(romFileName, system);
     const origin = window.location.origin;
-    const absoluteRomUrl = `${origin}${BASE_PATH}/api/nes/${encodeURIComponent(
-      romFileName
-    )}/${encodeURIComponent(slug)}?system=${encodeURIComponent(system)}`;
+
+    // Use /roms/api/roms/[id]/stream for high-performance HTTP 206 byte-range streaming
+    const absoluteRomUrl = `${origin}${BASE_PATH}/api/roms/${encodeURIComponent(
+      params.id
+    )}/stream?file=${encodeURIComponent(romFileName)}&system=${encodeURIComponent(system)}${
+      discParam ? `&disc=${encodeURIComponent(discParam)}` : ""
+    }`;
+
+    // Safely trap requestFullscreen to prevent uncaught NotAllowedError on mobile
+    if (typeof Element !== "undefined" && Element.prototype.requestFullscreen) {
+      try {
+        const origReqFs = Element.prototype.requestFullscreen;
+        Element.prototype.requestFullscreen = function (...args: any[]) {
+          try {
+            return (origReqFs as any).apply(this, args).catch((err: any) => {
+              console.warn("[Player] Suppressed unhandled requestFullscreen rejection:", err?.message || err);
+            });
+          } catch (err) {
+            console.warn("[Player] Synchronous requestFullscreen failure suppressed:", err);
+            return Promise.resolve();
+          }
+        };
+      } catch {}
+    }
 
     // Handle PS2 Check
     if (system === "ps2") {
@@ -651,7 +673,9 @@ export default function EmulatorPlayPage(): React.ReactElement {
       window.EJS_gameName = baseName;
       window.EJS_gameID = `${system}_${cleanBaseGameName}`;
       window.EJS_color = meta.colorHex;
-      window.EJS_startOnLoaded = true;
+      // HARD DISABLE: Automatic fullscreen on load triggers unhandled NotAllowedError on mobile
+      window.EJS_startOnLoaded = false;
+      window.EJS_fullscreenOnLoad = false;
       window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
       window.EJS_gameUrl = absoluteRomUrl;
 
@@ -663,6 +687,9 @@ export default function EmulatorPlayPage(): React.ReactElement {
       window.EJS_defaultOptions = {
         "save-save-interval": "60",
         "save-state-location": "browser",
+        "pcsx_rearmed_cdfs_cache": "async",
+        "pcsx_rearmed_async_cd": "sync",
+        "pcsx_rearmed_memcard2": "disabled",
       };
       if (biosUrl) {
         window.EJS_biosUrl = biosUrl;
