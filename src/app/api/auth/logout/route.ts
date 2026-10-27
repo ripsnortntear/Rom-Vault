@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { revokeSession, clearSessionCookie, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { revokeSession } from "@/lib/auth/session-db";
+import { clearSessionCookie, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 export async function POST(req: NextRequest) {
   try {

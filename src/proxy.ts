@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionTokenFast } from "@/lib/auth/token-signer";
-
-const SESSION_COOKIE_NAME = process.env.AUTH_SESSION_COOKIE_NAME || "rom_vault_session";
+import { verifySessionTokenFast, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 // Public paths that do not require authentication
 const PUBLIC_PREFIXES = [
@@ -70,11 +68,11 @@ export async function proxy(request: NextRequest) {
     return buildLoginRedirect(false);
   }
 
-  // Cryptographically validate the session token
-  const sessionData = await verifySessionTokenFast(rawToken);
+  // Cryptographically validate the session token via fast HMAC verification
+  const verifyResult = await verifySessionTokenFast(rawToken);
 
   // If signature verification fails (corrupted, tampered, or expired) -> clear cookie & redirect
-  if (!sessionData) {
+  if (!verifyResult.valid) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: "Invalid or expired session token." },
@@ -83,6 +81,8 @@ export async function proxy(request: NextRequest) {
     }
     return buildLoginRedirect(true);
   }
+
+  const sessionData = verifyResult.payload;
 
   // 4. Stage 2: Authorization Check (Role Enforcement)
   // Reaching this point guarantees the user has a cryptographically verified identity
@@ -104,7 +104,7 @@ export async function proxy(request: NextRequest) {
   // 5. Stage 3: Downstream Context Pass-Through
   const requestHeaders = new Headers(request.headers);
   if (sessionData.userId) {
-    requestHeaders.set("x-user-id", sessionData.userId);
+    requestHeaders.set("x-user-id", String(sessionData.userId));
   }
   if (sessionData.role) {
     requestHeaders.set("x-user-role", sessionData.role);
@@ -112,7 +112,7 @@ export async function proxy(request: NextRequest) {
   if (sessionData.username) {
     requestHeaders.set("x-user-username", sessionData.username);
   }
-  requestHeaders.set("x-session-token", sessionData.token);
+  requestHeaders.set("x-session-token", sessionData.sessionId || rawToken);
 
   // Ensure downstream Server Components read the session under all alias cookie names
   const existingCookieHeader = request.headers.get("cookie") || "";

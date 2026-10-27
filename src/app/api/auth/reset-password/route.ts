@@ -5,7 +5,7 @@ import {
   validatePasswordComplexity,
   hashPassword,
 } from "@/lib/auth/crypto";
-import { revokeAllUserSessions } from "@/lib/auth/session";
+import { revokeAllUserSessions } from "@/lib/auth/session-db";
 
 export async function POST(req: NextRequest) {
   try {

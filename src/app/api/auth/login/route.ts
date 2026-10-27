@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { query, execute } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/crypto";
 import { checkRateLimit, recordRateLimitEvent, resetRateLimitEvents } from "@/lib/auth/rate-limit";
-import { createSession, setSessionCookie } from "@/lib/auth/session";
+import { createSession } from "@/lib/auth/session-db";
+import { signSessionToken, setSessionCookie } from "@/lib/auth/session";
 import type { User } from "@/types/auth";
 
 export async function POST(req: NextRequest) {
@@ -114,7 +115,13 @@ export async function POST(req: NextRequest) {
 
     // 7. Create Session
     const { token, expiresAt } = await createSession(user.id, ip, userAgent);
-    await setSessionCookie(token, expiresAt, { userId: user.id, role: user.role });
+    const signedToken = await signSessionToken({
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      sessionId: token,
+    });
+    await setSessionCookie(signedToken, expiresAt, { userId: user.id, role: user.role, username: user.username });
 
     // Fetch user profile display details
     const profileRows = await query<{ display_name: string | null; avatar_url: string | null }>(
