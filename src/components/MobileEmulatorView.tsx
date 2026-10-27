@@ -83,6 +83,29 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   useEffect(() => {
     if (typeof window !== "undefined") {
       setIsInIframe(window.self !== window.top);
+
+      // Lock global rumble/vibration flags off immediately
+      window.EJS_rumble = false;
+      window.EJS_vibration = false;
+      (window as unknown as Record<string, unknown>).EJS_disableRumble = true;
+
+      const handleUnhandledRejection = (e: PromiseRejectionEvent) => {
+        const reason = e.reason;
+        const isExpectedError =
+          reason?.name === "NotAllowedError" ||
+          reason?.name === "SecurityError" ||
+          reason?.message?.includes("requestFullscreen") ||
+          reason?.message?.includes("user gesture") ||
+          reason?.message?.includes("not visible") ||
+          reason?.message?.includes("Permissions check failed");
+
+        if (isExpectedError) {
+          e.preventDefault();
+        }
+      };
+
+      window.addEventListener("unhandledrejection", handleUnhandledRejection);
+      return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     }
   }, []);
 

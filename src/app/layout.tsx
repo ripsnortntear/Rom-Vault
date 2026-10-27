@@ -35,40 +35,44 @@ export default function RootLayout({
 (function() {
   if (typeof window === "undefined") return;
   try {
-    // 1. Strip Gamepad haptic actuators & rumble prototypes
-    if ("GamepadHapticActuator" in window) {
-      try {
-        Object.defineProperty(window, "GamepadHapticActuator", {
-          value: undefined,
-          writable: true,
-          configurable: true,
-        });
-      } catch (e) {}
-    }
-    if ("Gamepad" in window && window.Gamepad && window.Gamepad.prototype) {
-      Object.defineProperty(window.Gamepad.prototype, "vibrationActuator", {
+    // 1. Freeze and wipe GamepadHapticActuator & vibration prototypes
+    window.GamepadHapticActuator = undefined;
+    if (window.Gamepad && window.Gamepad.prototype) {
+      Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
         get: function() { return null; },
-        configurable: true,
+        set: function() {},
+        configurable: false,
+        enumerable: false
       });
-      Object.defineProperty(window.Gamepad.prototype, "hapticActuators", {
+      Object.defineProperty(Gamepad.prototype, "hapticActuators", {
         get: function() { return []; },
-        configurable: true,
+        set: function() {},
+        configurable: false,
+        enumerable: false
       });
     }
 
-    // 2. Intercept navigator.getGamepads to sanitize returned pad objects
+    // 2. Intercept navigator.getGamepads to sanitize returned pad instances
     if (typeof navigator !== "undefined" && navigator.getGamepads) {
-      var origGetGamepads = navigator.getGamepads.bind(navigator);
+      const origGetGamepads = navigator.getGamepads.bind(navigator);
       navigator.getGamepads = function() {
-        var pads = origGetGamepads();
+        const pads = origGetGamepads();
         if (pads) {
-          for (var i = 0; i < pads.length; i++) {
-            var pad = pads[i];
-            if (pad && "vibrationActuator" in pad) {
+          for (let i = 0; i < pads.length; i++) {
+            const pad = pads[i];
+            if (pad) {
               try {
                 Object.defineProperty(pad, "vibrationActuator", {
-                  get: function() { return null; },
-                  configurable: true,
+                  get: () => null,
+                  set: () => {},
+                  configurable: false,
+                  enumerable: false
+                });
+                Object.defineProperty(pad, "hapticActuators", {
+                  get: () => [],
+                  set: () => {},
+                  configurable: false,
+                  enumerable: false
                 });
               } catch(e) {}
             }
@@ -78,22 +82,18 @@ export default function RootLayout({
       };
     }
 
-    // 3. Block WebHID & WebUSB device enumeration that trips Windows gamepad drivers
+    // 3. Kill WebHID and WebUSB device enumeration that resets XInput controllers
     if (typeof navigator !== "undefined") {
-      if ("hid" in navigator) {
-        Object.defineProperty(navigator, "hid", {
-          get: function() { return undefined; },
-          configurable: true,
-        });
+      if (navigator.hid) {
+        navigator.hid.getDevices = () => Promise.resolve([]);
+        navigator.hid.requestDevice = () => Promise.reject(new Error("WebHID disabled"));
       }
-      if ("usb" in navigator) {
-        Object.defineProperty(navigator, "usb", {
-          get: function() { return undefined; },
-          configurable: true,
-        });
+      if (navigator.usb) {
+        navigator.usb.getDevices = () => Promise.resolve([]);
+        navigator.usb.requestDevice = () => Promise.reject(new Error("WebUSB disabled"));
       }
-      if ("vibrate" in navigator) {
-        navigator.vibrate = function() { return false; };
+      if (navigator.vibrate) {
+        navigator.vibrate = () => false;
       }
     }
   } catch (err) {

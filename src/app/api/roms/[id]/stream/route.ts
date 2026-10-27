@@ -374,7 +374,8 @@ async function handleStream(
         "Content-Type": mimeType,
         "Accept-Ranges": "bytes",
         "Content-Length": fileSize.toString(),
-        "Cache-Control": "private, no-transform, max-age=86400",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Accel-Buffering": "no",
         "Last-Modified": stat.mtime.toUTCString(),
       };
 
@@ -382,7 +383,9 @@ async function handleStream(
         return new NextResponse(null, { status: 200, headers });
       }
 
-      const nodeStream = fs.createReadStream(/*turbopackIgnore: true*/ filePath);
+      const nodeStream = fs.createReadStream(/*turbopackIgnore: true*/ filePath, {
+        highWaterMark: 1024 * 1024 * 2,
+      });
       const webStream = Readable.toWeb(nodeStream) as ReadableStream;
       return new NextResponse(webStream, { status: 200, headers });
     }
@@ -409,7 +412,8 @@ async function handleStream(
       "Accept-Ranges": "bytes",
       "Content-Length": chunkSize.toString(),
       "Content-Type": mimeType,
-      "Cache-Control": "private, no-transform, max-age=86400",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Accel-Buffering": "no",
       "Last-Modified": stat.mtime.toUTCString(),
     };
 
@@ -417,8 +421,12 @@ async function handleStream(
       return new NextResponse(null, { status: 206, headers });
     }
 
-    // Zero-stutter backpressure streaming
-    const nodeStream = fs.createReadStream(/*turbopackIgnore: true*/ filePath, { start, end });
+    // Zero-stutter backpressure streaming with high throughput 2MB buffer
+    const nodeStream = fs.createReadStream(/*turbopackIgnore: true*/ filePath, {
+      start,
+      end,
+      highWaterMark: 1024 * 1024 * 2,
+    });
     const webStream = Readable.toWeb(nodeStream) as ReadableStream;
 
     return new NextResponse(webStream, {
