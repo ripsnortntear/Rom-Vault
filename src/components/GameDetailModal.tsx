@@ -12,9 +12,15 @@ import {
   Disc,
   Tv,
   BookOpen,
+  MessageSquare,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
-import { GameSocialSection } from "@/components/community/GameSocialSection";
+import {
+  GameSocialProvider,
+  GameRatingWidget,
+  GameLeaderboardSnapshot,
+  GameCommentsFeed,
+} from "@/components/community/GameSocialSection";
 
 interface GameDetailModalProps {
   game: GameItem | null;
@@ -242,6 +248,7 @@ export function GameDetailModal({
           />
         )}
 
+        {/* Modal Header */}
         <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-zinc-900/80 backdrop-blur-md">
           <div className="flex items-center gap-3 min-w-0">
             <span
@@ -266,251 +273,288 @@ export function GameDetailModal({
           </button>
         </div>
 
-        <div className="relative z-10 overflow-y-auto p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 flex flex-col gap-4">
-            <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl">
-              {activeTab === "video" && game.media.video ? (
-                <video
-                  key={game.media.video}
-                  src={game.media.video}
-                  poster={game.media.screenTitle ?? undefined}
-                  controls
-                  autoPlay
-                  loop
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <img
-                  src={getActiveImageUrl() ?? ""}
-                  alt={`${game.displayTitle} - ${activeTab}`}
-                  className="w-full h-full object-contain p-3"
-                />
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                    activeTab === tab.id
-                      ? "bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30"
-                      : "bg-zinc-900/90 text-zinc-300 border-white/10 hover:bg-zinc-800 hover:text-white"
-                  }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-4 gap-3 pt-2">
-              {thumbnailItems.map(
-                (thumb) =>
-                  thumb.url && (
-                    <button
-                      key={thumb.label}
-                      type="button"
-                      onClick={() => setActiveTab(thumb.tab)}
-                      className={`group flex flex-col items-center gap-1.5 p-2 rounded-xl border transition cursor-pointer ${
-                        activeTab === thumb.tab
-                          ? "border-red-500 bg-red-600/10"
-                          : "border-white/10 bg-zinc-900/60 hover:border-white/30"
-                      }`}
-                    >
-                      <img
-                        src={thumb.url}
-                        alt={thumb.label}
-                        className="h-16 w-full object-contain group-hover:scale-105 transition"
-                      />
-                      <span className="text-[10px] font-medium text-zinc-400">
-                        {thumb.label}
-                      </span>
-                    </button>
-                  )
-              )}
-            </div>
-          </div>
-
-          <div className="lg:col-span-5 flex flex-col justify-between gap-6">
-            <div className="flex flex-col gap-4">
-              {game.media.logo && (
-                <div className="h-24 flex items-center justify-center sm:justify-start bg-zinc-900/50 rounded-2xl p-4 border border-white/5">
-                  <img
-                    src={game.media.logo}
-                    alt={game.displayTitle}
-                    className="max-h-full max-w-full object-contain drop-shadow-lg"
+        {/* Modal Body wrapped in GameSocialProvider */}
+        <GameSocialProvider
+          gameId={game.id}
+          gameTitle={game.displayTitle}
+          system={game.system}
+        >
+          <div className="relative z-10 overflow-y-auto p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Left Column (50% desktop): Media Preview + Switchers + Comments */}
+            <div className="lg:col-span-6 flex flex-col gap-4">
+              {/* Media Viewport */}
+              <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl">
+                {activeTab === "video" && game.media.video ? (
+                  <video
+                    key={game.media.video}
+                    src={game.media.video}
+                    poster={game.media.screenTitle ?? undefined}
+                    controls
+                    autoPlay
+                    loop
+                    className="w-full h-full object-contain"
                   />
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2">
-                {game.regions.map((region) => (
-                  <span
-                    key={region}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10"
-                  >
-                    Region: {region}
-                  </span>
-                ))}
-                {(enrichedMeta?.year ?? game.year) && (
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-600/20 text-red-300 border border-red-500/30">
-                    Year: {enrichedMeta?.year ?? game.year}
-                  </span>
+                ) : (
+                  <img
+                    src={getActiveImageUrl() ?? ""}
+                    alt={`${game.displayTitle} - ${activeTab}`}
+                    className="w-full h-full object-contain p-3"
+                  />
                 )}
-                {(enrichedMeta?.developer ?? game.developer) && (
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10">
-                    Dev: {enrichedMeta?.developer ?? game.developer}
-                  </span>
-                )}
-                {(enrichedMeta?.publisher ?? game.publisher) && (
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10">
-                    Pub: {enrichedMeta?.publisher ?? game.publisher}
-                  </span>
-                )}
-                {game.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 border border-white/10"
-                  >
-                    {tag}
-                  </span>
-                ))}
-                <span className="px-2.5 py-1 rounded-lg text-xs font-mono bg-zinc-900 text-zinc-400 border border-white/10">
-                  {game.fileSizeBytes >= 1024 * 1024 * 1024
-                    ? `${(game.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-                    : game.fileSizeBytes >= 1024 * 1024
-                    ? `${(game.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
-                    : `${Math.max(1, Math.round(game.fileSizeBytes / 1024))} KB`}
-                </span>
               </div>
 
-              <div className="flex flex-col gap-2 bg-zinc-900/70 border border-white/10 rounded-2xl p-4">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-400">
-                  <BookOpen className="w-4 h-4" />
-                  Story &amp; Gameplay Overview
-                </div>
-                <div className="text-sm text-zinc-300 leading-relaxed max-h-56 overflow-y-auto pr-1 whitespace-pre-line">
-                  {game.story || "No story text available for this title."}
-                </div>
+              {/* Media Switcher Tab Buttons */}
+              <div className="flex flex-wrap gap-2">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                      activeTab === tab.id
+                        ? "bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30"
+                        : "bg-zinc-900/90 text-zinc-300 border-white/10 hover:bg-zinc-800 hover:text-white"
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Community Ratings, High Scores & Comments */}
-              <GameSocialSection
-                gameId={game.id}
-                gameTitle={game.displayTitle}
-                system={game.system}
-              />
+              {/* Media Thumbnails Grid */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-3 xl:grid-cols-6 gap-2 pt-1">
+                {thumbnailItems.map(
+                  (thumb) =>
+                    thumb.url && (
+                      <button
+                        key={thumb.label}
+                        type="button"
+                        onClick={() => setActiveTab(thumb.tab)}
+                        className={`group flex flex-col items-center gap-1 p-1.5 rounded-xl border transition cursor-pointer ${
+                          activeTab === thumb.tab
+                            ? "border-red-500 bg-red-600/10"
+                            : "border-white/10 bg-zinc-900/60 hover:border-white/30"
+                        }`}
+                      >
+                        <img
+                          src={thumb.url}
+                          alt={thumb.label}
+                          className="h-12 w-full object-contain group-hover:scale-105 transition"
+                        />
+                        <span className="text-[9px] font-medium text-zinc-400 truncate">
+                          {thumb.label}
+                        </span>
+                      </button>
+                    )
+                )}
+              </div>
+
+              {/* Desktop Comments Section: Relocated directly beneath media switcher buttons */}
+              <div className="mt-4 border-t border-zinc-800/80 pt-4 flex-1 hidden lg:flex flex-col min-h-0">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-2">
+                  <MessageSquare className="w-3.5 h-3.5 text-red-400" />
+                  <span>Community Comments</span>
+                </h4>
+                <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
+                  <GameCommentsFeed gameId={game.id} />
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-3 pt-2 border-t border-white/10">
-              <button
-                type="button"
-                onClick={handlePlayActive}
-                className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl font-bold text-base bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/30 transition cursor-pointer"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                {game.playable
-                  ? game.discs && game.discs.length > 1
-                    ? `Play Disc ${activeDiscNum} in Browser Now`
-                    : "Play in Browser Now"
-                  : "Play / Download Options"}
-              </button>
-
-              {game.discs && game.discs.length > 1 && (
-                <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-xs">
-                  <div className="font-semibold text-zinc-300 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Disc className="w-3.5 h-3.5 text-red-400" />
-                      Select Starting Disc ({game.discs.length} Discs)
-                    </span>
-                    <span className="text-red-400 font-bold text-[11px] bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
-                      Loaded: Disc {activeDiscNum}
-                    </span>
+            {/* Right Column (50% desktop): Badges, Star Rating, Actions, Storyline, High Scores */}
+            <div className="lg:col-span-6 flex flex-col justify-between gap-6">
+              <div className="flex flex-col gap-4">
+                {game.media.logo && (
+                  <div className="h-20 flex items-center justify-center sm:justify-start bg-zinc-900/50 rounded-2xl p-3 border border-white/5">
+                    <img
+                      src={game.media.logo}
+                      alt={game.displayTitle}
+                      className="max-h-full max-w-full object-contain drop-shadow-lg"
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    {game.discs.map((d, idx) => {
-                      const isSelected = idx === selectedDiscIndex;
-                      return (
-                        <div
-                          key={d.discNumber}
-                          onClick={() => setSelectedDiscIndex(idx)}
-                          className={`group flex items-center justify-between p-2 rounded-lg border transition cursor-pointer ${
-                            isSelected
-                              ? "bg-red-600/20 border-red-500/80 text-white shadow-md shadow-red-600/20 ring-1 ring-red-500/50"
-                              : "bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300 hover:border-white/25"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
+                )}
+
+                {/* Metadata & Tag Badges */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {game.regions.map((region) => (
+                    <span
+                      key={region}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10"
+                    >
+                      Region: {region}
+                    </span>
+                  ))}
+                  {(enrichedMeta?.year ?? game.year) && (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-600/20 text-red-300 border border-red-500/30">
+                      Year: {enrichedMeta?.year ?? game.year}
+                    </span>
+                  )}
+                  {(enrichedMeta?.developer ?? game.developer) && (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10">
+                      Dev: {enrichedMeta?.developer ?? game.developer}
+                    </span>
+                  )}
+                  {(enrichedMeta?.publisher ?? game.publisher) && (
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10">
+                      Pub: {enrichedMeta?.publisher ?? game.publisher}
+                    </span>
+                  )}
+                  {game.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 border border-white/10"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-mono bg-zinc-900 text-zinc-400 border border-white/10">
+                    {game.fileSizeBytes >= 1024 * 1024 * 1024
+                      ? `${(game.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+                      : game.fileSizeBytes >= 1024 * 1024
+                      ? `${(game.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
+                      : `${Math.max(1, Math.round(game.fileSizeBytes / 1024))} KB`}
+                  </span>
+                </div>
+
+                {/* 1-to-5 Star Rating widget directly under title/badges */}
+                <GameRatingWidget />
+
+                {/* Primary Action Buttons */}
+                <div className="flex flex-col gap-3 py-1">
+                  <button
+                    type="button"
+                    onClick={handlePlayActive}
+                    className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl font-bold text-base bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/30 transition cursor-pointer"
+                  >
+                    <Play className="w-5 h-5 fill-current" />
+                    {game.playable
+                      ? game.discs && game.discs.length > 1
+                        ? `Play Disc ${activeDiscNum} in Browser Now`
+                        : "Play in Browser Now"
+                      : "Play / Download Options"}
+                  </button>
+
+                  {/* Multi-disc Starting Disc Selector */}
+                  {game.discs && game.discs.length > 1 && (
+                    <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-xs">
+                      <div className="font-semibold text-zinc-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Disc className="w-3.5 h-3.5 text-red-400" />
+                          Select Starting Disc ({game.discs.length} Discs)
+                        </span>
+                        <span className="text-red-400 font-bold text-[11px] bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
+                          Loaded: Disc {activeDiscNum}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {game.discs.map((d, idx) => {
+                          const isSelected = idx === selectedDiscIndex;
+                          return (
                             <div
-                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                              key={d.discNumber}
+                              onClick={() => setSelectedDiscIndex(idx)}
+                              className={`group flex items-center justify-between p-2 rounded-lg border transition cursor-pointer ${
                                 isSelected
-                                  ? "border-red-400 bg-red-500 text-white"
-                                  : "border-zinc-500 bg-zinc-800"
+                                  ? "bg-red-600/20 border-red-500/80 text-white shadow-md shadow-red-600/20 ring-1 ring-red-500/50"
+                                  : "bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300 hover:border-white/25"
                               }`}
                             >
-                              {isSelected && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                              )}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-bold text-xs truncate">
-                                Disc {d.discNumber}
-                              </span>
-                              <span className="text-[10px] text-zinc-400 font-mono">
-                                {d.fileSizeBytes >= 1024 * 1024 * 1024
-                                  ? `${(d.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-                                  : `${Math.round(d.fileSizeBytes / (1024 * 1024))} MB`}
-                              </span>
-                            </div>
-                          </div>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div
+                                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                    isSelected
+                                      ? "border-red-400 bg-red-500 text-white"
+                                      : "border-zinc-500 bg-zinc-800"
+                                  }`}
+                                >
+                                  {isSelected && (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                  )}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-bold text-xs truncate">
+                                    Disc {d.discNumber}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 font-mono">
+                                    {d.fileSizeBytes >= 1024 * 1024 * 1024
+                                      ? `${(d.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+                                      : `${Math.round(d.fileSizeBytes / (1024 * 1024))} MB`}
+                                  </span>
+                                </div>
+                              </div>
 
-                          <a
-                            href={`${d.romUrl}${d.romUrl.includes("?") ? "&" : "?"}download=1`}
-                            download={d.fileName}
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white transition shrink-0 ml-1"
-                            title={`Download Disc ${d.discNumber}`}
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                      );
-                    })}
+                              <a
+                                href={`${d.romUrl}${d.romUrl.includes("?") ? "&" : "?"}download=1`}
+                                download={d.fileName}
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white transition shrink-0 ml-1"
+                                title={`Download Disc ${d.discNumber}`}
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <a
+                      href={`${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1`}
+                      download={activeRomFileName}
+                      className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white border border-white/15 transition"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download {game.discs && game.discs.length > 1 ? `Disc ${activeDiscNum}` : "ROM"}
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => onToggleFavorite(game.id)}
+                      className={`inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm border transition cursor-pointer ${
+                        isFavorite
+                          ? "bg-red-600/20 border-red-500 text-red-200"
+                          : "bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200"
+                      }`}
+                    >
+                      <Heart
+                        className={`w-4 h-4 ${isFavorite ? "fill-current text-red-500" : ""}`}
+                      />
+                      {isFavorite ? "Favorited" : "Favorite"}
+                    </button>
                   </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <a
-                  href={`${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1`}
-                  download={activeRomFileName}
-                  className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white border border-white/15 transition"
-                >
-                  <Download className="w-4 h-4" />
-                  Download {game.discs && game.discs.length > 1 ? `Disc ${activeDiscNum}` : "ROM"}
-                </a>
+                {/* Storyline Overview */}
+                <div className="flex flex-col gap-2 bg-zinc-900/70 border border-white/10 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-400">
+                    <BookOpen className="w-4 h-4" />
+                    Story &amp; Gameplay Overview
+                  </div>
+                  <div className="text-sm text-zinc-300 leading-relaxed max-h-52 overflow-y-auto pr-1 whitespace-pre-line custom-scrollbar">
+                    {game.story || "No story text available for this title."}
+                  </div>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => onToggleFavorite(game.id)}
-                  className={`inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm border transition cursor-pointer ${
-                    isFavorite
-                      ? "bg-red-600/20 border-red-500 text-red-200"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200"
-                  }`}
-                >
-                  <Heart
-                    className={`w-4 h-4 ${isFavorite ? "fill-current text-red-500" : ""}`}
-                  />
-                  {isFavorite ? "Favorited" : "Favorite"}
-                </button>
+                {/* Vault Leaderboard Snapshot Banner */}
+                <GameLeaderboardSnapshot />
+
+                {/* Mobile Comments Section: Stacks naturally at bottom on small screens */}
+                <div className="mt-6 border-t border-zinc-800/80 pt-4 flex lg:hidden flex-col">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-2">
+                    <MessageSquare className="w-3.5 h-3.5 text-red-400" />
+                    <span>Community Comments</span>
+                  </h4>
+                  <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
+                    <GameCommentsFeed gameId={game.id} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </GameSocialProvider>
       </div>
     </div>
   );

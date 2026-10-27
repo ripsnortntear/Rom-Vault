@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useTransition, useOptimistic } from "react";
+import React, {
+  useState,
+  useEffect,
+  useTransition,
+  useOptimistic,
+  createContext,
+  useContext,
+} from "react";
 import {
   Star,
   MessageSquare,
@@ -18,21 +25,70 @@ import { submitHighScoreAction } from "@/app/actions/scores";
 import type { GameSocialStats, GameComment, GameHighScore } from "@/types/community";
 import type { AuthSession } from "@/types/auth";
 
-interface GameSocialSectionProps {
+interface GameSocialContextType {
+  stats: GameSocialStats;
+  currentUser: AuthSession["user"] | null;
+  optimisticRating: {
+    userRating: number | null;
+    averageRating: number;
+    totalRatings: number;
+  };
+  hoverRating: number | null;
+  setHoverRating: React.Dispatch<React.SetStateAction<number | null>>;
+  handleRate: (stars: number) => void;
+  isSubmittingRating: boolean;
+  commentText: string;
+  setCommentText: React.Dispatch<React.SetStateAction<string>>;
+  isSubmittingComment: boolean;
+  commentError: string | null;
+  setCommentError: React.Dispatch<React.SetStateAction<string | null>>;
+  handlePostComment: (e: React.FormEvent) => void;
+  handleDeleteComment: (commentId: number) => Promise<void>;
+  showScoreModal: boolean;
+  setShowScoreModal: React.Dispatch<React.SetStateAction<boolean>>;
+  scoreInput: string;
+  setScoreInput: React.Dispatch<React.SetStateAction<string>>;
+  proofInput: string;
+  setProofInput: React.Dispatch<React.SetStateAction<string>>;
+  scoreNotes: string;
+  setScoreNotes: React.Dispatch<React.SetStateAction<string>>;
+  isSubmittingScore: boolean;
+  scoreError: string | null;
+  copiedScoreId: number | null;
+  handleScoreSubmit: (e: React.FormEvent) => void;
+  handleShareScore: (score: GameHighScore) => Promise<void>;
+  gameId: string;
+  gameTitle: string;
+  system: string;
+}
+
+const GameSocialContext = createContext<GameSocialContextType | null>(null);
+
+export function useGameSocial() {
+  const ctx = useContext(GameSocialContext);
+  if (!ctx) {
+    throw new Error("useGameSocial must be used within a GameSocialProvider");
+  }
+  return ctx;
+}
+
+interface GameSocialProviderProps {
   gameId: string;
   gameTitle: string;
   system: string;
   initialStats?: GameSocialStats | null;
   currentUser?: AuthSession["user"] | null;
+  children: React.ReactNode;
 }
 
-export function GameSocialSection({
+export function GameSocialProvider({
   gameId,
   gameTitle,
   system,
   initialStats,
   currentUser: initialUser,
-}: GameSocialSectionProps) {
+  children,
+}: GameSocialProviderProps) {
   const [stats, setStats] = useState<GameSocialStats>(
     initialStats || {
       averageRating: 0,
@@ -70,7 +126,8 @@ export function GameSocialSection({
     (state, newRating: number) => {
       const alreadyRated = state.userRating !== null;
       const count = alreadyRated ? state.totalRatings : state.totalRatings + 1;
-      const totalScore = state.averageRating * state.totalRatings - (state.userRating || 0) + newRating;
+      const totalScore =
+        state.averageRating * state.totalRatings - (state.userRating || 0) + newRating;
       const newAvg = count > 0 ? Number((totalScore / count).toFixed(1)) : newRating;
       return {
         userRating: newRating,
@@ -222,7 +279,8 @@ export function GameSocialSection({
 
   // Share High Score
   const handleShareScore = async (score: GameHighScore) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://www.oldsmarchaos.com";
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "https://www.oldsmarchaos.com";
     const shareUrl = `${origin}/roms/scores/${score.id}`;
     const shareText = `I just scored ${score.score.toLocaleString()} on ${gameTitle} (${system.toUpperCase()}) on ROM Vault! Can you beat it? ${shareUrl}`;
 
@@ -246,25 +304,80 @@ export function GameSocialSection({
     }
   };
 
+  const contextValue: GameSocialContextType = {
+    stats,
+    currentUser,
+    optimisticRating,
+    hoverRating,
+    setHoverRating,
+    handleRate,
+    isSubmittingRating,
+    commentText,
+    setCommentText,
+    isSubmittingComment,
+    commentError,
+    setCommentError,
+    handlePostComment,
+    handleDeleteComment,
+    showScoreModal,
+    setShowScoreModal,
+    scoreInput,
+    setScoreInput,
+    proofInput,
+    setProofInput,
+    scoreNotes,
+    setScoreNotes,
+    isSubmittingScore,
+    scoreError,
+    copiedScoreId,
+    handleScoreSubmit,
+    handleShareScore,
+    gameId,
+    gameTitle,
+    system,
+  };
+
   return (
-    <div className="flex flex-col gap-6 pt-4 border-t border-white/10 text-zinc-200">
-      {/* 1. Header & Star Rating Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
+    <GameSocialContext.Provider value={contextValue}>
+      {children}
+    </GameSocialContext.Provider>
+  );
+}
+
+/**
+ * 1-to-5 Star Rating widget and aggregate score display.
+ */
+export function GameRatingWidget({ className = "" }: { className?: string }) {
+  const {
+    optimisticRating,
+    hoverRating,
+    setHoverRating,
+    handleRate,
+    isSubmittingRating,
+    commentError,
+  } = useGameSocial();
+
+  return (
+    <div className={`flex flex-col gap-2 ${className}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/60 border border-white/10 rounded-2xl p-3.5">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-            <Star className="w-5 h-5 fill-current" />
+          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <Star className="w-4 h-4 fill-current" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-black text-white">
-                {optimisticRating.averageRating > 0 ? optimisticRating.averageRating.toFixed(1) : "—"}
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-black text-white">
+                {optimisticRating.averageRating > 0
+                  ? optimisticRating.averageRating.toFixed(1)
+                  : "—"}
               </span>
-              <span className="text-xs text-zinc-400">/ 5.0</span>
-              <span className="text-xs text-zinc-500">
-                ({optimisticRating.totalRatings} {optimisticRating.totalRatings === 1 ? "rating" : "ratings"})
+              <span className="text-[11px] text-zinc-400">/ 5.0</span>
+              <span className="text-[11px] text-zinc-500">
+                ({optimisticRating.totalRatings}{" "}
+                {optimisticRating.totalRatings === 1 ? "rating" : "ratings"})
               </span>
             </div>
-            <p className="text-xs text-zinc-400">
+            <p className="text-[11px] text-zinc-400">
               {optimisticRating.userRating
                 ? `You rated this title ${optimisticRating.userRating} ★`
                 : "Rate this game to support the community"}
@@ -273,7 +386,7 @@ export function GameSocialSection({
         </div>
 
         {/* Interactive Star Picker */}
-        <div className="flex items-center gap-1.5 self-start sm:self-auto">
+        <div className="flex items-center gap-1 self-start sm:self-auto">
           {[1, 2, 3, 4, 5].map((star) => {
             const activeVal = hoverRating ?? optimisticRating.userRating ?? 0;
             const isFilled = star <= activeVal;
@@ -289,7 +402,7 @@ export function GameSocialSection({
                 title={`Rate ${star} star${star > 1 ? "s" : ""}`}
               >
                 <Star
-                  className={`w-6 h-6 transition ${
+                  className={`w-5 h-5 transition ${
                     isFilled
                       ? "text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]"
                       : "text-zinc-600 hover:text-zinc-400"
@@ -302,14 +415,42 @@ export function GameSocialSection({
       </div>
 
       {commentError && (
-        <div className="p-3 rounded-xl bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+        <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
           <span>{commentError}</span>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* 2. Top High Scores & Submit Score Button */}
-      <div className="flex flex-col gap-3 bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
+/**
+ * Vault Leaderboard Records and Submit High Score modal.
+ */
+export function GameLeaderboardSnapshot({ className = "" }: { className?: string }) {
+  const {
+    stats,
+    currentUser,
+    setShowScoreModal,
+    setCommentError,
+    showScoreModal,
+    scoreError,
+    scoreInput,
+    setScoreInput,
+    proofInput,
+    setProofInput,
+    scoreNotes,
+    setScoreNotes,
+    handleScoreSubmit,
+    isSubmittingScore,
+    handleShareScore,
+    copiedScoreId,
+    gameTitle,
+  } = useGameSocial();
+
+  return (
+    <>
+      <div className={`flex flex-col gap-3 bg-zinc-900/60 border border-white/10 rounded-2xl p-4 ${className}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
             <Trophy className="w-4 h-4 text-amber-400" />
@@ -339,11 +480,14 @@ export function GameSocialSection({
         ) : (
           <div className="flex flex-col divide-y divide-white/5">
             {stats.topScores.map((score, index) => {
-              const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`;
+              const medal =
+                index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`;
               return (
                 <div key={score.id} className="flex items-center justify-between py-2 text-xs">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono font-bold w-6 text-center text-zinc-400">{medal}</span>
+                    <span className="font-mono font-bold w-6 text-center text-zinc-400">
+                      {medal}
+                    </span>
                     <span className="font-semibold text-white truncate">
                       {score.user.displayName || score.user.username}
                     </span>
@@ -385,124 +529,7 @@ export function GameSocialSection({
         )}
       </div>
 
-      {/* 3. Community Comments Feed */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-400">
-            <MessageSquare className="w-4 h-4" />
-            <span>Community Discussion ({stats.commentsCount})</span>
-          </div>
-        </div>
-
-        {/* Post Comment Input */}
-        {currentUser ? (
-          <form onSubmit={handlePostComment} className="flex flex-col gap-2">
-            <div className="relative">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Share your review, strategies, secret codes, or memories..."
-                maxLength={2000}
-                rows={3}
-                className="w-full rounded-xl bg-zinc-900 border border-white/15 px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none transition"
-              />
-              <div className="absolute right-3 bottom-3 text-[10px] text-zinc-500">
-                {commentText.length} / 2000
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={isSubmittingComment || !commentText.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white shadow-md shadow-red-600/30 transition cursor-pointer active:scale-95"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isSubmittingComment ? "Posting..." : "Post Comment"}</span>
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/10 text-xs text-zinc-400 flex items-center justify-between">
-            <span>Log in to join the conversation and post comments.</span>
-            <a
-              href="/roms/auth/login"
-              className="font-bold text-red-400 hover:text-red-300 underline"
-            >
-              Log In
-            </a>
-          </div>
-        )}
-
-        {/* Comments List */}
-        <div className="flex flex-col gap-2.5 mt-2 max-h-72 overflow-y-auto pr-1">
-          {stats.recentComments.length === 0 ? (
-            <p className="text-xs text-zinc-500 italic py-3 text-center">
-              No comments posted yet. Start the conversation!
-            </p>
-          ) : (
-            stats.recentComments.map((comment) => {
-              const isAuthor = currentUser?.id === comment.author.id;
-              const isAdmin = currentUser?.role === "admin";
-              const canDelete = isAuthor || isAdmin;
-
-              return (
-                <div
-                  key={comment.id}
-                  className="flex flex-col gap-1.5 p-3 rounded-xl bg-zinc-900/40 border border-white/10 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center font-bold text-[10px] text-zinc-300 uppercase overflow-hidden shrink-0">
-                        {comment.author.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={comment.author.avatarUrl}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          (comment.author.displayName || comment.author.username).charAt(0)
-                        )}
-                      </div>
-                      <span className="font-semibold text-white">
-                        {comment.author.displayName || comment.author.username}
-                      </span>
-                      {comment.author.role === "admin" && (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-red-600/30 text-red-400 border border-red-500/30">
-                          Admin
-                        </span>
-                      )}
-                      <span className="text-[10px] text-zinc-500">
-                        {new Date(comment.createdAt).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-
-                    {canDelete && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteComment(comment.id)}
-                        className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-white/10 transition cursor-pointer"
-                        title="Delete Comment"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-zinc-300 whitespace-pre-wrap leading-relaxed pl-8">
-                    {comment.content}
-                  </p>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* 4. High Score Submission Modal */}
+      {/* High Score Submission Modal */}
       {showScoreModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
@@ -520,7 +547,7 @@ export function GameSocialSection({
               <button
                 type="button"
                 onClick={() => setShowScoreModal(false)}
-                className="text-zinc-400 hover:text-white"
+                className="text-zinc-400 hover:text-white cursor-pointer"
               >
                 ✕
               </button>
@@ -577,14 +604,14 @@ export function GameSocialSection({
                 <button
                   type="button"
                   onClick={() => setShowScoreModal(false)}
-                  className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-white"
+                  className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-white cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingScore || !scoreInput}
-                  className="px-4 py-2 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmittingScore ? "Submitting..." : "Submit Record"}
                 </button>
@@ -593,6 +620,196 @@ export function GameSocialSection({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * Community Comments Feed Component.
+ * Self-contained or consumer of GameSocialContext.
+ */
+export function GameCommentsFeedInternal() {
+  const {
+    stats,
+    currentUser,
+    commentText,
+    setCommentText,
+    isSubmittingComment,
+    commentError,
+    handlePostComment,
+    handleDeleteComment,
+  } = useGameSocial();
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Post Comment Input */}
+      {currentUser ? (
+        <form onSubmit={handlePostComment} className="flex flex-col gap-2">
+          <div className="relative">
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="Share review, tips, secret codes..."
+              maxLength={2000}
+              rows={2}
+              className="w-full rounded-xl bg-zinc-900/90 border border-white/15 px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none transition"
+            />
+            <div className="absolute right-2.5 bottom-2 text-[9px] text-zinc-500">
+              {commentText.length} / 2000
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isSubmittingComment || !commentText.trim()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white shadow-md shadow-red-600/30 transition cursor-pointer active:scale-95"
+            >
+              <Send className="w-3 h-3" />
+              <span>{isSubmittingComment ? "Posting..." : "Post Comment"}</span>
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-white/10 text-xs text-zinc-400 flex items-center justify-between">
+          <span>Log in to post comments.</span>
+          <a
+            href="/roms/auth/login"
+            className="font-bold text-red-400 hover:text-red-300 underline"
+          >
+            Log In
+          </a>
+        </div>
+      )}
+
+      {commentError && (
+        <div className="p-2 rounded-lg bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+          <span>{commentError}</span>
+        </div>
+      )}
+
+      {/* Comments List */}
+      <div className="flex flex-col gap-2">
+        {stats.recentComments.length === 0 ? (
+          <p className="text-xs text-zinc-500 italic py-2 text-center">
+            No comments posted yet. Start the conversation!
+          </p>
+        ) : (
+          stats.recentComments.map((comment) => {
+            const isAuthor = currentUser?.id === comment.author.id;
+            const isAdmin = currentUser?.role === "admin";
+            const canDelete = isAuthor || isAdmin;
+
+            return (
+              <div
+                key={comment.id}
+                className="flex flex-col gap-1 p-2.5 rounded-xl bg-zinc-900/40 border border-white/10 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-5 h-5 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center font-bold text-[9px] text-zinc-300 uppercase overflow-hidden shrink-0">
+                      {comment.author.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={comment.author.avatarUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        (comment.author.displayName || comment.author.username).charAt(0)
+                      )}
+                    </div>
+                    <span className="font-semibold text-white truncate text-[11px]">
+                      {comment.author.displayName || comment.author.username}
+                    </span>
+                    {comment.author.role === "admin" && (
+                      <span className="px-1 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider bg-red-600/30 text-red-400 border border-red-500/30 shrink-0">
+                        Admin
+                      </span>
+                    )}
+                    <span className="text-[10px] text-zinc-500 shrink-0">
+                      {new Date(comment.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </div>
+
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteComment(comment.id)}
+                      className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-white/10 transition cursor-pointer"
+                      title="Delete Comment"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-zinc-300 whitespace-pre-wrap leading-relaxed pl-7 text-[11px]">
+                  {comment.content}
+                </p>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
+  );
+}
+
+export function GameCommentsFeed({ gameId }: { gameId?: string }) {
+  const context = useContext(GameSocialContext);
+  if (context) {
+    return <GameCommentsFeedInternal />;
+  }
+
+  if (!gameId) {
+    return null;
+  }
+
+  return (
+    <GameSocialProvider gameId={gameId} gameTitle="" system="">
+      <GameCommentsFeedInternal />
+    </GameSocialProvider>
+  );
+}
+
+/**
+ * Backwards-compatible GameSocialSection that wraps all three elements.
+ */
+export function GameSocialSection({
+  gameId,
+  gameTitle,
+  system,
+  initialStats,
+  currentUser,
+}: {
+  gameId: string;
+  gameTitle: string;
+  system: string;
+  initialStats?: GameSocialStats | null;
+  currentUser?: AuthSession["user"] | null;
+}) {
+  return (
+    <GameSocialProvider
+      gameId={gameId}
+      gameTitle={gameTitle}
+      system={system}
+      initialStats={initialStats}
+      currentUser={currentUser}
+    >
+      <div className="flex flex-col gap-4 text-zinc-200">
+        <GameRatingWidget />
+        <GameLeaderboardSnapshot />
+        <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-400">
+            <MessageSquare className="w-4 h-4" />
+            <span>Community Discussion</span>
+          </div>
+          <GameCommentsFeedInternal />
+        </div>
+      </div>
+    </GameSocialProvider>
   );
 }
