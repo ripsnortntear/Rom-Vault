@@ -356,7 +356,7 @@ export function GameDetailModal({
                   <MessageSquare className="w-3.5 h-3.5 text-red-400" />
                   <span>Community Comments</span>
                 </h4>
-                <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar [scrollbar-width:thin] [scrollbar-color:rgba(63,63,70,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/40 hover:[&::-webkit-scrollbar-thumb]:bg-zinc-500/70 active:[&::-webkit-scrollbar-thumb]:bg-indigo-500">
                   <GameCommentsFeed gameId={game.id} />
                 </div>
               </div>
@@ -547,7 +547,7 @@ export function GameDetailModal({
                     <MessageSquare className="w-3.5 h-3.5 text-red-400" />
                     <span>Community Comments</span>
                   </h4>
-                  <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar [scrollbar-width:thin] [scrollbar-color:rgba(63,63,70,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/40 hover:[&::-webkit-scrollbar-thumb]:bg-zinc-500/70 active:[&::-webkit-scrollbar-thumb]:bg-indigo-500">
                     <GameCommentsFeed gameId={game.id} />
                   </div>
                 </div>
