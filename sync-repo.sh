@@ -12,34 +12,61 @@ echo "=========================================="
 echo " [Sync] Checking Repository Status"
 echo "=========================================="
 
-# Check if there are any working tree changes or untracked files
-if [[ -z $(git status --porcelain) ]]; then
-  echo "[*] Working directory is clean. Checking for unpushed commits..."
-  LOCAL_HASH=$(git rev-parse @)
-  REMOTE_HASH=$(git rev-parse @{u} 2>/dev/null || echo "")
+HAS_CHANGES=false
+if [[ -n $(git status --porcelain) ]]; then
+  HAS_CHANGES=true
+fi
 
-  if [[ -n "$REMOTE_HASH" && "$LOCAL_HASH" == "$REMOTE_HASH" ]]; then
-    echo "[✓] Everything is already committed and up to date with remote."
-    exit 0
+# 1. Parse commit message and flags
+COMMIT_MSG=""
+REBUILD=false
+
+for arg in "$@"; do
+  if [[ "$arg" == "--rebuild" ]]; then
+    REBUILD=true
+  elif [[ -z "$COMMIT_MSG" ]]; then
+    COMMIT_MSG="$arg"
   fi
-else
-  # Stage all files
+done
+
+if [[ -z "$COMMIT_MSG" ]]; then
+  COMMIT_MSG="chore(sync): automated sync on $(date '+%Y-%m-%d %H:%M:%S')"
+fi
+
+# 2. Rebuild FIRST (if requested or by default on sync)
+if [[ "$REBUILD" == true ]]; then
+  echo "=========================================="
+  echo " [Build] Testing Next.js Turbopack Build"
+  echo "=========================================="
+  npm run build
+  echo "[✓] Build passed cleanly! Proceeding to commit and push..."
+
+  echo "[+] Restarting $SERVICE_NAME..."
+  sudo systemctl restart "$SERVICE_NAME"
+  echo "[✓] $SERVICE_NAME successfully restarted!"
+fi
+
+# 3. Commit changes locally if any exist
+if [[ "$HAS_CHANGES" == true ]]; then
   echo "[+] Staging all changes (git add -A)..."
   git add -A
-
-  # Build commit message
-  if [[ $# -gt 0 ]]; then
-    COMMIT_MSG="$*"
-  else
-    COMMIT_MSG="chore(sync): automated sync on $(date '+%Y-%m-%d %H:%M:%S')"
-  fi
-
   echo "[+] Committing with message: '$COMMIT_MSG'"
   git commit -m "$COMMIT_MSG"
 fi
 
-# Push to remote branch
-echo "[+] Pushing changes to $GIT_REMOTE/$GIT_BRANCH..."
+# 4. Check if there are unpushed commits
+LOCAL_HASH=$(git rev-parse @)
+REMOTE_HASH=$(git rev-parse @{u} 2>/dev/null || echo "")
+
+if [[ -n "$REMOTE_HASH" && "$LOCAL_HASH" == "$REMOTE_HASH" ]]; then
+  echo "[✓] Everything is already up to date with remote."
+  exit 0
+fi
+
+# 5. Push to remote only after build has succeeded
+echo "=========================================="
+echo " [Push] Pushing Verified Build to $GIT_REMOTE/$GIT_BRANCH"
+echo "=========================================="
 if git push "$GIT_REMOTE" "$GIT_BRANCH"; then
   echo "[✓] Git push successful!"
 else
@@ -48,16 +75,6 @@ else
   echo "[✓] Direct authenticated push successful!"
 fi
 
-# Optional build and service reload
-if [[ "${1:-}" == "--rebuild" || "${2:-}" == "--rebuild" ]]; then
-  echo "=========================================="
-  echo " [Build] Building Next.js & Restarting"
-  echo "=========================================="
-  npm run build
-  sudo systemctl restart "$SERVICE_NAME"
-  echo "[✓] $SERVICE_NAME successfully restarted!"
-fi
-
 echo "=========================================="
-echo " [Done] Sync complete."
+echo " [Done] Verified sync complete."
 echo "=========================================="
