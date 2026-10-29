@@ -5,10 +5,8 @@ variables:
   GITLAB_FEATURES: ""
   SECRET_DETECTION_DISABLED: "true"
   SAST_DISABLED: "true"
-  NODE_ENV: "production"
   SKIP_ENV_VALIDATION: "true"
   NEXT_TELEMETRY_DISABLED: "1"
-  # Provide mock fallbacks for static build analysis
   SESSION_SECRET: "ci-dummy-session-secret-build-only-32bytes"
   DATABASE_URL: "mysql://build:build@localhost:3306/build"
 
@@ -16,8 +14,8 @@ build_and_verify:
   stage: build
   script:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
-    - echo "[*] Installing dependencies..."
-    - npm ci
+    - echo "[*] Installing all dependencies (including devDependencies for TypeScript)..."
+    - npm ci --include=dev
     - echo "[*] Checking TypeScript types..."
     - npx tsc --noEmit
     - echo "[*] Running Next.js build..."
