@@ -1,5 +1,6 @@
 stages:
   - build
+  - deploy
 
 variables:
   GITLAB_FEATURES: ""
@@ -14,7 +15,6 @@ build_and_verify:
   stage: build
   script:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
-    # Copy host production env if present on runner host to satisfy any missing connection strings
     - if [ -f /var/www/html/roms/.env ]; then cp /var/www/html/roms/.env .env.local; fi
     - echo "[*] Installing all dependencies (including devDependencies)..."
     - npm ci --include=dev
@@ -26,3 +26,16 @@ build_and_verify:
     expire_in: 2 days
     paths:
       - .next/
+
+deploy_production:
+  stage: deploy
+  dependencies:
+    - build_and_verify
+  only:
+    - main
+  script:
+    - echo "[*] Syncing verified build artifacts to production directory..."
+    - rsync -a --delete .next/ /var/www/html/roms/.next/
+    - echo "[*] Restarting retro-gaming service..."
+    - sudo /bin/systemctl restart retro-gaming.service
+    - echo "[✓] Deployment complete and service restarted!"
