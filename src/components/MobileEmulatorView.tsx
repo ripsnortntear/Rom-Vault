@@ -317,7 +317,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             pcsx_rearmed_drc: "enabled",
             pcsx_rearmed_neon_enhancement_enable: "disabled",
             pcsx_rearmed_neon_enhancement_no_main: "disabled",
-            pcsx_rearmed_pad1type: hasPhysicalController ? "dualshock" : "standard",
+            pcsx_rearmed_pad1type: "analog",
             pcsx_rearmed_analog_to_digital: "left_analog",
           };
 
@@ -335,7 +335,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_player1_l3_btn": "10",
             "input_player1_r3_btn": "11",
             "input_player1_analog_dpad_mode": "1",
-            "input_libretro_device_p1": hasPhysicalController ? "5" : "1",
+            "input_libretro_device_p1": "5",
           };
         }
 
