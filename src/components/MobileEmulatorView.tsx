@@ -128,7 +128,24 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
   const activeDisc = game.discs && game.discs[selectedDiscIndex] ? game.discs[selectedDiscIndex] : null;
 
-  const stopEmulator = useCallback(() => {
+  const stopEmulator = useCallback(async () => {
+    // 1. Force flush save data to persistent storage if emulator is active
+    const emu = window.EJS_emulator;
+    if (emu) {
+      try {
+        if (typeof emu.gameManager?.saveSaveFiles === "function") {
+          emu.gameManager.saveSaveFiles();
+        } else if (typeof emu.saveSaveFiles === "function") {
+          emu.saveSaveFiles();
+        }
+      } catch (e) {
+        console.warn("[Emulator] Flush save error:", e);
+      }
+    }
+
+    // Brief delay to allow IndexedDB / localStorage async transaction to settle
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
     const existingScript = document.getElementById("ejs-loader-script");
     if (existingScript) existingScript.remove();
 
@@ -301,11 +318,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             pcsx_rearmed_neon_enhancement_enable: "disabled",
             pcsx_rearmed_neon_enhancement_no_main: "disabled",
             pcsx_rearmed_pad1type: hasPhysicalController ? "dualshock" : "standard",
-            pcsx_rearmed_analog_to_digital: hasPhysicalController ? "left_analog" : "disabled",
+            pcsx_rearmed_analog_to_digital: "left_analog",
           };
 
           window.EJS_defaultOptions = {
-            "save-save-interval": "120",
+            "save-save-interval": "10",
+            "autosave": "1",
             "save-state-location": "browser",
             "pcsx_rearmed_cdfs_cache": "disabled",
             "pcsx_rearmed_async_cd": "sync",
@@ -316,7 +334,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_player1_r2_btn": "7",
             "input_player1_l3_btn": "10",
             "input_player1_r3_btn": "11",
-            "input_player1_analog_dpad_mode": hasPhysicalController ? "1" : "0",
+            "input_player1_analog_dpad_mode": "1",
             "input_libretro_device_p1": hasPhysicalController ? "5" : "1",
           };
         }
@@ -361,8 +379,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     setErrorMessage(null);
   };
 
-  const handleBackToLibrary = () => {
-    stopEmulator();
+  const handleBackToLibrary = async () => {
+    await stopEmulator();
     window.location.assign("/roms");
   };
 
@@ -391,6 +409,14 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           margin: 0 auto !important;
         }
 
+        #mobile-emulator-container canvas {
+          display: block !important;
+          margin: auto !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+          object-fit: contain !important;
+        }
+
         #mobile-emulator-container > div,
         #mobile-emulator-container #ejs_parent,
         #mobile-emulator-container canvas {
@@ -405,7 +431,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
       {/* Top Header when running standalone (not in modal iframe) */}
       {!isInIframe && (
-        <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-3 bg-gradient-to-b from-black/90 via-black/50 to-transparent">
+        <div className="w-full shrink-0 z-50 flex items-center justify-between p-3.5 bg-zinc-950/95 border-b border-white/10">
           <div className="flex items-center gap-2">
             <button
               onClick={handleBackToLibrary}
@@ -450,7 +476,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       )}
 
       {/* Dedicated Emulator Mount Sub-Container */}
-      <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+      <div className="relative w-full flex-1 flex items-center justify-center bg-black overflow-hidden">
         <div
           id="mobile-emulator-container"
           ref={containerRef}
