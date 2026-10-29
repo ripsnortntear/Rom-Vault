@@ -100,10 +100,9 @@ export function RetroLibraryClient({
   const [recentIds, setRecentIds] = useState<string[]>([]);
 
   const [featuredGame, setFeaturedGame] = useState<GameItem | null>(() => {
-    const iconic = initialGames.find((g) =>
-      ICONIC_TITLES.some((title) => g.baseName.includes(title))
-    );
-    return iconic ?? initialGames[0] ?? null;
+    if (!initialGames || initialGames.length === 0) return null;
+    const randomIndex = Math.floor(Math.random() * initialGames.length);
+    return initialGames[randomIndex] ?? null;
   });
 
   const [detailGame, setDetailGame] = useState<GameItem | null>(null);
@@ -396,19 +395,14 @@ export function RetroLibraryClient({
   }, []);
 
   useEffect(() => {
-    if (selectedSystem === "ALL") {
-      return;
+    const pool = selectedSystem === "ALL"
+      ? initialGames
+      : initialGames.filter((g) => g.system === selectedSystem);
+
+    if (pool.length > 0) {
+      const randomIndex = Math.floor(Math.random() * pool.length);
+      setFeaturedGame(pool[randomIndex] ?? null);
     }
-    setFeaturedGame((prev) => {
-      if (prev && prev.system === selectedSystem) {
-        return prev;
-      }
-      const pool = initialGames.filter((g) => g.system === selectedSystem);
-      const iconic = pool.find((g) =>
-        ICONIC_TITLES.some((title) => g.baseName.includes(title))
-      );
-      return iconic ?? pool[0] ?? prev;
-    });
   }, [selectedSystem, initialGames]);
 
   const availableRegions = useMemo(() => {
