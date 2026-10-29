@@ -222,6 +222,55 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   useEffect(() => {
     if (bootState !== "running") return;
 
+    let animId: number;
+    const DEADZONE = 0.4;
+    const lastAxesState = { up: false, down: false, left: false, right: false };
+
+    const pollPhysicalStick = () => {
+      const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
+      const pad = Array.from(pads).find((p) => p && p.connected && p.axes && p.axes.length >= 2);
+
+      if (pad) {
+        const axisX = pad.axes[0] || 0;
+        const axisY = pad.axes[1] || 0;
+
+        const left = axisX < -DEADZONE;
+        const right = axisX > DEADZONE;
+        const up = axisY < -DEADZONE;
+        const down = axisY > DEADZONE;
+
+        // If state changed, simulate keyboard arrows matching the touch joystick behavior
+        if (left !== lastAxesState.left) {
+          window.dispatchEvent(new KeyboardEvent(left ? "keydown" : "keyup", { key: "ArrowLeft", code: "ArrowLeft", bubbles: true }));
+          lastAxesState.left = left;
+        }
+        if (right !== lastAxesState.right) {
+          window.dispatchEvent(new KeyboardEvent(right ? "keydown" : "keyup", { key: "ArrowRight", code: "ArrowRight", bubbles: true }));
+          lastAxesState.right = right;
+        }
+        if (up !== lastAxesState.up) {
+          window.dispatchEvent(new KeyboardEvent(up ? "keydown" : "keyup", { key: "ArrowUp", code: "ArrowUp", bubbles: true }));
+          lastAxesState.up = up;
+        }
+        if (down !== lastAxesState.down) {
+          window.dispatchEvent(new KeyboardEvent(down ? "keydown" : "keyup", { key: "ArrowDown", code: "ArrowDown", bubbles: true }));
+          lastAxesState.down = down;
+        }
+      }
+
+      animId = requestAnimationFrame(pollPhysicalStick);
+    };
+
+    animId = requestAnimationFrame(pollPhysicalStick);
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [bootState]);
+
+  useEffect(() => {
+    if (bootState !== "running") return;
+
     const handleGamepadConnected = (e: GamepadEvent) => {
       const pad = e.gamepad;
       if (pad && pad.axes && pad.axes.length >= 2) {
