@@ -280,7 +280,7 @@ export function GameDetailModal({
           system={game.system}
         >
           <div className="relative z-10 overflow-y-auto p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Left Column (50% desktop): Media Preview + Switchers + Comments */}
+            {/* Left Column: Media Viewport + Red Play Button Directly Under Media */}
             <div className="lg:col-span-6 flex flex-col gap-4">
               {/* Media Viewport */}
               <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl">
@@ -303,8 +303,91 @@ export function GameDetailModal({
                 )}
               </div>
 
+              {/* Big Red Play Button & Disc Selector - Placed immediately beneath media container */}
+              <div className="flex flex-col gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handlePlayActive}
+                  className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-black text-base bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:from-red-700 active:to-red-800 text-white shadow-xl shadow-red-600/30 transition transform active:scale-[0.98] cursor-pointer"
+                >
+                  <Play className="w-5 h-5 fill-current" />
+                  <span>
+                    {game.playable
+                      ? game.discs && game.discs.length > 1
+                        ? `Play Disc ${activeDiscNum} in Browser Now`
+                        : "Play in Browser Now"
+                      : "Play / Download Options"}
+                  </span>
+                </button>
+
+                {/* Multi-disc Starting Disc Selector */}
+                {game.discs && game.discs.length > 1 && (
+                  <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-xs">
+                    <div className="font-semibold text-zinc-300 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Disc className="w-3.5 h-3.5 text-red-400" />
+                        Select Starting Disc ({game.discs.length} Discs)
+                      </span>
+                      <span className="text-red-400 font-bold text-[11px] bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
+                        Loaded: Disc {activeDiscNum}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      {game.discs.map((d, idx) => {
+                        const isSelected = idx === selectedDiscIndex;
+                        return (
+                          <div
+                            key={d.discNumber}
+                            onClick={() => setSelectedDiscIndex(idx)}
+                            className={`group flex items-center justify-between p-2 rounded-lg border transition cursor-pointer ${
+                              isSelected
+                                ? "bg-red-600/20 border-red-500/80 text-white shadow-md shadow-red-600/20 ring-1 ring-red-500/50"
+                                : "bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300 hover:border-white/25"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                  isSelected
+                                    ? "border-red-400 bg-red-500 text-white"
+                                    : "border-zinc-500 bg-zinc-800"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                )}
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-bold text-xs truncate">
+                                  Disc {d.discNumber}
+                                </span>
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  {d.fileSizeBytes >= 1024 * 1024 * 1024
+                                    ? `${(d.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+                                    : `${Math.round(d.fileSizeBytes / (1024 * 1024))} MB`}
+                                </span>
+                              </div>
+                            </div>
+
+                            <a
+                              href={`${d.romUrl}${d.romUrl.includes("?") ? "&" : "?"}download=1`}
+                              download={d.fileName}
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white transition shrink-0 ml-1"
+                              title={`Download Disc ${d.discNumber}`}
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Media Switcher Tab Buttons */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 pt-1">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -350,7 +433,7 @@ export function GameDetailModal({
                 )}
               </div>
 
-              {/* Desktop Comments Section: Relocated directly beneath media switcher buttons */}
+              {/* Desktop Comments Section */}
               <div className="mt-4 border-t border-zinc-800/80 pt-4 flex-1 hidden lg:flex flex-col min-h-0">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-2">
                   <MessageSquare className="w-3.5 h-3.5 text-red-400" />
@@ -362,7 +445,7 @@ export function GameDetailModal({
               </div>
             </div>
 
-            {/* Right Column (50% desktop): Badges, Star Rating, Actions, Storyline, High Scores */}
+            {/* Right Column: Badges, Rating, Download & Fav, Overview */}
             <div className="lg:col-span-6 flex flex-col justify-between gap-6">
               <div className="flex flex-col gap-4">
                 {game.media.logo && (
@@ -375,7 +458,7 @@ export function GameDetailModal({
                   </div>
                 )}
 
-                {/* Metadata & Tag Badges */}
+                {/* Metadata & Badges */}
                 <div className="flex flex-wrap items-center gap-2">
                   {game.regions.map((region) => (
                     <span
@@ -417,114 +500,34 @@ export function GameDetailModal({
                   </span>
                 </div>
 
-                {/* 1-to-5 Star Rating widget directly under title/badges */}
+                {/* Star Rating Widget */}
                 <GameRatingWidget />
 
-                {/* Primary Action Buttons */}
-                <div className="flex flex-col gap-3 py-1">
+                {/* Secondary Actions: Download and Favorite */}
+                <div className="grid grid-cols-2 gap-3 py-1">
+                  <a
+                    href={`${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1`}
+                    download={activeRomFileName}
+                    className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white border border-white/15 transition"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download {game.discs && game.discs.length > 1 ? `Disc ${activeDiscNum}` : "ROM"}
+                  </a>
+
                   <button
                     type="button"
-                    onClick={handlePlayActive}
-                    className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl font-bold text-base bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/30 transition cursor-pointer"
+                    onClick={() => onToggleFavorite(game.id)}
+                    className={`inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm border transition cursor-pointer ${
+                      isFavorite
+                        ? "bg-red-600/20 border-red-500 text-red-200"
+                        : "bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200"
+                    }`}
                   >
-                    <Play className="w-5 h-5 fill-current" />
-                    {game.playable
-                      ? game.discs && game.discs.length > 1
-                        ? `Play Disc ${activeDiscNum} in Browser Now`
-                        : "Play in Browser Now"
-                      : "Play / Download Options"}
+                    <Heart
+                      className={`w-4 h-4 ${isFavorite ? "fill-current text-red-500" : ""}`}
+                    />
+                    {isFavorite ? "Favorited" : "Favorite"}
                   </button>
-
-                  {/* Multi-disc Starting Disc Selector */}
-                  {game.discs && game.discs.length > 1 && (
-                    <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-xs">
-                      <div className="font-semibold text-zinc-300 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
-                          <Disc className="w-3.5 h-3.5 text-red-400" />
-                          Select Starting Disc ({game.discs.length} Discs)
-                        </span>
-                        <span className="text-red-400 font-bold text-[11px] bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
-                          Loaded: Disc {activeDiscNum}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        {game.discs.map((d, idx) => {
-                          const isSelected = idx === selectedDiscIndex;
-                          return (
-                            <div
-                              key={d.discNumber}
-                              onClick={() => setSelectedDiscIndex(idx)}
-                              className={`group flex items-center justify-between p-2 rounded-lg border transition cursor-pointer ${
-                                isSelected
-                                  ? "bg-red-600/20 border-red-500/80 text-white shadow-md shadow-red-600/20 ring-1 ring-red-500/50"
-                                  : "bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300 hover:border-white/25"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div
-                                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                                    isSelected
-                                      ? "border-red-400 bg-red-500 text-white"
-                                      : "border-zinc-500 bg-zinc-800"
-                                  }`}
-                                >
-                                  {isSelected && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                                  )}
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="font-bold text-xs truncate">
-                                    Disc {d.discNumber}
-                                  </span>
-                                  <span className="text-[10px] text-zinc-400 font-mono">
-                                    {d.fileSizeBytes >= 1024 * 1024 * 1024
-                                      ? `${(d.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-                                      : `${Math.round(d.fileSizeBytes / (1024 * 1024))} MB`}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <a
-                                href={`${d.romUrl}${d.romUrl.includes("?") ? "&" : "?"}download=1`}
-                                download={d.fileName}
-                                onClick={(e) => e.stopPropagation()}
-                                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white transition shrink-0 ml-1"
-                                title={`Download Disc ${d.discNumber}`}
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </a>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <a
-                      href={`${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1`}
-                      download={activeRomFileName}
-                      className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white border border-white/15 transition"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download {game.discs && game.discs.length > 1 ? `Disc ${activeDiscNum}` : "ROM"}
-                    </a>
-
-                    <button
-                      type="button"
-                      onClick={() => onToggleFavorite(game.id)}
-                      className={`inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm border transition cursor-pointer ${
-                        isFavorite
-                          ? "bg-red-600/20 border-red-500 text-red-200"
-                          : "bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200"
-                      }`}
-                    >
-                      <Heart
-                        className={`w-4 h-4 ${isFavorite ? "fill-current text-red-500" : ""}`}
-                      />
-                      {isFavorite ? "Favorited" : "Favorite"}
-                    </button>
-                  </div>
                 </div>
 
                 {/* Storyline Overview */}
@@ -541,7 +544,7 @@ export function GameDetailModal({
                 {/* Vault Leaderboard Snapshot Banner */}
                 <GameLeaderboardSnapshot />
 
-                {/* Mobile Comments Section: Stacks naturally at bottom on small screens */}
+                {/* Mobile Comments Section */}
                 <div className="mt-6 border-t border-zinc-800/80 pt-4 flex lg:hidden flex-col">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-2">
                     <MessageSquare className="w-3.5 h-3.5 text-red-400" />

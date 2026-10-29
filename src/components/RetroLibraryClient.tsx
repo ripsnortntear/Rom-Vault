@@ -353,7 +353,7 @@ export function RetroLibraryClient({
       (window.innerWidth < 768 || window.matchMedia("(pointer: coarse)").matches);
 
     if (isMobile) {
-      window.location.assign(`/roms/play/${encodeURIComponent(game.id)}`);
+      window.location.assign(`/roms/play/${encodeURIComponent(decodeURIComponent(game.id))}`);
       return;
     }
 

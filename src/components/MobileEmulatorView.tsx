@@ -3,12 +3,26 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle } from "lucide-react";
 
+function deepDecode(str: string): string {
+  let s = str || "";
+  try {
+    while (s.includes("%20") || s.includes("%25")) {
+      const decoded = decodeURIComponent(s);
+      if (decoded === s) break;
+      s = decoded;
+    }
+  } catch (e) {}
+  return s;
+}
+
 declare global {
   interface Window {
     EJS_player?: string;
     EJS_core?: string;
+    EJS_biosUrl?: string;
     EJS_gameName?: string;
     EJS_gameUrl?: string;
+    EJS_gamePath?: string;
     EJS_pathtodata?: string;
     EJS_language?: string;
     EJS_disableAutoLang?: boolean;
@@ -17,6 +31,10 @@ declare global {
     EJS_rumble?: boolean;
     EJS_vibration?: boolean;
     EJS_disableRumble?: boolean;
+    EJS_loadToMemory?: boolean;
+    EJS_disableCue?: boolean;
+    EJS_threads?: boolean;
+    EJS_CacheLimit?: number;
     EJS_resolution?: number;
     EJS_volume?: number;
     EJS_audioBufferSize?: number;
@@ -84,7 +102,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     if (typeof window !== "undefined") {
       setIsInIframe(window.self !== window.top);
 
-      // Lock global rumble/vibration flags off immediately
       window.EJS_rumble = false;
       window.EJS_vibration = false;
       (window as unknown as Record<string, unknown>).EJS_disableRumble = true;
@@ -132,7 +149,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     };
   }, [stopEmulator]);
 
-  // Dynamic runtime gamepad connection hook
   const updatePadMode = useCallback((connected: boolean) => {
     if (game.system !== "psx" && game.system !== "ps1") return;
 
@@ -170,7 +186,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     }
   }, [game.system]);
 
-  // Listen for parent iframe messages (e.g. from modal wrapper)
   useEffect(() => {
     const handleParentMessage = (e: MessageEvent) => {
       if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
@@ -187,7 +202,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     return () => window.removeEventListener("message", handleParentMessage);
   }, [bootState, updatePadMode, stopEmulator]);
 
-  // Strictly gate physical gamepad listeners until the emulator is actively running
   useEffect(() => {
     if (bootState !== "running") return;
 
@@ -218,7 +232,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     setErrorMessage(null);
 
     try {
-      // 1. Resume AudioContext within user gesture
       try {
         const AudioCtx =
           window.AudioContext ||
@@ -231,7 +244,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         }
       } catch {}
 
-      // 2. Defuse automatic orientation lock and programmatic fullscreen rejections
       if (typeof window !== "undefined") {
         const screenAny = (screen as unknown as { orientation?: { lock?: unknown } })?.orientation;
         if (screenAny && typeof screenAny.lock === "function") {
@@ -240,42 +252,50 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           } catch {}
         }
 
-        // 3. Compute Stream URL for Active Disc
         const discNum = activeDisc ? activeDisc.discNumber : undefined;
-        const fileName = activeDisc ? activeDisc.fileName : game.romFileName;
         const discQuery = discNum ? `?disc=${discNum}` : "";
-        const fileQuery = fileName ? `${discQuery ? "&" : "?"}file=${encodeURIComponent(fileName)}` : "";
-        const streamUrl = `/roms/api/roms/${encodeURIComponent(game.id)}/stream${discQuery}${fileQuery}`;
+        const cleanId = deepDecode(game.id).trim();
 
-        // 4. Configure low-memory EmulatorJS flags
+        // Direct stream route with disc query
+        const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanId)}/stream${discQuery}`;
+
+        // Compute clean filename with explicit .chd extension
+        const rawFileName = activeDisc ? activeDisc.fileName : game.romFileName;
+        const cleanFileName = (rawFileName ? deepDecode(rawFileName).trim() : (game.title + ".chd")).replace(/\.(bin|cue|zip)$/i, ".chd");
+
         window.EJS_player = "#mobile-emulator-container";
         window.EJS_core = game.system;
         window.EJS_gameName = game.title;
+        if (game.system === "psx" || game.system === "ps1") {
+          window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
+        }
+        window.EJS_gamePath = cleanFileName;
+        window.EJS_disableCue = true;
+        window.EJS_loadToMemory = true;
+        window.EJS_CacheLimit = 32 * 1024 * 1024;
+        window.EJS_threads = false;
+
         window.EJS_gameUrl = streamUrl;
         window.EJS_pathtodata = "/roms/emulatorjs/data/";
         window.EJS_language = "en-US";
         window.EJS_disableAutoLang = true;
 
-        // Deterministic Auto-Start: EmulatorJS starts on load because we already captured user gesture
         window.EJS_startOnLoaded = true;
         window.EJS_fullscreenOnLoad = false;
 
-        // Disable rumble/vibration to protect controller
         window.EJS_rumble = false;
         window.EJS_vibration = false;
         (window as unknown as Record<string, unknown>).EJS_disableRumble = true;
 
-        // Conserve audio buffer and canvas resolution
         window.EJS_resolution = 1;
         window.EJS_volume = 1.0;
-        window.EJS_audioBufferSize = 8192;
+        window.EJS_audioBufferSize = 2048;
         window.EJS_sampleRate = 44100;
 
-        // Core Specific Settings (e.g. PCSX ReARMed)
         const hasPhysicalController = checkPhysicalGamepadConnected();
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_coreSettings = {
-            pcsx_rearmed_cdfs_cache: "async",
+            pcsx_rearmed_cdfs_cache: "disabled",
             pcsx_rearmed_async_cd: "sync",
             pcsx_rearmed_drc: "enabled",
             pcsx_rearmed_neon_enhancement_enable: "disabled",
@@ -285,9 +305,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           };
 
           window.EJS_defaultOptions = {
-            "save-save-interval": "60",
+            "save-save-interval": "120",
             "save-state-location": "browser",
-            "pcsx_rearmed_cdfs_cache": "async",
+            "pcsx_rearmed_cdfs_cache": "disabled",
             "pcsx_rearmed_async_cd": "sync",
             "pcsx_rearmed_memcard2": "disabled",
             "input_player1_l_btn": "4",
@@ -299,25 +319,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_player1_analog_dpad_mode": hasPhysicalController ? "1" : "0",
             "input_libretro_device_p1": hasPhysicalController ? "5" : "1",
           };
-
-          window.EJS_virtualGamepadSettings = {
-            ...window.EJS_virtualGamepadSettings,
-            shoulders: 4,
-            buttonLabels: {
-              ...window.EJS_virtualGamepadSettings?.buttonLabels,
-              b: "○",
-              a: "✕",
-              y: "△",
-              x: "□",
-              l: "L1",
-              r: "R1",
-              l2: "L2",
-              r2: "R2",
-            },
-          };
         }
 
-        // 5. Hook native EmulatorJS start event to dismiss overlay ONLY after WASM is running
         window.EJS_onStart = () => {
           setBootState("running");
         };
@@ -325,7 +328,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           setBootState("running");
         };
 
-        // 6. Clean previous script or DOM elements before injection
         const existingScript = document.getElementById("ejs-loader-script");
         if (existingScript) existingScript.remove();
 
@@ -333,7 +335,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           containerRef.current.innerHTML = "";
         }
 
-        // 7. Inject loader script
         const script = document.createElement("script");
         script.id = "ejs-loader-script";
         script.src = "/roms/emulatorjs/data/loader.js";
@@ -378,94 +379,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   };
 
   return (
-    <div
-      className={`relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden select-none ${
-        game.system === "psx" || game.system === "ps1" ? "psx-touch-controls" : ""
-      }`}
-    >
+    <div className="relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden select-none">
       <style>{`
-        /* PS1 Shoulder Buttons Styling & Ergonomic Placement */
-        .psx-touch-controls .ejs_button_l,
-        .psx-touch-controls .ejs_button_l2,
-        .psx-touch-controls .ejs_button_r,
-        .psx-touch-controls .ejs_button_r2,
-        .psx-touch-controls [data-button="l"],
-        .psx-touch-controls [data-button="l2"],
-        .psx-touch-controls [data-button="r"],
-        .psx-touch-controls [data-button="r2"] {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-          font-weight: 800 !important;
-          font-size: 13px !important;
-          border-radius: 8px !important;
-          color: #e4e4e7 !important;
-          background-color: rgba(39, 39, 42, 0.6) !important;
-          border: 1px solid rgba(113, 113, 122, 0.5) !important;
-          backdrop-filter: blur(4px) !important;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          user-select: none !important;
-          touch-action: none !important;
-        }
-
-        /* Ergonomic Min Size & Proportions */
-        .psx-touch-controls .ejs_button_l,
-        .psx-touch-controls [data-button="l"],
-        .psx-touch-controls .ejs_button_l2,
-        .psx-touch-controls [data-button="l2"],
-        .psx-touch-controls .ejs_button_r,
-        .psx-touch-controls [data-button="r"],
-        .psx-touch-controls .ejs_button_r2,
-        .psx-touch-controls [data-button="r2"] {
-          min-width: 48px !important;
-          min-height: 34px !important;
-        }
-
-        /* Pressed States */
-        .psx-touch-controls .ejs_button_l:active,
-        .psx-touch-controls .ejs_button_l2:active,
-        .psx-touch-controls .ejs_button_r:active,
-        .psx-touch-controls .ejs_button_r2:active,
-        .psx-touch-controls [data-button="l"]:active,
-        .psx-touch-controls [data-button="l2"]:active,
-        .psx-touch-controls [data-button="r"]:active,
-        .psx-touch-controls [data-button="r2"]:active {
-          background-color: rgba(91, 141, 249, 0.5) !important;
-          border-color: #5b8df9 !important;
-        }
-
-        /* Explicit Button Content Labeling */
-        .psx-touch-controls .ejs_button_l::after,
-        .psx-touch-controls [data-button="l"]::after {
-          content: "L1" !important;
-        }
-        .psx-touch-controls .ejs_button_l2::after,
-        .psx-touch-controls [data-button="l2"]::after {
-          content: "L2" !important;
-        }
-        .psx-touch-controls .ejs_button_r::after,
-        .psx-touch-controls [data-button="r"]::after {
-          content: "R1" !important;
-        }
-        .psx-touch-controls .ejs_button_r2::after,
-        .psx-touch-controls [data-button="r2"]::after {
-          content: "R2" !important;
-        }
-
-        /* Hide fallback text if inner spans are injected */
-        .psx-touch-controls .ejs_button_l *,
-        .psx-touch-controls .ejs_button_l2 *,
-        .psx-touch-controls .ejs_button_r *,
-        .psx-touch-controls .ejs_button_r2 *,
-        .psx-touch-controls [data-button="l"] *,
-        .psx-touch-controls [data-button="l2"] *,
-        .psx-touch-controls [data-button="r"] *,
-        .psx-touch-controls [data-button="r2"] * {
-          display: none !important;
-        }
-
-        /* Ensure EmulatorJS canvas mount is centered without horizontal shift */
         #mobile-emulator-container {
           display: flex !important;
           align-items: center !important;
@@ -482,7 +397,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           margin: 0 auto !important;
         }
 
-        /* Suppress internal EmulatorJS start button in favor of dead-centered prompt */
         #mobile-emulator-container #ejs_start_button,
         #mobile-emulator-container .ejs_start_btn {
           display: none !important;
