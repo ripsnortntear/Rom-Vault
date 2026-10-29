@@ -6,8 +6,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
-<!-- END:nextjs-agent-rules -->
-
 # Next.js 16 App Router — ROM Vault Project Guidelines
 
 ROM Vault (https://your-domain.com/roms) is a high-performance web-based retro gaming preservation portal and in-browser emulation system built with Next.js 16 (App Router), React 19, and TypeScript. All code must strictly match the versions and conventions defined in package.json, discarding legacy patterns from Next.js 13–15.
@@ -110,3 +108,4 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Performance Profiling: Validate via `/_next/mcp` that emulation routes, media streams, and library views emit clean static shells without unexpected blocking SSR waterfalls.
 - Audit Caching Tiers: Clearly annotate which segments are prerendered, cache-component accelerated (`"use cache"`), or streamed via `<Suspense>`.
 
+<!-- END:nextjs-agent-rules -->

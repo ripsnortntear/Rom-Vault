@@ -317,7 +317,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             pcsx_rearmed_drc: "enabled",
             pcsx_rearmed_neon_enhancement_enable: "disabled",
             pcsx_rearmed_neon_enhancement_no_main: "disabled",
-            pcsx_rearmed_pad1type: "analog",
+            pcsx_rearmed_pad1type: "standard",
             pcsx_rearmed_analog_to_digital: "left_analog",
           };
 
@@ -339,11 +339,42 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           };
         }
 
+        const applyAnalogMapping = () => {
+          const emu = window.EJS_emulator;
+          if (!emu) return;
+
+          try {
+            if (typeof emu.setCoreSetting === "function") {
+              emu.setCoreSetting("pcsx_rearmed_pad1type", "standard");
+              emu.setCoreSetting("pcsx_rearmed_analog_to_digital", "left_analog");
+            }
+            const gm = emu.gameManager;
+            if (gm) {
+              if (typeof gm.setOption === "function") {
+                gm.setOption("pcsx_rearmed_pad1type", "standard");
+                gm.setOption("pcsx_rearmed_analog_to_digital", "left_analog");
+                gm.setOption("input_player1_analog_dpad_mode", "1");
+              }
+              if (typeof gm.setVariable === "function") {
+                gm.setVariable("pcsx_rearmed_pad1type", "standard");
+                gm.setVariable("pcsx_rearmed_analog_to_digital", "left_analog");
+                gm.setVariable("input_player1_analog_dpad_mode", "1");
+              }
+            }
+          } catch (e) {
+            console.warn("[Emulator] Core setting injection warning:", e);
+          }
+        };
+
         window.EJS_onStart = () => {
           setBootState("running");
+          applyAnalogMapping();
         };
         window.EJS_onGameStart = () => {
           setBootState("running");
+          applyAnalogMapping();
+          setTimeout(applyAnalogMapping, 500);
+          setTimeout(applyAnalogMapping, 1500);
         };
 
         const existingScript = document.getElementById("ejs-loader-script");
