@@ -14,7 +14,9 @@ build_and_verify:
   stage: build
   script:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
-    - echo "[*] Installing all dependencies (including devDependencies for TypeScript)..."
+    # Copy host production env if present on runner host to satisfy any missing connection strings
+    - if [ -f /var/www/html/roms/.env ]; then cp /var/www/html/roms/.env .env.local; fi
+    - echo "[*] Installing all dependencies (including devDependencies)..."
     - npm ci --include=dev
     - echo "[*] Checking TypeScript types..."
     - npx tsc --noEmit
