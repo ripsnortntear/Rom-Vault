@@ -38,7 +38,6 @@ export function EmulatorModal({
     if (typeof window === "undefined") return;
 
     try {
-      // Neutralize GamepadHapticActuator / vibrationActuator to prevent firmware trip
       if ("GamepadHapticActuator" in window) {
         try {
           Object.defineProperty(window, "GamepadHapticActuator", {
@@ -62,6 +61,7 @@ export function EmulatorModal({
       }
     } catch {}
   }, []);
+
   // Trap unhandled fullscreen rejections to prevent crashing the modal on mobile
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -92,7 +92,27 @@ export function EmulatorModal({
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "loaded">("idle");
   const [mountedCardName, setMountedCardName] = useState<string>("");
-  const [showNotice, setShowNotice] = useState<boolean>(true);
+
+  // Dismissable state reset pattern (replaces useEffect setState)
+  const [dismissedGameId, setDismissedGameId] = useState<string | null>(null);
+  const showNotice = Boolean(game?.id && dismissedGameId !== game.id);
+
+  // Derive initial disc index directly during render
+  const defaultDiscIndex = game?.discs && game.romFileName
+    ? Math.max(0, game.discs.findIndex((d) => d.fileName === game.romFileName))
+    : 0;
+
+  const [discSelection, setDiscSelection] = useState<{ gameId: string; index: number }>({
+    gameId: game?.id || "",
+    index: defaultDiscIndex >= 0 ? defaultDiscIndex : 0,
+  });
+
+  const selectedDiscIndex = discSelection.gameId === game?.id ? discSelection.index : (defaultDiscIndex >= 0 ? defaultDiscIndex : 0);
+
+  const setSelectedDiscIndex = useCallback((index: number) => {
+    if (!game?.id) return;
+    setDiscSelection({ gameId: game.id, index });
+  }, [game]);
 
   const { connected: gamepadConnected, id: gamepadId, needsActivation: gamepadNeedsActivation } = useGamepadManager({
     enabled: Boolean(game),
@@ -114,24 +134,6 @@ export function EmulatorModal({
     },
   });
 
-  useEffect(() => {
-    setShowNotice(true);
-  }, [game?.id]);
-
-  const initialIndex = game?.discs && game.romFileName
-    ? Math.max(0, game.discs.findIndex((d) => d.fileName === game.romFileName))
-    : 0;
-  const [selectedDiscIndex, setSelectedDiscIndex] = useState<number>(initialIndex !== -1 ? initialIndex : 0);
-
-  useEffect(() => {
-    if (game?.discs && game.romFileName) {
-      const idx = game.discs.findIndex((d) => d.fileName === game.romFileName);
-      setSelectedDiscIndex(idx >= 0 ? idx : 0);
-    } else {
-      setSelectedDiscIndex(0);
-    }
-  }, [game]);
-
   const resetHideTimer = useCallback(() => {
     if (hideBarsTimerRef.current) {
       clearTimeout(hideBarsTimerRef.current);
@@ -151,20 +153,22 @@ export function EmulatorModal({
     }
   };
 
+  // Clean timer cleanup on exit/unmount without calling setState inside an effect
   useEffect(() => {
-    if (isFullscreen) {
-      resetHideTimer();
-    } else {
-      if (hideBarsTimerRef.current) {
-        clearTimeout(hideBarsTimerRef.current);
-        hideBarsTimerRef.current = null;
-      }
-      setShowFullscreenBars(false);
+    if (!isFullscreen && hideBarsTimerRef.current) {
+      clearTimeout(hideBarsTimerRef.current);
+      hideBarsTimerRef.current = null;
     }
-  }, [isFullscreen, resetHideTimer]);
+  }, [isFullscreen]);
 
-  const handleExit = () => {
-    const doc = document as any;
+  const handleExit = useCallback(() => {
+    const doc = document as unknown as {
+      fullscreenElement?: Element;
+      webkitFullscreenElement?: Element;
+      exitFullscreen?: () => Promise<void>;
+      webkitExitFullscreen?: () => Promise<void>;
+    };
+
     if (doc.fullscreenElement || doc.webkitFullscreenElement) {
       try {
         if (doc.exitFullscreen) {
@@ -182,7 +186,48 @@ export function EmulatorModal({
       }
     } catch {}
     onClose();
-  };
+  }, [onClose]);
+
+  const toggleFullscreen = useCallback(async () => {
+    const elem = containerRef.current as unknown as {
+      requestFullscreen?: () => Promise<void>;
+      webkitRequestFullscreen?: () => Promise<void>;
+    };
+    const doc = document as unknown as {
+      fullscreenElement?: Element;
+      webkitFullscreenElement?: Element;
+      exitFullscreen?: () => Promise<void>;
+      webkitExitFullscreen?: () => Promise<void>;
+    };
+
+    const isCurrentlyFs = Boolean(doc.fullscreenElement || doc.webkitFullscreenElement);
+
+    if (!isCurrentlyFs) {
+      if (elem) {
+        try {
+          if (elem.requestFullscreen) {
+            await elem.requestFullscreen();
+          } else if (elem.webkitRequestFullscreen) {
+            await elem.webkitRequestFullscreen();
+          }
+        } catch {}
+      }
+      setIsFullscreen(true);
+      resetHideTimer();
+    } else {
+      if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+        try {
+          if (doc.exitFullscreen) {
+            await doc.exitFullscreen();
+          } else if (doc.webkitExitFullscreen) {
+            await doc.webkitExitFullscreen();
+          }
+        } catch {}
+      }
+      setIsFullscreen(false);
+      setShowFullscreenBars(false);
+    }
+  }, [resetHideTimer]);
 
   const handleForceSave = () => {
     setSaveStatus("saving");
@@ -215,13 +260,13 @@ export function EmulatorModal({
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      const doc = document as any;
+      const doc = document as unknown as {
+        fullscreenElement?: Element;
+        webkitFullscreenElement?: Element;
+      };
       const fsActive = Boolean(doc.fullscreenElement || doc.webkitFullscreenElement);
-      if (fsActive) {
-        setIsFullscreen(true);
-        resetHideTimer();
-      } else {
-        setIsFullscreen(false);
+      setIsFullscreen(fsActive);
+      if (!fsActive) {
         setShowFullscreenBars(false);
       }
     };
@@ -230,7 +275,7 @@ export function EmulatorModal({
       if (e.key === "F11") {
         e.preventDefault();
         toggleFullscreen();
-      } else if (e.key === "Escape" && !document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+      } else if (e.key === "Escape" && !document.fullscreenElement && !(document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement) {
         handleExit();
       }
     };
@@ -244,44 +289,11 @@ export function EmulatorModal({
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose, resetHideTimer]);
+  }, [handleExit, toggleFullscreen]);
 
   if (!game) {
     return null;
   }
-
-  const toggleFullscreen = async () => {
-    const elem = containerRef.current as any;
-    if (!isFullscreen) {
-      if (elem) {
-        try {
-          if (elem.requestFullscreen) {
-            await elem.requestFullscreen();
-          } else if (elem.webkitRequestFullscreen) {
-            await elem.webkitRequestFullscreen();
-          }
-        } catch {
-          // Native fullscreen failed or unsupported on this device (e.g. iOS Safari) - CSS fallback activates below!
-        }
-      }
-      setIsFullscreen(true);
-      setShowFullscreenBars(true);
-      resetHideTimer();
-    } else {
-      const doc = document as any;
-      if (doc.fullscreenElement || doc.webkitFullscreenElement) {
-        try {
-          if (doc.exitFullscreen) {
-            await doc.exitFullscreen();
-          } else if (doc.webkitExitFullscreen) {
-            await doc.webkitExitFullscreen();
-          }
-        } catch {}
-      }
-      setIsFullscreen(false);
-      setShowFullscreenBars(false);
-    }
-  };
 
   const activeDisc =
     game.discs && game.discs[selectedDiscIndex]
@@ -292,7 +304,7 @@ export function EmulatorModal({
   const activeDiscNum = activeDisc ? activeDisc.discNumber : 1;
 
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
-  const playerUrl = `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName)}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
+  const playerUrl = `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName || "")}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
   const downloadUrl = activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
 
   const renderControls = () => {
@@ -378,6 +390,7 @@ export function EmulatorModal({
             Click window or press any button to resume controller
           </div>
         )}
+
         {/* Invisible edge hover/touch triggers for fullscreen reveal */}
         {isFullscreen && (
           <>
@@ -649,115 +662,115 @@ export function EmulatorModal({
             </div>
           )}
 
-        {showNotice && game.playable && (game.system === "saturn" || game.system === "ps2" || game.system === "psx") && (
-          <div className="bg-amber-950/80 border-b border-amber-600/30 px-4 py-1.5 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-            <span className="flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>
-                {game.system === "saturn" ? (
-                  <>
-                    <strong>Sega Saturn Notice:</strong> In-browser Saturn emulation uses software rendering and runs at ~1–5 FPS. For full 60 FPS, click <strong>Download</strong> and play in desktop{" "}
-                    <a
-                      href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold underline hover:text-white transition"
-                      title="Download RetroArch Installer (Win64 v1.22.2)"
-                    >
-                      RetroArch
-                    </a>{" "}
-                    (Beetle Saturn core).
-                  </>
-                ) : game.system === "psx" ? (
-                  <>
-                    <strong>PlayStation Notice:</strong> In-browser PS1 emulation runs via WebAssembly. For full 60 FPS, enhanced 3D resolution, and multi-disc save swapping, you can also click <strong>Download</strong> and play in desktop{" "}
-                    <a
-                      href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold underline hover:text-white transition"
-                      title="Download RetroArch Installer (Win64 v1.22.2)"
-                    >
-                      RetroArch
-                    </a>{" "}
-                    (Beetle PSX / PCSX ReARMed) or{" "}
-                    <a
-                      href="https://duckstation.org/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold underline hover:text-white transition"
-                      title="Download DuckStation"
-                    >
-                      DuckStation
-                    </a>.
-                  </>
-                ) : (
-                  <>
-                    <strong>PlayStation 2 Notice:</strong> In-browser PS2 emulation requires WebGPU hardware acceleration and modern browser support. For full 60 FPS, high-res rendering, and controller rumble, click <strong>Download</strong> and play in desktop{" "}
-                    <a
-                      href="https://pcsx2.net/downloads/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold underline hover:text-white transition"
-                      title="Download PCSX2 (PlayStation 2 Emulator)"
-                    >
-                      PCSX2
-                    </a>{" "}
-                    or{" "}
-                    <a
-                      href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold underline hover:text-white transition"
-                      title="Download RetroArch Installer (Win64 v1.22.2)"
-                    >
-                      RetroArch
-                    </a>.
-                  </>
-                )}
-              </span>
-            </span>
-            <div className="flex items-center gap-2">
-              <a
-                href={downloadUrl}
-                download={activeRomFileName}
-                className="underline hover:text-white font-medium shrink-0"
-              >
-                Download {game.system === "saturn" || game.system === "psx" ? (activeDisc ? `Disc ${activeDiscNum} CHD` : "CHD") : "ROM"}
-              </a>
-              {game.discs && game.discs.length > 1 && (
-                <span className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-amber-600/40 text-[11px]">
-                  <span>Discs:</span>
-                  {game.discs.map((d, idx) => (
-                    <button
-                      key={d.discNumber}
-                      type="button"
-                      onClick={() => setSelectedDiscIndex(idx)}
-                      className={`min-h-[26px] min-w-[28px] px-1.5 py-0.5 rounded border font-mono transition cursor-pointer active:scale-95 touch-manipulation ${
-                        idx === selectedDiscIndex
-                          ? "bg-amber-600 border-amber-300 text-white font-bold"
-                          : "bg-amber-900/60 hover:bg-amber-800 border-amber-500/40 text-amber-200"
-                      }`}
-                      title={`Boot Disc ${d.discNumber} (${d.fileName})`}
-                    >
-                      D{d.discNumber}
-                    </button>
-                  ))}
+          {showNotice && game.playable && (game.system === "saturn" || game.system === "ps2" || game.system === "psx") && (
+            <div className="bg-amber-950/80 border-b border-amber-600/30 px-4 py-1.5 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <span className="flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>
+                  {game.system === "saturn" ? (
+                    <>
+                      <strong>Sega Saturn Notice:</strong> In-browser Saturn emulation uses software rendering and runs at ~1–5 FPS. For full 60 FPS, click <strong>Download</strong> and play in desktop{" "}
+                      <a
+                        href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download RetroArch Installer (Win64 v1.22.2)"
+                      >
+                        RetroArch
+                      </a>{" "}
+                      (Beetle Saturn core).
+                    </>
+                  ) : game.system === "psx" ? (
+                    <>
+                      <strong>PlayStation Notice:</strong> In-browser PS1 emulation runs via WebAssembly. For full 60 FPS, enhanced 3D resolution, and multi-disc save swapping, you can also click <strong>Download</strong> and play in desktop{" "}
+                      <a
+                        href="https://duckstation.org/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download DuckStation"
+                      >
+                        DuckStation
+                      </a>{" "}
+                      or{" "}
+                      <a
+                        href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download RetroArch Installer (Win64 v1.22.2)"
+                      >
+                        RetroArch
+                      </a>.
+                    </>
+                  ) : (
+                    <>
+                      <strong>PlayStation 2 Notice:</strong> In-browser PS2 emulation requires WebGPU hardware acceleration and modern browser support. For full 60 FPS, high-res rendering, and controller rumble, click <strong>Download</strong> and play in desktop{" "}
+                      <a
+                        href="https://pcsx2.net/downloads/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download PCSX2 (PlayStation 2 Emulator)"
+                      >
+                        PCSX2
+                      </a>{" "}
+                      or{" "}
+                      <a
+                        href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download RetroArch Installer (Win64 v1.22.2)"
+                      >
+                        RetroArch
+                      </a>.
+                    </>
+                  )}
                 </span>
-              )}
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={downloadUrl}
+                  download={activeRomFileName}
+                  className="underline hover:text-white font-medium shrink-0"
+                >
+                  Download {game.system === "saturn" || game.system === "psx" ? (activeDisc ? `Disc ${activeDiscNum} CHD` : "CHD") : "ROM"}
+                </a>
+                {game.discs && game.discs.length > 1 && (
+                  <span className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-amber-600/40 text-[11px]">
+                    <span>Discs:</span>
+                    {game.discs.map((d, idx) => (
+                      <button
+                        key={d.discNumber}
+                        type="button"
+                        onClick={() => setSelectedDiscIndex(idx)}
+                        className={`min-h-[26px] min-w-[28px] px-1.5 py-0.5 rounded border font-mono transition cursor-pointer active:scale-95 touch-manipulation ${
+                          idx === selectedDiscIndex
+                            ? "bg-amber-600 border-amber-300 text-white font-bold"
+                            : "bg-amber-900/60 hover:bg-amber-800 border-amber-500/40 text-amber-200"
+                        }`}
+                        title={`Boot Disc ${d.discNumber} (${d.fileName})`}
+                      >
+                        D{d.discNumber}
+                      </button>
+                    ))}
+                  </span>
+                )}
 
-              <button
-                type="button"
-                onClick={() => setShowNotice(false)}
-                className="ml-1 min-h-[32px] min-w-[32px] p-1.5 rounded-md hover:bg-amber-900/80 text-amber-300 hover:text-white transition cursor-pointer active:scale-95 touch-manipulation flex items-center justify-center"
-                title="Dismiss warning"
-                aria-label="Dismiss warning"
-              >
-                <X className="w-4 h-4" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissedGameId(game.id)}
+                  className="ml-1 min-h-[32px] min-w-[32px] p-1.5 rounded-md hover:bg-amber-900/80 text-amber-300 hover:text-white transition cursor-pointer active:scale-95 touch-manipulation flex items-center justify-center"
+                  title="Dismiss warning"
+                  aria-label="Dismiss warning"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
 
         <div
@@ -774,7 +787,6 @@ export function EmulatorModal({
               title={`Emulator - ${game.displayTitle}${activeDisc ? ` (Disc ${activeDiscNum})` : ""}`}
               src={playerUrl}
               className="w-full h-full border-0"
-              // HARDENED SANDBOX: explicitly omit "hid" and "usb" to prevent Chromium WebHID/WebUSB device grabs
               allow="autoplay; fullscreen; gamepad"
             />
           ) : (

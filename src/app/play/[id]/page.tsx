@@ -55,6 +55,10 @@ export default async function PlayPage({ params }: PlayPageProps) {
               try {
                 // 1. Wipe GamepadHapticActuator
                 window.GamepadHapticActuator = undefined;
+                // Neuter orientation lock crash on iOS Safari
+                if (window.screen && window.screen.orientation) {
+                  try { window.screen.orientation.lock = function() { return Promise.resolve(); }; } catch(e) {}
+                }
 
                 // 2. Lock Gamepad prototype getters
                 if (window.Gamepad && window.Gamepad.prototype) {

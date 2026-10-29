@@ -7,6 +7,8 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/scores",
   "/emulatorjs",
+  "/api/roms",
+  "/api/bios",
   "/_next",
   "/favicon.ico",
 ];

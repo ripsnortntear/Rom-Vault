@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Search,
+  ArrowLeft,
   X,
   Heart,
   Clock,
@@ -160,14 +161,15 @@ export function FilterBar({
             </div>
 
             <div className="relative inline-flex items-center">
-              <Globe className="w-3.5 h-3.5 text-zinc-400 absolute left-3 pointer-events-none" />
+              <span className="text-xs absolute left-2.5 pointer-events-none select-none">🌐</span>
               <select
                 value={selectedRegion}
                 onChange={(e) => onRegionChange(e.target.value)}
                 aria-label="Filter by region"
-                className="pl-8 pr-7 py-2 rounded-xl bg-zinc-900 border border-white/10 text-xs font-semibold text-zinc-200 focus:outline-none focus:border-red-500/60 cursor-pointer"
+                className="pl-7 pr-6 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-semibold text-zinc-200 focus:outline-none focus:border-red-500/60 cursor-pointer appearance-none"
               >
-                <option value="ALL">All Regions</option>
+                <option value="ALL">Regions</option>
+                <option value="ALL">— All —</option>
                 {availableRegions.map((region) => (
                   <option key={region} value={region}>
                     {region}
@@ -176,7 +178,7 @@ export function FilterBar({
               </select>
             </div>
 
-            <div className="relative inline-flex items-center">
+            <div className="relative hidden sm:inline-flex items-center">
               <Layers className="w-3.5 h-3.5 text-zinc-400 absolute left-3 pointer-events-none" />
               <select
                 value={coverStyle}
@@ -196,8 +198,82 @@ export function FilterBar({
           </div>
         </div>
 
-        {/* System Selector Bar */}
-        <div className="mt-3 pt-3 border-t border-white/10 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {/* System Selector Bar */}
+        {/* Mobile View: Dynamic Collapsing Strip (< sm) */}
+        <div className="mt-3 pt-3 border-t border-white/10 sm:hidden">
+          {selectedSystem !== "ALL" ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onSystemChange("ALL")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900 text-zinc-300 border border-white/15 active:scale-95 transition"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>All Consoles</span>
+              </button>
+
+              {(() => {
+                const meta = KNOWN_SYSTEMS[selectedSystem as ConsoleSystem];
+                const count = systemCounts[selectedSystem as ConsoleSystem] ?? 0;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onSystemChange("ALL")}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md shadow-black/40 ring-2 ring-white/30 active:scale-95 transition ${meta?.badgeColor || "bg-red-600"}`}
+                    title="Tap to clear filter"
+                  >
+                    {meta?.colorHex && (
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: meta.colorHex }}
+                      />
+                    )}
+                    <span>{meta?.name || selectedSystem}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/30 text-white">
+                      {count}
+                    </span>
+                    <X className="w-3.5 h-3.5 ml-0.5 text-white/80" />
+                  </button>
+                );
+              })()}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
+              <button
+                type="button"
+                onClick={() => onSystemChange("ALL")}
+                className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 text-white shadow-md border border-white/20"
+              >
+                All ({totalLibrary})
+              </button>
+
+              {Object.entries(KNOWN_SYSTEMS).map(([id, meta]) => {
+                const count = systemCounts[id as ConsoleSystem] ?? 0;
+                if (count === 0 && totalLibrary > 0) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onSystemChange(id as ConsoleSystem)}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/80 text-zinc-300 border border-white/5 active:scale-95 transition"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: meta.colorHex }}
+                    />
+                    {meta.shortLabel}
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View: Full Wrapping Bar (>= sm) */}
+        <div className="mt-3 pt-3 border-t border-white/10 hidden sm:flex flex-wrap items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => onSystemChange("ALL")}
@@ -211,14 +287,14 @@ export function FilterBar({
           </button>
 
           {Object.entries(KNOWN_SYSTEMS).map(([id, meta]) => {
-            const count = systemCounts[id] ?? 0;
+            const count = systemCounts[id as ConsoleSystem] ?? 0;
             if (count === 0 && totalLibrary > 0) return null;
             const isSelected = selectedSystem === id;
             return (
               <button
                 key={id}
                 type="button"
-                onClick={() => onSystemChange(id)}
+                onClick={() => onSystemChange(id as ConsoleSystem)}
                 className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                   isSelected
                     ? `${meta.badgeColor} text-white shadow-md shadow-black/40 ring-2 ring-white/30`

@@ -13,7 +13,7 @@
     const folderPath = (path) => path.substring(0, path.length - path.split("/").pop().length);
     let scriptPath = (typeof window.EJS_pathtodata === "string") ? window.EJS_pathtodata : folderPath((new URL(document.currentScript.src)).pathname);
     if (!scriptPath.endsWith("/")) scriptPath += "/";
-    //console.log(scriptPath);
+
     function loadScript(file) {
         return new Promise(function(resolve) {
             let script = document.createElement("script");
@@ -21,9 +21,9 @@
                 if ("undefined" != typeof EJS_paths && typeof EJS_paths[file] === "string") {
                     return EJS_paths[file];
                 } else if (file.endsWith("emulator.min.js")) {
-                    return scriptPath + file;
+                    return scriptPath + file + (file.includes(".js") && !file.includes("?v=") ? "?v=" + Date.now() : "");
                 } else {
-                    return scriptPath + "src/" + file;
+                    return scriptPath + file + (file.includes(".js") && !file.includes("?v=") ? "?v=" + Date.now() : "");
                 }
             }();
             script.onload = resolve;
@@ -42,7 +42,7 @@
                 if ("undefined" != typeof EJS_paths && typeof EJS_paths[file] === "string") {
                     return EJS_paths[file];
                 } else {
-                    return scriptPath + file;
+                    return scriptPath + file + (file.includes(".js") && !file.includes("?v=") ? "?v=" + Date.now() : "");
                 }
             }();
             css.onload = resolve;
@@ -75,11 +75,24 @@
         }
         await loadStyle("emulator.css");
     } else {
-        await loadScript("emulator.min.js");
+        await loadScript("emulator.min.js?v=" + Date.now());
         await loadStyle("emulator.min.css");
     }
     const config = {};
-    config.gameUrl = window.EJS_gameUrl;
+    let resolvedGameUrl = window.EJS_gameUrl;
+    if (typeof resolvedGameUrl === "string") {
+        try {
+            const urlObj = new URL(resolvedGameUrl, window.location.origin);
+            const fileParam = urlObj.searchParams.get("file");
+            if (fileParam) {
+                config.gamePath = fileParam;
+            } else if (window.EJS_gameName) {
+                config.gamePath = window.EJS_gameName + ".chd";
+            }
+        } catch(e) {}
+    }
+    config.gameUrl = resolvedGameUrl;
+    config.gamePath = window.EJS_gamePath || config.gamePath;
     config.dataPath = scriptPath;
     config.system = window.EJS_core;
     config.biosUrl = window.EJS_biosUrl;
@@ -95,7 +108,12 @@
     config.volume = window.EJS_volume;
     config.defaultControllers = window.EJS_defaultControls;
     config.startOnLoad = window.EJS_startOnLoaded;
-    config.fullscreenOnLoad = window.EJS_fullscreenOnLoaded;
+
+    // Force automatic fullscreen off across both naming conventions
+    config.fullscreenOnLoad = false;
+    window.EJS_fullscreenOnLoad = false;
+    window.EJS_fullscreenOnLoaded = false;
+
     config.filePaths = window.EJS_paths;
     config.loadState = window.EJS_loadStateURL;
     config.cacheLimit = window.EJS_CacheLimit;
@@ -110,7 +128,7 @@
     config.backgroundColor = window.EJS_backgroundColor;
     config.controlScheme = window.EJS_controlScheme;
     config.threads = window.EJS_threads;
-    config.disableCue = window.EJS_disableCue;
+    config.disableCue = true;
     config.startBtnName = window.EJS_startButtonName;
     config.softLoad = window.EJS_softLoad;
     config.capture = window.EJS_screenCapture;
@@ -119,7 +137,7 @@
     config.disableDatabases = window.EJS_disableDatabases;
     config.disableLocalStorage = window.EJS_disableLocalStorage;
     config.forceLegacyCores = window.EJS_forceLegacyCores;
-    config.noAutoFocus = window.EJS_noAutoFocus;
+    config.noAutoFocus = true; // Prevents mobile touch focus from pulling viewport to fullscreen
     config.videoRotation = window.EJS_videoRotation;
     config.hideSettings = window.EJS_hideSettings;
     config.shaders = Object.assign({}, window.EJS_SHADERS, window.EJS_shaders ? window.EJS_shaders : {});
@@ -148,6 +166,33 @@
     }
 
     window.EJS_emulator = new EmulatorJS(EJS_player, config);
+
+    // Ensure this.fileName preserves the actual extension for RetroArch callMain
+    if (window.EJS_emulator) {
+        try {
+            const urlObj = new URL(window.EJS_gameUrl, window.location.origin);
+            const targetFile = urlObj.searchParams.get("file") 
+                || window.EJS_gamePath 
+                || (window.EJS_gameName ? window.EJS_gameName + ".chd" : null);
+            if (targetFile) {
+                window.EJS_emulator.fileName = decodeURIComponent(targetFile);
+                if (window.EJS_emulator.config) {
+                    window.EJS_emulator.config.disableCue = true;
+                    window.EJS_emulator.config.fileName = decodeURIComponent(targetFile);
+                }
+                console.log("[loader.js] Enforced emulator fileName:", window.EJS_emulator.fileName);
+            }
+        } catch(e) {
+            console.warn("[loader.js] Error parsing fileName:", e);
+        }
+    }
+
+    // Defuse EmulatorJS internal fullscreen requests so it never hijacks the screen automatically
+    if (window.EJS_emulator) {
+        window.EJS_emulator.requestFullscreen = function() {};
+        window.EJS_emulator.fullscreen = function() {};
+    }
+
     window.EJS_adBlocked = (url, del) => window.EJS_emulator.adBlocked(url, del);
     if (typeof window.EJS_ready === "function") {
         window.EJS_emulator.on("ready", window.EJS_ready);
