@@ -1,27 +1,22 @@
-stages:
-  - test
+# stages:
   - build
 
 variables:
-  # Disable Auto DevOps and Docker-based security templates
   GITLAB_FEATURES: ""
   SECRET_DETECTION_DISABLED: "true"
   SAST_DISABLED: "true"
 
-# Verify dependencies and lint/typecheck
-typecheck:
-  stage: test
-  script:
-    - node -v
-    - npm -v
-    - npx tsc --noEmit
-
-# Test the Next.js production build
-next_build:
+build_and_verify:
   stage: build
   script:
+    - export PATH="/usr/local/bin:/usr/bin:$PATH"
+    - echo "[*] Installing dependencies..."
+    - npm ci
+    - echo "[*] Checking TypeScript types..."
+    - npx tsc --noEmit
+    - echo "[*] Running Next.js build..."
     - npm run build
   artifacts:
-    expire_in: 1 day
+    expire_in: 2 days
     paths:
       - .next/
