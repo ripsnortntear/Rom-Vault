@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { GET as getMe, PUT as updateMe } from "@/app/api/users/me/route";
 

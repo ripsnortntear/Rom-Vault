@@ -5,6 +5,12 @@ variables:
   GITLAB_FEATURES: ""
   SECRET_DETECTION_DISABLED: "true"
   SAST_DISABLED: "true"
+  NODE_ENV: "production"
+  SKIP_ENV_VALIDATION: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  # Provide mock fallbacks for static build analysis
+  SESSION_SECRET: "ci-dummy-session-secret-build-only-32bytes"
+  DATABASE_URL: "mysql://build:build@localhost:3306/build"
 
 build_and_verify:
   stage: build
