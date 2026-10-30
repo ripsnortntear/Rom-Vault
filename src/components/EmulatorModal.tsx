@@ -114,25 +114,52 @@ export function EmulatorModal({
     setDiscSelection({ gameId: game.id, index });
   }, [game]);
 
-  const { connected: gamepadConnected, id: gamepadId, needsActivation: gamepadNeedsActivation } = useGamepadManager({
-    enabled: false, // Disabled to prevent duplicate polling collision with iframe
-    deadzone: 0.15,
-    onPoll: (pad) => {
+  const [gamepadConnected, setGamepadConnected] = useState<boolean>(false);
+  const [gamepadId, setGamepadId] = useState<string | null>(null);
+  const gamepadNeedsActivation = false;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const checkInitialPads = () => {
       try {
-        if (iframeRef.current && iframeRef.current.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            {
-              type: "GAMEPAD_PULSE",
-              gamepadId: pad.id,
-              connected: pad.connected,
-              index: pad.index,
-            },
-            "*"
-          );
+        if (navigator.getGamepads) {
+          const pads = navigator.getGamepads();
+          const first = Array.from(pads).find((p) => p && p.connected);
+          if (first) {
+            setGamepadConnected(true);
+            setGamepadId(first.id || "Controller");
+          }
         }
       } catch {}
-    },
-  });
+    };
+
+    const handleConnected = (e: GamepadEvent) => {
+      setGamepadConnected(true);
+      setGamepadId(e.gamepad.id || "Controller");
+    };
+
+    const handleDisconnected = () => {
+      try {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const stillConnected = Array.from(pads).some((p) => p && p.connected);
+        setGamepadConnected(stillConnected);
+        if (!stillConnected) setGamepadId(null);
+      } catch {
+        setGamepadConnected(false);
+        setGamepadId(null);
+      }
+    };
+
+    window.addEventListener("gamepadconnected", handleConnected);
+    window.addEventListener("gamepaddisconnected", handleDisconnected);
+    checkInitialPads();
+
+    return () => {
+      window.removeEventListener("gamepadconnected", handleConnected);
+      window.removeEventListener("gamepaddisconnected", handleDisconnected);
+    };
+  }, []);
 
   const resetHideTimer = useCallback(() => {
     if (hideBarsTimerRef.current) {
@@ -240,7 +267,10 @@ export function EmulatorModal({
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === "VAULT_SAVE_STATUS") {
+      if (e.data?.type === "VAULT_GAMEPAD_STATUS") {
+        setGamepadConnected(Boolean(e.data.connected));
+        if (e.data.id) setGamepadId(e.data.id);
+      } else if (e.data?.type === "VAULT_SAVE_STATUS") {
         setSaveStatus(e.data.status);
         if (e.data?.cardName) {
           setMountedCardName(e.data.cardName);

@@ -331,11 +331,29 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       if (pad && pad.axes && pad.axes.length >= 2) {
         updatePadMode(true);
       }
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: "VAULT_GAMEPAD_STATUS",
+            connected: true,
+            id: pad.id || "Controller"
+          }, "*");
+        }
+      } catch {}
     };
 
     const handleGamepadDisconnected = () => {
       const stillConnected = checkPhysicalGamepadConnected();
       updatePadMode(stillConnected);
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: "VAULT_GAMEPAD_STATUS",
+            connected: stillConnected,
+            id: stillConnected ? "Controller" : null
+          }, "*");
+        }
+      } catch {}
     };
 
     window.addEventListener("gamepadconnected", handleGamepadConnected);
