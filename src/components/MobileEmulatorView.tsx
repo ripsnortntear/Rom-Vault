@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
+import { PS2EmulatorView } from "@/components/PS2EmulatorView";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -99,6 +100,8 @@ function checkPhysicalGamepadConnected(): boolean {
 }
 
 export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
+  const isPs2 = (game.system || "").toLowerCase().trim() === "ps2";
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [bootState, setBootState] = useState<"idle" | "booting" | "running" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -112,43 +115,55 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   activeCardIdRef.current = activeCardId;
 
   // Unified save pusher: syncs to card slot if available, else falls back to game save route
-  const pushSaveToServer = useCallback(async (buffer: ArrayBuffer | Uint8Array) => {
-    if (!buffer || buffer.byteLength === 0) return;
-    const cardId = activeCardIdRef.current;
+  const pushSaveToServer = useCallback(
+    async (buffer: ArrayBuffer | Uint8Array) => {
+      if (isPs2 || !buffer || buffer.byteLength === 0) return;
+      const cardId = activeCardIdRef.current;
 
-    try {
-      setIsSaving(true);
-      const blob = new Blob([buffer as any]);
+      try {
+        setIsSaving(true);
+        const blob = new Blob([buffer as any]);
 
-      if (cardId) {
-        const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync?system=${encodeURIComponent(game.system)}&gameId=${encodeURIComponent(cleanGameId)}`, {
-          credentials: "include",
-          method: "PUT",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: blob,
-                  });
-        if (res.ok) {
-          console.log("[SaveSync] Card synchronized to slot:", cardId);
-          return;
+        if (cardId) {
+          const res = await fetch(
+            `/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync?system=${encodeURIComponent(
+              game.system
+            )}&gameId=${encodeURIComponent(cleanGameId)}`,
+            {
+              credentials: "include",
+              method: "PUT",
+              headers: { "Content-Type": "application/octet-stream" },
+              body: blob,
+            }
+          );
+          if (res.ok) {
+            console.log("[SaveSync] Card synchronized to slot:", cardId);
+            return;
+          }
         }
-      }
 
-      // Fallback: save directly to game saves route
-      await fetch(`/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`, {
-        credentials: "include",
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: blob,
-              });
-      console.log("[SaveSync] Save written to game save repository.");
-    } catch (err) {
-      console.warn("[SaveSync] Failed to push save:", err);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [cleanGameId, game.system]);
+        // Fallback: save directly to game saves route
+        await fetch(
+          `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`,
+          {
+            credentials: "include",
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: blob,
+          }
+        );
+        console.log("[SaveSync] Save written to game save repository.");
+      } catch (err) {
+        console.warn("[SaveSync] Failed to push save:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [isPs2, cleanGameId, game.system]
+  );
 
   useEffect(() => {
+    if (isPs2) return;
     if (typeof window !== "undefined") {
       setIsInIframe(window.self !== window.top);
 
@@ -174,11 +189,13 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       window.addEventListener("unhandledrejection", handleUnhandledRejection);
       return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     }
-  }, []);
+  }, [isPs2]);
 
-  const activeDisc = game.discs && game.discs[selectedDiscIndex] ? game.discs[selectedDiscIndex] : null;
+  const activeDisc =
+    game.discs && game.discs[selectedDiscIndex] ? game.discs[selectedDiscIndex] : null;
 
   const stopEmulator = useCallback(async () => {
+    if (isPs2) return;
     const emu = window.EJS_emulator;
     if (emu) {
       try {
@@ -218,53 +235,62 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
-  }, [pushSaveToServer]);
+  }, [isPs2, pushSaveToServer]);
 
   useEffect(() => {
+    if (isPs2) return;
     return () => {
       stopEmulator();
     };
-  }, [stopEmulator]);
+  }, [isPs2, stopEmulator]);
 
-  const updatePadMode = useCallback((connected: boolean) => {
-    if (game.system !== "psx" && game.system !== "ps1") return;
+  const updatePadMode = useCallback(
+    (connected: boolean) => {
+      if (isPs2 || (game.system !== "psx" && game.system !== "ps1")) return;
 
-    if (window.EJS_coreSettings) {
-      window.EJS_coreSettings.pcsx_rearmed_pad1type = connected ? "dualshock" : "standard";
-      window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = connected ? "left_analog" : "disabled";
-    }
+      if (window.EJS_coreSettings) {
+        window.EJS_coreSettings.pcsx_rearmed_pad1type = connected ? "dualshock" : "standard";
+        window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = connected
+          ? "left_analog"
+          : "disabled";
+      }
 
-    if (window.EJS_defaultOptions) {
-      window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = connected ? "1" : "0";
-      window.EJS_defaultOptions["input_libretro_device_p1"] = connected ? "5" : "1";
-    }
+      if (window.EJS_defaultOptions) {
+        window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = connected ? "1" : "0";
+        window.EJS_defaultOptions["input_libretro_device_p1"] = connected ? "5" : "1";
+      }
 
-    const emu = window.EJS_emulator;
-    if (emu) {
-      try {
-        if (typeof emu.setCoreSetting === "function") {
-          emu.setCoreSetting("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
-          emu.setCoreSetting("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
-        }
-        if (emu.gameManager) {
-          const gm = emu.gameManager;
-          if (typeof gm.setOption === "function") {
-            gm.setOption("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
-            gm.setOption("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
-            gm.setOption("input_player1_analog_dpad_mode", connected ? "1" : "0");
-            gm.setOption("input_libretro_device_p1", connected ? "5" : "1");
+      const emu = window.EJS_emulator;
+      if (emu) {
+        try {
+          if (typeof emu.setCoreSetting === "function") {
+            emu.setCoreSetting("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
+            emu.setCoreSetting("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
           }
-          if (typeof gm.setVariable === "function") {
-            gm.setVariable("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
-            gm.setVariable("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
-            gm.setVariable("input_player1_analog_dpad_mode", connected ? "1" : "0");
+          if (emu.gameManager) {
+            const gm = emu.gameManager;
+            if (typeof gm.setOption === "function") {
+              gm.setOption("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
+              gm.setOption("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+              gm.setOption("input_player1_analog_dpad_mode", connected ? "1" : "0");
+              gm.setOption("input_libretro_device_p1", connected ? "5" : "1");
+            }
+            if (typeof gm.setVariable === "function") {
+              gm.setVariable("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
+              gm.setVariable("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+              gm.setVariable("input_player1_analog_dpad_mode", connected ? "1" : "0");
+            }
           }
+        } catch (e) {
+          console.warn("[Emulator] Core setting injection warning:", e);
         }
-      } catch {}
-    }
-  }, [game.system]);
+      }
+    },
+    [isPs2, game.system]
+  );
 
   useEffect(() => {
+    if (isPs2) return;
     const handleParentMessage = (e: MessageEvent) => {
       if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
         updatePadMode(true);
@@ -278,10 +304,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
     window.addEventListener("message", handleParentMessage);
     return () => window.removeEventListener("message", handleParentMessage);
-  }, [bootState, updatePadMode, stopEmulator]);
+  }, [isPs2, bootState, updatePadMode, stopEmulator]);
 
   useEffect(() => {
-    if (bootState !== "running") return;
+    if (isPs2 || bootState !== "running") return;
 
     let animId: number;
     const DEADZONE = 0.4;
@@ -301,19 +327,43 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         const down = axisY > DEADZONE;
 
         if (left !== lastAxesState.left) {
-          window.dispatchEvent(new KeyboardEvent(left ? "keydown" : "keyup", { key: "ArrowLeft", code: "ArrowLeft", bubbles: true }));
+          window.dispatchEvent(
+            new KeyboardEvent(left ? "keydown" : "keyup", {
+              key: "ArrowLeft",
+              code: "ArrowLeft",
+              bubbles: true,
+            })
+          );
           lastAxesState.left = left;
         }
         if (right !== lastAxesState.right) {
-          window.dispatchEvent(new KeyboardEvent(right ? "keydown" : "keyup", { key: "ArrowRight", code: "ArrowRight", bubbles: true }));
+          window.dispatchEvent(
+            new KeyboardEvent(right ? "keydown" : "keyup", {
+              key: "ArrowRight",
+              code: "ArrowRight",
+              bubbles: true,
+            })
+          );
           lastAxesState.right = right;
         }
         if (up !== lastAxesState.up) {
-          window.dispatchEvent(new KeyboardEvent(up ? "keydown" : "keyup", { key: "ArrowUp", code: "ArrowUp", bubbles: true }));
+          window.dispatchEvent(
+            new KeyboardEvent(up ? "keydown" : "keyup", {
+              key: "ArrowUp",
+              code: "ArrowUp",
+              bubbles: true,
+            })
+          );
           lastAxesState.up = up;
         }
         if (down !== lastAxesState.down) {
-          window.dispatchEvent(new KeyboardEvent(down ? "keydown" : "keyup", { key: "ArrowDown", code: "ArrowDown", bubbles: true }));
+          window.dispatchEvent(
+            new KeyboardEvent(down ? "keydown" : "keyup", {
+              key: "ArrowDown",
+              code: "ArrowDown",
+              bubbles: true,
+            })
+          );
           lastAxesState.down = down;
         }
       }
@@ -323,10 +373,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
     animId = requestAnimationFrame(pollPhysicalStick);
     return () => cancelAnimationFrame(animId);
-  }, [bootState]);
+  }, [isPs2, bootState]);
 
   useEffect(() => {
-    if (bootState !== "running") return;
+    if (isPs2 || bootState !== "running") return;
 
     const handleGamepadConnected = (e: GamepadEvent) => {
       const pad = e.gamepad;
@@ -335,11 +385,14 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       }
       try {
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({
-            type: "VAULT_GAMEPAD_STATUS",
-            connected: true,
-            id: pad.id || "Controller"
-          }, "*");
+          window.parent.postMessage(
+            {
+              type: "VAULT_GAMEPAD_STATUS",
+              connected: true,
+              id: pad.id || "Controller",
+            },
+            "*"
+          );
         }
       } catch {}
     };
@@ -349,11 +402,14 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       updatePadMode(stillConnected);
       try {
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({
-            type: "VAULT_GAMEPAD_STATUS",
-            connected: stillConnected,
-            id: stillConnected ? "Controller" : null
-          }, "*");
+          window.parent.postMessage(
+            {
+              type: "VAULT_GAMEPAD_STATUS",
+              connected: stillConnected,
+              id: stillConnected ? "Controller" : null,
+            },
+            "*"
+          );
         }
       } catch {}
     };
@@ -365,7 +421,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       window.removeEventListener("gamepadconnected", handleGamepadConnected);
       window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
     };
-  }, [bootState, updatePadMode]);
+  }, [isPs2, bootState, updatePadMode]);
 
   const handleStartGame = async () => {
     if (bootState !== "idle") return;
@@ -403,9 +459,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           console.warn("[MemoryCard] Could not fetch user cards:", err);
         }
 
-        // If no user card was resolved, load from game saves endpoint
         if (!loadUrl) {
-          loadUrl = `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`;
+          loadUrl = `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(
+            game.system
+          )}`;
         }
       }
 
@@ -422,24 +479,24 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
         const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanGameId)}/stream${discQuery}`;
         const rawFileName = activeDisc ? activeDisc.fileName : game.romFileName;
-        const cleanFileName = (rawFileName ? deepDecode(rawFileName).trim() : (game.title + ".chd")).replace(/\.(bin|cue|zip)$/i, ".chd");
+        const cleanFileName = (
+          rawFileName ? deepDecode(rawFileName).trim() : game.title + ".chd"
+        ).replace(/\.(bin|cue|zip)$/i, ".chd");
 
         window.EJS_player = "#mobile-emulator-container";
-        window.EJS_core = (game.system === "ps2") ? "play" : game.system;
+        window.EJS_core = game.system;
         window.EJS_gameName = game.title;
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
           if (loadUrl) {
             window.EJS_loadSaveUrl = loadUrl;
           }
-        } else if (game.system === "ps2") {
-          window.EJS_biosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
         }
         window.EJS_gamePath = cleanFileName;
         window.EJS_disableCue = true;
         window.EJS_loadToMemory = true;
-        window.EJS_CacheLimit = (game.system === "ps2") ? 512 * 1024 * 1024 : 32 * 1024 * 1024;
-        window.EJS_threads = (game.system === "ps2") ? true : false;
+        window.EJS_CacheLimit = 32 * 1024 * 1024;
+        window.EJS_threads = false;
 
         window.EJS_gameUrl = streamUrl;
         window.EJS_pathtodata = "/roms/emulatorjs/data/";
@@ -544,7 +601,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
         script.onerror = () => {
           setBootState("error");
-          setErrorMessage("Failed to load /roms/emulatorjs/data/loader.js (Check static files or proxy).");
+          setErrorMessage(
+            "Failed to load /roms/emulatorjs/data/loader.js (Check static files or proxy)."
+          );
         };
 
         document.body.appendChild(script);
@@ -574,11 +633,18 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     try {
       if (el.requestFullscreen) {
         el.requestFullscreen().catch(() => {});
-      } else if ((el as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen) {
+      } else if (
+        (el as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen
+      ) {
         (el as unknown as { webkitRequestFullscreen: () => void }).webkitRequestFullscreen();
       }
     } catch {}
   };
+
+  // Safe early render AFTER all hooks have executed
+  if (isPs2) {
+    return <PS2EmulatorView game={game} />;
+  }
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden select-none">
@@ -706,8 +772,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         {bootState === "booting" && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/95 p-4 text-center">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm font-semibold text-zinc-200">Mounting Cloud Memory Card & Core...</p>
-            <p className="text-xs text-zinc-500 mt-1">Downloading save state & streaming game data</p>
+            <p className="text-sm font-semibold text-zinc-200">
+              Mounting Cloud Memory Card & Core...
+            </p>
+            <p className="text-xs text-zinc-500 mt-1">
+              Downloading save state & streaming game data
+            </p>
           </div>
         )}
 
