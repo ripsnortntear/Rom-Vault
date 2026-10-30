@@ -35,7 +35,7 @@ deploy_production:
     - main
   script:
     - echo "[*] Syncing verified build artifacts to production directory..."
-    - rsync -rlptD --delete --no-owner --no-group .next/ /var/www/html/roms/.next/
+    - rsync -rD --delete --no-times --no-perms --no-owner --no-group .next/ /var/www/html/roms/.next/
     - echo "[*] Restarting retro-gaming service..."
     - sudo /bin/systemctl restart retro-gaming.service
     - echo "[✓] Deployment complete and service restarted!"
