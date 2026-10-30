@@ -120,7 +120,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync`, {
         method: "PUT",
         headers: { "Content-Type": "application/octet-stream" },
-        body: buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer),
+        body: new Blob([buffer as any]),
         keepalive: true,
       });
       if (!res.ok) {
