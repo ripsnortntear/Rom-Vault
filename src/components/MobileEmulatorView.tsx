@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle } from "lucide-react";
+import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -39,6 +39,8 @@ declare global {
     EJS_volume?: number;
     EJS_audioBufferSize?: number;
     EJS_sampleRate?: number;
+    EJS_loadSaveUrl?: string;
+    EJS_onSave?: (data: { name: string; data: Uint8Array | ArrayBuffer }) => void | Promise<void>;
     EJS_onStart?: () => void;
     EJS_onGameStart?: () => void;
     EJS_coreSettings?: Record<string, string>;
@@ -52,9 +54,14 @@ declare global {
       stop?: () => void;
       on?: (event: string, callback: (...args: unknown[]) => void) => void;
       setCoreSetting?: (key: string, value: string) => void;
+      saveSaveFiles?: () => void;
+      getSaveFile?: () => Uint8Array | ArrayBuffer | null;
       gameManager?: {
         setOption?: (key: string, value: string) => void;
         setVariable?: (key: string, value: string) => void;
+        saveSaveFiles?: () => void;
+        getSaveFile?: () => Uint8Array | ArrayBuffer | null;
+        saveFile?: Uint8Array | ArrayBuffer;
         [key: string]: unknown;
       };
       [key: string]: unknown;
@@ -97,6 +104,36 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedDiscIndex, setSelectedDiscIndex] = useState<number>(0);
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const activeCardIdRef = useRef<string | null>(null);
+  activeCardIdRef.current = activeCardId;
+
+  // Helper to persist save buffer to server
+  const pushSaveToServer = useCallback(async (buffer: ArrayBuffer | Uint8Array) => {
+    const cardId = activeCardIdRef.current;
+    if (!cardId || !buffer || buffer.byteLength === 0) return;
+
+    try {
+      setIsSaving(true);
+      const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer),
+        keepalive: true,
+      });
+      if (!res.ok) {
+        console.warn("[SaveSync] Sync responded with status:", res.status);
+      } else {
+        console.log("[SaveSync] Card saved successfully to server.");
+      }
+    } catch (err) {
+      console.warn("[SaveSync] Failed to push save:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -129,7 +166,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const activeDisc = game.discs && game.discs[selectedDiscIndex] ? game.discs[selectedDiscIndex] : null;
 
   const stopEmulator = useCallback(async () => {
-    // 1. Force flush save data to persistent storage if emulator is active
     const emu = window.EJS_emulator;
     if (emu) {
       try {
@@ -138,12 +174,24 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         } else if (typeof emu.saveSaveFiles === "function") {
           emu.saveSaveFiles();
         }
+
+        // Try extracting memory card buffer directly from core memory
+        const gm = emu.gameManager as Record<string, unknown> | undefined;
+        const rawBuffer =
+          typeof emu.getSaveFile === "function"
+            ? emu.getSaveFile()
+            : typeof gm?.getSaveFile === "function"
+            ? (gm.getSaveFile as () => Uint8Array | ArrayBuffer)()
+            : (gm?.saveFile as Uint8Array | ArrayBuffer | undefined);
+
+        if (rawBuffer && rawBuffer.byteLength > 0) {
+          await pushSaveToServer(rawBuffer);
+        }
       } catch (e) {
         console.warn("[Emulator] Flush save error:", e);
       }
     }
 
-    // Brief delay to allow IndexedDB / localStorage async transaction to settle
     await new Promise((resolve) => setTimeout(resolve, 350));
 
     const existingScript = document.getElementById("ejs-loader-script");
@@ -158,7 +206,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
-  }, []);
+  }, [pushSaveToServer]);
 
   useEffect(() => {
     return () => {
@@ -197,6 +245,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           if (typeof gm.setVariable === "function") {
             gm.setVariable("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
             gm.setVariable("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+            gm.setVariable("input_player1_analog_dpad_mode", connected ? "1" : "0");
           }
         }
       } catch {}
@@ -239,7 +288,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         const up = axisY < -DEADZONE;
         const down = axisY > DEADZONE;
 
-        // If state changed, simulate keyboard arrows matching the touch joystick behavior
         if (left !== lastAxesState.left) {
           window.dispatchEvent(new KeyboardEvent(left ? "keydown" : "keyup", { key: "ArrowLeft", code: "ArrowLeft", bubbles: true }));
           lastAxesState.left = left;
@@ -262,10 +310,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     };
 
     animId = requestAnimationFrame(pollPhysicalStick);
-
-    return () => {
-      cancelAnimationFrame(animId);
-    };
+    return () => cancelAnimationFrame(animId);
   }, [bootState]);
 
   useEffect(() => {
@@ -292,7 +337,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     };
   }, [bootState, updatePadMode]);
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (bootState !== "idle") return;
     setBootState("booting");
     setErrorMessage(null);
@@ -310,6 +355,20 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         }
       } catch {}
 
+      let resolvedCardId: string | null = null;
+      if (game.system === "psx" || game.system === "ps1") {
+        try {
+          const cardsRes = await fetch("/roms/api/users/me/cards");
+          if (cardsRes.ok) {
+            const data = await cardsRes.json();
+            resolvedCardId = data.activeSlot1Id || (data.cards && data.cards[0]?.id) || null;
+            setActiveCardId(resolvedCardId);
+          }
+        } catch (err) {
+          console.warn("[MemoryCard] Could not fetch user cards:", err);
+        }
+      }
+
       if (typeof window !== "undefined") {
         const screenAny = (screen as unknown as { orientation?: { lock?: unknown } })?.orientation;
         if (screenAny && typeof screenAny.lock === "function") {
@@ -322,10 +381,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         const discQuery = discNum ? `?disc=${discNum}` : "";
         const cleanId = deepDecode(game.id).trim();
 
-        // Direct stream route with disc query
         const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanId)}/stream${discQuery}`;
-
-        // Compute clean filename with explicit .chd extension
         const rawFileName = activeDisc ? activeDisc.fileName : game.romFileName;
         const cleanFileName = (rawFileName ? deepDecode(rawFileName).trim() : (game.title + ".chd")).replace(/\.(bin|cue|zip)$/i, ".chd");
 
@@ -334,6 +390,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_gameName = game.title;
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
+          if (resolvedCardId) {
+            window.EJS_loadSaveUrl = `/roms/api/users/me/cards/${encodeURIComponent(resolvedCardId)}/download`;
+          }
         }
         window.EJS_gamePath = cleanFileName;
         window.EJS_disableCue = true;
@@ -358,7 +417,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_audioBufferSize = 2048;
         window.EJS_sampleRate = 44100;
 
-        const hasPhysicalController = checkPhysicalGamepadConnected();
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_coreSettings = {
             pcsx_rearmed_cdfs_cache: "disabled",
@@ -373,7 +431,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           window.EJS_defaultOptions = {
             "save-save-interval": "10",
             "autosave": "1",
-            "save-state-location": "browser",
             "pcsx_rearmed_cdfs_cache": "disabled",
             "pcsx_rearmed_async_cd": "sync",
             "pcsx_rearmed_memcard2": "disabled",
@@ -387,6 +444,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_libretro_device_p1": "5",
           };
         }
+
+        window.EJS_onSave = (saveData) => {
+          if (saveData?.data) {
+            pushSaveToServer(saveData.data);
+          }
+        };
 
         const applyAnalogMapping = () => {
           const emu = window.EJS_emulator;
@@ -541,9 +604,16 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             )}
           </div>
 
-          <span className="text-xs text-zinc-300 font-medium truncate max-w-[150px] sm:max-w-[220px]">
-            {game.title}
-          </span>
+          <div className="flex items-center gap-2">
+            {isSaving && (
+              <span className="flex items-center gap-1 text-[11px] text-indigo-400 bg-indigo-950/60 border border-indigo-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                <Save className="w-3 h-3" /> Syncing Card...
+              </span>
+            )}
+            <span className="text-xs text-zinc-300 font-medium truncate max-w-[120px] sm:max-w-[220px]">
+              {game.title}
+            </span>
+          </div>
 
           <button
             onClick={handleManualFullscreen}
@@ -585,7 +655,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
               </button>
 
               <p className="text-xs text-zinc-500">
-                Tap to initialize engine and audio context
+                Tap to mount Cloud Memory Card & audio context
               </p>
             </div>
           </div>
@@ -595,8 +665,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         {bootState === "booting" && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/95 p-4 text-center">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm font-semibold text-zinc-200">Starting Emulator Core...</p>
-            <p className="text-xs text-zinc-500 mt-1">Downloading core & streaming game data</p>
+            <p className="text-sm font-semibold text-zinc-200">Mounting Cloud Memory Card & Core...</p>
+            <p className="text-xs text-zinc-500 mt-1">Downloading save state & streaming game data</p>
           </div>
         )}
 
