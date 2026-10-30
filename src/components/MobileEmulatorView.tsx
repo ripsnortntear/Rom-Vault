@@ -107,33 +107,46 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
+  const cleanGameId = deepDecode(game.id).trim();
   const activeCardIdRef = useRef<string | null>(null);
   activeCardIdRef.current = activeCardId;
 
-  // Helper to persist save buffer to server
+  // Unified save pusher: syncs to card slot if available, else falls back to game save route
   const pushSaveToServer = useCallback(async (buffer: ArrayBuffer | Uint8Array) => {
+    if (!buffer || buffer.byteLength === 0) return;
     const cardId = activeCardIdRef.current;
-    if (!cardId || !buffer || buffer.byteLength === 0) return;
 
     try {
       setIsSaving(true);
-      const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync`, {
-        method: "PUT",
+      const blob = new Blob([buffer as any]);
+
+      if (cardId) {
+        const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: blob,
+          keepalive: true,
+        });
+        if (res.ok) {
+          console.log("[SaveSync] Card synchronized to slot:", cardId);
+          return;
+        }
+      }
+
+      // Fallback: save directly to game saves route
+      await fetch(`/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`, {
+        method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
-        body: new Blob([buffer as any]),
+        body: blob,
         keepalive: true,
       });
-      if (!res.ok) {
-        console.warn("[SaveSync] Sync responded with status:", res.status);
-      } else {
-        console.log("[SaveSync] Card saved successfully to server.");
-      }
+      console.log("[SaveSync] Save written to game save repository.");
     } catch (err) {
       console.warn("[SaveSync] Failed to push save:", err);
     } finally {
       setIsSaving(false);
     }
-  }, []);
+  }, [cleanGameId, game.system]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -175,7 +188,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           emu.saveSaveFiles();
         }
 
-        // Try extracting memory card buffer directly from core memory
         const gm = emu.gameManager as Record<string, unknown> | undefined;
         const rawBuffer =
           typeof emu.getSaveFile === "function"
@@ -356,16 +368,26 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       } catch {}
 
       let resolvedCardId: string | null = null;
+      let loadUrl: string | undefined = undefined;
+
       if (game.system === "psx" || game.system === "ps1") {
         try {
-          const cardsRes = await fetch("/roms/api/users/me/cards");
+          const cardsRes = await fetch("/roms/api/users/me/cards", { credentials: "include" });
           if (cardsRes.ok) {
             const data = await cardsRes.json();
             resolvedCardId = data.activeSlot1Id || (data.cards && data.cards[0]?.id) || null;
             setActiveCardId(resolvedCardId);
+            if (resolvedCardId) {
+              loadUrl = `/roms/api/users/me/cards/${encodeURIComponent(resolvedCardId)}/download`;
+            }
           }
         } catch (err) {
           console.warn("[MemoryCard] Could not fetch user cards:", err);
+        }
+
+        // If no user card was resolved, load from game saves endpoint
+        if (!loadUrl) {
+          loadUrl = `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`;
         }
       }
 
@@ -379,9 +401,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
         const discNum = activeDisc ? activeDisc.discNumber : undefined;
         const discQuery = discNum ? `?disc=${discNum}` : "";
-        const cleanId = deepDecode(game.id).trim();
 
-        const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanId)}/stream${discQuery}`;
+        const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanGameId)}/stream${discQuery}`;
         const rawFileName = activeDisc ? activeDisc.fileName : game.romFileName;
         const cleanFileName = (rawFileName ? deepDecode(rawFileName).trim() : (game.title + ".chd")).replace(/\.(bin|cue|zip)$/i, ".chd");
 
@@ -390,8 +411,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_gameName = game.title;
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
-          if (resolvedCardId) {
-            window.EJS_loadSaveUrl = `/roms/api/users/me/cards/${encodeURIComponent(resolvedCardId)}/download`;
+          if (loadUrl) {
+            window.EJS_loadSaveUrl = loadUrl;
           }
         }
         window.EJS_gamePath = cleanFileName;
