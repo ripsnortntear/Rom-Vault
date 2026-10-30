@@ -125,8 +125,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           method: "PUT",
           headers: { "Content-Type": "application/octet-stream" },
           body: blob,
-          keepalive: true,
-        });
+                  });
         if (res.ok) {
           console.log("[SaveSync] Card synchronized to slot:", cardId);
           return;
@@ -138,8 +137,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: blob,
-        keepalive: true,
-      });
+              });
       console.log("[SaveSync] Save written to game save repository.");
     } catch (err) {
       console.warn("[SaveSync] Failed to push save:", err);

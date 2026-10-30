@@ -9,38 +9,35 @@ interface RouteContext {
   }>;
 }
 
-function safeDecode(val: string): string {
+function deepClean(str: string): string {
+  let s = str || "";
   try {
-    return decodeURIComponent(val);
-  } catch {
-    return val;
-  }
+    while (s.includes("%20") || s.includes("%25")) {
+      const decoded = decodeURIComponent(s);
+      if (decoded === s) break;
+      s = decoded;
+    }
+  } catch {}
+  return s;
 }
 
-function getCleanSaveBaseKey(gameId: string, system: string): string {
-  let name = safeDecode(gameId);
+function getCandidateKeys(rawId: string): string[] {
+  const decoded = deepClean(rawId);
+  const withoutPrefix = decoded.includes("__") ? decoded.slice(decoded.indexOf("__") + 2) : decoded;
+  const stripped = withoutPrefix
+    .replace(/\.(chd|rvz|iso|bin|cue|zip|7z|sfc|smc|nes|z64|v64|n64|gba|gbc|gb)$/i, "")
+    .replace(/[\s\(\[]+(?:disc|disk)\s*[^)\]]*[)\]]+/gi, "")
+    .trim();
 
-  // Strip system prefix if present (e.g., "psx__Final Fantasy VII...")
-  if (name.includes("__")) {
-    name = name.slice(name.indexOf("__") + 2);
-  }
+  const keys = new Set<string>();
+  keys.add(stripped);
+  keys.add(stripped.replace(/[\s]+/g, "_"));
+  keys.add(stripped.replace(/[\s]+/g, "_20"));
+  keys.add(stripped.replace(/[\s]+/g, "%20"));
+  keys.add(rawId);
+  keys.add(encodeURIComponent(stripped));
 
-  // Strip file extensions if present
-  name = name.replace(/\.(chd|rvz|iso|bin|cue|zip|7z|sfc|smc|nes|z64|v64|n64|gba|gbc|gb)$/i, "");
-
-  // Strip disc suffixes (e.g. " (Disc 1)", " (Disc 2)") so multi-disc games share the same memory card
-  name = name.replace(/[\s\(\[]+(?:disc|disk)\s*[^)\]]*[)\]]+/gi, "");
-
-  // Strip specific multi-disc campaign names
-  name = name.replace(
-    /\s*\((?:allies|soviet|nod|gdi|evolution disc|arcade disc|shockwave[^)]*|the first generation|chronicles of arthur|blazing guns|ninja hayate|road blaster)\)/gi,
-    ""
-  );
-
-  // Sanitize path traversal characters
-  name = name.replace(/[\/\\?%*:|"<>]/g, "_").trim();
-
-  return name || "game_save";
+  return Array.from(keys);
 }
 
 const SAVES_ROOT = "/mnt/storage/roms/saves";
@@ -51,33 +48,57 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const { gameId } = await context.params;
-    const system = normalizeSystem(request.nextUrl.searchParams.get("system"));
-    const client = request.nextUrl.searchParams.get("client")?.replace(/[^a-zA-Z0-9_-]/g, "") || "";
-    const baseKey = getCleanSaveBaseKey(gameId, system);
+    const system = normalizeSystem(request.nextUrl.searchParams.get("system")) || "psx";
+    const systemDir = path.join(SAVES_ROOT, system);
 
-    // Candidates: client-specific first, then global
-    const candidates: string[] = [];
-    if (client) {
-      candidates.push(path.join(SAVES_ROOT, system, client, `${baseKey}.srm`));
-      candidates.push(path.join(SAVES_ROOT, system, client, `${baseKey}.sav`));
+    if (!fs.existsSync(systemDir)) {
+      return NextResponse.json({ exists: false }, { status: 404 });
     }
-    candidates.push(path.join(SAVES_ROOT, system, `${baseKey}.srm`));
-    candidates.push(path.join(SAVES_ROOT, system, `${baseKey}.sav`));
 
+    const candidateKeys = getCandidateKeys(gameId);
     let foundPath: string | null = null;
-    for (const cand of candidates) {
-      if (fs.existsSync(cand)) {
-        foundPath = cand;
-        break;
+
+    // 1. Search directly in system directory and immediate subdirectories
+    for (const key of candidateKeys) {
+      const possibleNames = [`${key}.srm`, `${key}.sav`, `${key}.mcr`];
+      for (const name of possibleNames) {
+        const direct = path.join(systemDir, name);
+        if (fs.existsSync(direct)) {
+          foundPath = direct;
+          break;
+        }
+      }
+      if (foundPath) break;
+    }
+
+    // 2. Search client subdirectories if not found in root
+    if (!foundPath) {
+      const entries = fs.readdirSync(systemDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name !== "users") {
+          const subDir = path.join(systemDir, entry.name);
+          for (const key of candidateKeys) {
+            const possibleNames = [`${key}.srm`, `${key}.sav`, `${key}.mcr`];
+            for (const name of possibleNames) {
+              const subPath = path.join(subDir, name);
+              if (fs.existsSync(subPath)) {
+                foundPath = subPath;
+                break;
+              }
+            }
+            if (foundPath) break;
+          }
+        }
+        if (foundPath) break;
       }
     }
 
     if (!foundPath) {
-      return NextResponse.json({ exists: false, baseKey }, { status: 404 });
+      return NextResponse.json({ exists: false }, { status: 404 });
     }
 
-    const data = fs.readFileSync(/*turbopackIgnore: true*/ foundPath);
-    const stat = fs.statSync(/*turbopackIgnore: true*/ foundPath);
+    const data = fs.readFileSync(foundPath);
+    const stat = fs.statSync(foundPath);
     const isDownload = request.nextUrl.searchParams.get("download") === "1";
 
     return new NextResponse(data, {
@@ -87,14 +108,12 @@ export async function GET(
         "Content-Length": String(data.byteLength),
         "Last-Modified": stat.mtime.toUTCString(),
         "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Content-Disposition": isDownload
-          ? `attachment; filename="${encodeURIComponent(baseKey)}.srm"`
-          : "inline",
+        "Content-Disposition": isDownload ? `attachment; filename="save.srm"` : "inline",
       },
     });
   } catch (error) {
-    console.error("[api/saves GET] Failed reading save:", error);
-    return NextResponse.json({ error: "Failed to read save file" }, { status: 500 });
+    console.error("[api/saves GET] Error reading save:", error);
+    return NextResponse.json({ error: "Failed to read save" }, { status: 500 });
   }
 }
 
@@ -104,49 +123,55 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { gameId } = await context.params;
-    const system = normalizeSystem(request.nextUrl.searchParams.get("system"));
-    const client = request.nextUrl.searchParams.get("client")?.replace(/[^a-zA-Z0-9_-]/g, "") || "";
-    const baseKey = getCleanSaveBaseKey(gameId, system);
-
+    const system = normalizeSystem(request.nextUrl.searchParams.get("system")) || "psx";
     const arrayBuffer = await request.arrayBuffer();
+
     if (!arrayBuffer || arrayBuffer.byteLength === 0) {
       return NextResponse.json({ error: "Empty save payload" }, { status: 400 });
     }
 
     const buffer = Buffer.from(arrayBuffer);
+    const systemDir = path.join(SAVES_ROOT, system);
+    fs.mkdirSync(systemDir, { recursive: true });
 
-    // Write to global system directory
-    const globalDir = path.join(SAVES_ROOT, system);
-    fs.mkdirSync(globalDir, { recursive: true });
-    const globalPath = path.join(globalDir, `${baseKey}.srm`);
-    const globalTmp = `${globalPath}.${Date.now()}.tmp`;
+    // Canonical filename uses clean spaces: e.g. "Final Fantasy VII (USA).srm"
+    const decoded = deepClean(gameId);
+    const cleanBase = (decoded.includes("__") ? decoded.slice(decoded.indexOf("__") + 2) : decoded)
+      .replace(/\.(chd|rvz|iso|bin|cue|zip|7z|sfc|smc|nes|z64|v64|n64|gba|gbc|gb)$/i, "")
+      .replace(/[\s\(\[]+(?:disc|disk)\s*[^)\]]*[)\]]+/gi, "")
+      .replace(/[\/\\?%*:|"<>]/g, "_")
+      .trim();
 
-    fs.writeFileSync(globalTmp, buffer);
-    fs.renameSync(globalTmp, globalPath);
+    const targetFile = path.join(systemDir, `${cleanBase}.srm`);
+    const tmpFile = `${targetFile}.${Date.now()}.tmp`;
+
+    fs.writeFileSync(tmpFile, buffer);
+    fs.renameSync(tmpFile, targetFile);
+
     try {
-      fs.copyFileSync(globalPath, `${globalPath}.bak`);
-    } catch {
-      // Backup copy non-critical
-    }
+      fs.copyFileSync(targetFile, `${targetFile}.bak`);
+    } catch {}
 
-    // If client ID provided, also write to client subdirectory
-    if (client) {
-      const clientDir = path.join(SAVES_ROOT, system, client);
-      fs.mkdirSync(clientDir, { recursive: true });
-      const clientPath = path.join(clientDir, `${baseKey}.srm`);
-      const clientTmp = `${clientPath}.${Date.now()}.tmp`;
-      fs.writeFileSync(clientTmp, buffer);
-      fs.renameSync(clientTmp, clientPath);
+    // Mirror to legacy %20 name if it exists on disk to ensure backward compatibility
+    const legacyNames = [
+      `${cleanBase.replace(/[\s]+/g, "_20")}_20.srm`,
+      `${cleanBase.replace(/[\s]+/g, "_20")}.srm`,
+      `${cleanBase.replace(/[\s]+/g, "_")}.srm`
+    ];
+    for (const leg of legacyNames) {
+      const legPath = path.join(systemDir, leg);
+      if (fs.existsSync(legPath)) {
+        try { fs.copyFileSync(targetFile, legPath); } catch {}
+      }
     }
 
     return NextResponse.json({
       success: true,
-      baseKey,
-      fileSizeBytes: buffer.byteLength,
-      timestamp: Date.now(),
+      bytes: buffer.byteLength,
+      target: targetFile,
     });
   } catch (error) {
-    console.error("[api/saves POST] Failed saving data:", error);
-    return NextResponse.json({ error: "Failed to store save file" }, { status: 500 });
+    console.error("[api/saves POST] Error saving:", error);
+    return NextResponse.json({ error: "Failed to store save" }, { status: 500 });
   }
 }
