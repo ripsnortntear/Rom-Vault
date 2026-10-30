@@ -10,8 +10,8 @@ variables:
   NEXT_TELEMETRY_DISABLED: "1"
   SESSION_SECRET: "ci-dummy-session-secret-build-only-32bytes"
   DATABASE_URL: "mysql://build:build@localhost:3306/build"
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
 
-# Global or per-job cache definition
 cache:
   key:
     files:
@@ -26,7 +26,6 @@ build_and_verify:
   before_script:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
     - if [ -f /var/www/html/roms/.env ]; then cp /var/www/html/roms/.env .env.local; fi
-    - npm config set cache .npm --global
   script:
     - echo "[*] Installing dependencies..."
     - npm ci --include=dev --ignore-scripts --prefer-offline
