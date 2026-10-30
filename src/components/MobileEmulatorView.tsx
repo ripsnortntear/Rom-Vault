@@ -425,19 +425,21 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         const cleanFileName = (rawFileName ? deepDecode(rawFileName).trim() : (game.title + ".chd")).replace(/\.(bin|cue|zip)$/i, ".chd");
 
         window.EJS_player = "#mobile-emulator-container";
-        window.EJS_core = game.system;
+        window.EJS_core = (game.system === "ps2") ? "play" : game.system;
         window.EJS_gameName = game.title;
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
           if (loadUrl) {
             window.EJS_loadSaveUrl = loadUrl;
           }
+        } else if (game.system === "ps2") {
+          window.EJS_biosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
         }
         window.EJS_gamePath = cleanFileName;
         window.EJS_disableCue = true;
         window.EJS_loadToMemory = true;
-        window.EJS_CacheLimit = 32 * 1024 * 1024;
-        window.EJS_threads = false;
+        window.EJS_CacheLimit = (game.system === "ps2") ? 512 * 1024 * 1024 : 32 * 1024 * 1024;
+        window.EJS_threads = (game.system === "ps2") ? true : false;
 
         window.EJS_gameUrl = streamUrl;
         window.EJS_pathtodata = "/roms/emulatorjs/data/";
