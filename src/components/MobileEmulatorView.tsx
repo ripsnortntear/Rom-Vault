@@ -460,7 +460,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_player1_l3_btn": "10",
             "input_player1_r3_btn": "11",
             "input_player1_analog_dpad_mode": "1",
-            "input_libretro_device_p1": "5",
+            "input_libretro_device_p1": "1",
           };
         }
 

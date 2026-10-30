@@ -115,7 +115,7 @@ export function EmulatorModal({
   }, [game]);
 
   const { connected: gamepadConnected, id: gamepadId, needsActivation: gamepadNeedsActivation } = useGamepadManager({
-    enabled: Boolean(game),
+    enabled: false, // Disabled to prevent duplicate polling collision with iframe
     deadzone: 0.15,
     onPoll: (pad) => {
       try {
