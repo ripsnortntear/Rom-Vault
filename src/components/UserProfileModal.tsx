@@ -351,7 +351,7 @@ export function UserProfileModal({
             <HardDrive className="w-4 h-4 text-emerald-400 shrink-0" />
             <div>
               <div className="text-zinc-400 text-[11px]">Daily Download Quota:</div>
-              <div className="font-bold text-zinc-200">
+              <div suppressHydrationWarning className="font-bold text-zinc-200">
                 {isAdmin ? (
                   <span className="text-emerald-400 font-extrabold flex items-center gap-1">
                     <span className="text-base leading-none">∞</span> Unlimited (Admin)
@@ -691,7 +691,7 @@ export function UserProfileModal({
                                     <span>v{card.version}</span>
                                     <span>&bull;</span>
                                     <span>
-                                      Synced: {new Date(card.updated_at).toLocaleDateString()}
+                                      <span suppressHydrationWarning>Synced: {new Date(card.updated_at).toLocaleDateString()}</span>
                                     </span>
                                   </div>
                                 </>

@@ -578,7 +578,7 @@ export function EmulatorModal({
               {saveStatus === "saved" && (
                 <span className="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{mountedCardName ? `${mountedCardName} Synced` : "Memory Card Synced"}</span>
+                  <span suppressHydrationWarning>{mountedCardName ? `${mountedCardName} Synced` : "Memory Card Synced"}</span>
                 </span>
               )}
               {saveStatus === "saving" && (
@@ -590,7 +590,7 @@ export function EmulatorModal({
               {saveStatus === "loaded" && (
                 <span className="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold bg-blue-950/80 border border-blue-500/40 text-blue-300">
                   <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-                  <span>{mountedCardName ? `${mountedCardName} Mounted` : "Card Loaded"}</span>
+                  <span suppressHydrationWarning>{mountedCardName ? `${mountedCardName} Mounted` : "Card Loaded"}</span>
                 </span>
               )}
 

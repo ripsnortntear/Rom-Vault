@@ -121,7 +121,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       const blob = new Blob([buffer as any]);
 
       if (cardId) {
-        const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync`, {
+        const res = await fetch(`/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync?system=${encodeURIComponent(game.system)}&gameId=${encodeURIComponent(cleanGameId)}`, {
+          credentials: "include",
           method: "PUT",
           headers: { "Content-Type": "application/octet-stream" },
           body: blob,
@@ -134,6 +135,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
       // Fallback: save directly to game saves route
       await fetch(`/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`, {
+        credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: blob,
