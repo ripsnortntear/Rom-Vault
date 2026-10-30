@@ -17,7 +17,7 @@ build_and_verify:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
     - if [ -f /var/www/html/roms/.env ]; then cp /var/www/html/roms/.env .env.local; fi
     - echo "[*] Installing all dependencies (including devDependencies)..."
-    - npm ci --include=dev
+    - npm ci --include=dev --ignore-scripts
     - echo "[*] Checking TypeScript types..."
     - npx tsc --noEmit
     - echo "[*] Running Next.js build..."

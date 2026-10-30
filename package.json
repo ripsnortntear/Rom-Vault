@@ -35,6 +35,7 @@
     "typescript": "^5"
   },
   "allowScripts": {
-    "eslint-formatter-compact@9.0.1": true
+    "eslint-formatter-compact@9.0.1": true,
+    "unrs-resolver@1.12.2": true
   }
 }
