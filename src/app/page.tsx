@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import React, { Suspense } from "react";
 import { scanGameLibrary } from "@/lib/scanner";
 import { RetroLibraryClient } from "@/components/RetroLibraryClient";
