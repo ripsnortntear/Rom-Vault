@@ -2737,6 +2737,7 @@
 			discError(DISC_COPY.notDisc);
 			return;
 		}
+		page.autoBoot = true;
 		chooseDisc({ kind: 'url', url: url.href, name: base, size }, null);
 	}
 
@@ -11262,6 +11263,9 @@
 		disc.urlPending = !!discParam; // a queued ?bios= boot waits for the ?disc= check
 		devElf.pending = !!elfParam; // and for the ?elf= download
 		devState.pending = !!stateParam; // and for the ?state= download
+		if (discParam || biosParam) {
+			page.autoBoot = true;
+		}
 		// Touch-only devices: the download waits for a BIOS.
 		if (!touchOnlyQuery.matches || biosParam)
 			ensureRuntime();
