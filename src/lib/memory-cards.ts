@@ -6,10 +6,18 @@ import { generateUUID } from "@/lib/auth/crypto";
 import type { UserMemoryCard } from "@/types/auth";
 
 export const PS1_CARD_SIZE = 131072; // 128 KB (15 save blocks of 8 KB + 1 directory frame)
+export const PS2_CARD_SIZE = 8650752; // 8 MB (8,650,752 bytes: 512-byte pages + 16 bytes ECC)
 export const MAX_CARDS_PER_USER = 5;
 
 const STORAGE_ROOT_PRIMARY = "/mnt/storage/roms/saves/users";
 const STORAGE_ROOT_FALLBACK = path.join(process.cwd(), "storage/saves/users");
+
+export function normalizeCardSystem(sys?: string | null): "psx" | "ps2" {
+  if (!sys) return "psx";
+  const s = sys.toLowerCase().trim();
+  if (s === "ps2" || s === "playstation2") return "ps2";
+  return "psx";
+}
 
 /**
  * Returns the storage directory for a specific user's virtual memory cards.
@@ -72,6 +80,14 @@ export function createFormattedPs1MemoryCard(): Buffer {
 }
 
 /**
+ * Generates a clean authentic 8 MB Sony PlayStation 2 Memory Card image (.ps2).
+ * Formatted with 0xFF bytes per PCSX2 raw card specification.
+ */
+export function createFormattedPs2MemoryCard(): Buffer {
+  return Buffer.alloc(PS2_CARD_SIZE, 0xff);
+}
+
+/**
  * Computes SHA-256 hash string for checksum verification.
  */
 export function computeCardChecksum(buffer: Buffer): string {
@@ -79,17 +95,21 @@ export function computeCardChecksum(buffer: Buffer): string {
 }
 
 /**
- * Lists all memory cards for a user, ordered by slot_index (Slot 1 is top/active).
+ * Lists all memory cards for a user and system, ordered by slot_index (Slot 1 is top/active).
  */
-export async function listUserMemoryCards(userId: string): Promise<UserMemoryCard[]> {
+export async function listUserMemoryCards(
+  userId: string,
+  systemInput: string = "psx"
+): Promise<UserMemoryCard[]> {
+  const system = normalizeCardSystem(systemInput);
   const cards = await query<UserMemoryCard>(
-    "SELECT * FROM user_memory_cards WHERE user_id = ? ORDER BY slot_index ASC",
-    [userId]
+    "SELECT * FROM user_memory_cards WHERE user_id = ? AND system = ? ORDER BY slot_index ASC",
+    [userId, system]
   );
 
-  // If user has zero cards, automatically provision their default Slot 1 card
+  // If user has zero cards for this system, automatically provision their default Slot 1 card
   if (cards.length === 0) {
-    const defaultCard = await ensureDefaultCard(userId);
+    const defaultCard = await ensureDefaultCard(userId, system);
     return [defaultCard];
   }
 
@@ -97,12 +117,16 @@ export async function listUserMemoryCards(userId: string): Promise<UserMemoryCar
 }
 
 /**
- * Ensures user has at least Slot 1 default virtual memory card.
+ * Ensures user has at least Slot 1 default virtual memory card for the requested system.
  */
-export async function ensureDefaultCard(userId: string): Promise<UserMemoryCard> {
+export async function ensureDefaultCard(
+  userId: string,
+  systemInput: string = "psx"
+): Promise<UserMemoryCard> {
+  const system = normalizeCardSystem(systemInput);
   const existing = await query<UserMemoryCard>(
-    "SELECT * FROM user_memory_cards WHERE user_id = ? AND slot_index = 1 LIMIT 1",
-    [userId]
+    "SELECT * FROM user_memory_cards WHERE user_id = ? AND system = ? AND slot_index = 1 LIMIT 1",
+    [userId, system]
   );
 
   if (existing.length > 0) {
@@ -111,22 +135,29 @@ export async function ensureDefaultCard(userId: string): Promise<UserMemoryCard>
 
   const cardId = generateUUID();
   const userDir = getUserMemoryCardDir(userId);
-  const filePath = path.join(userDir, `card_slot1_${cardId}.mcr`);
+  const isPs2 = system === "ps2";
+  const ext = isPs2 ? "ps2" : "mcr";
+  const filePath = path.join(userDir, `${system}_card_slot1_${cardId}.${ext}`);
 
-  // Check if there is an existing FF7 or PS1 save from prior sessions to preserve
   let initialBuffer: Buffer | null = null;
-  const legacyCandidate = "/mnt/storage/roms/saves/psx/Final_20Fantasy_20VII_20(USA)_20.srm";
-  try {
-    if (fs.existsSync(legacyCandidate)) {
-      const legacyBuf = fs.readFileSync(legacyCandidate);
-      if (legacyBuf.byteLength === PS1_CARD_SIZE) {
-        initialBuffer = legacyBuf;
-      }
-    }
-  } catch {}
 
-  if (!initialBuffer) {
-    initialBuffer = createFormattedPs1MemoryCard();
+  if (isPs2) {
+    initialBuffer = createFormattedPs2MemoryCard();
+  } else {
+    // Check if there is an existing FF7 or PS1 save from prior sessions to preserve
+    const legacyCandidate = "/mnt/storage/roms/saves/psx/Final_20Fantasy_20VII_20(USA)_20.srm";
+    try {
+      if (fs.existsSync(legacyCandidate)) {
+        const legacyBuf = fs.readFileSync(legacyCandidate);
+        if (legacyBuf.byteLength === PS1_CARD_SIZE) {
+          initialBuffer = legacyBuf;
+        }
+      }
+    } catch {}
+
+    if (!initialBuffer) {
+      initialBuffer = createFormattedPs1MemoryCard();
+    }
   }
 
   fs.writeFileSync(filePath, initialBuffer);
@@ -135,11 +166,14 @@ export async function ensureDefaultCard(userId: string): Promise<UserMemoryCard>
   } catch {}
 
   const checksum = computeCardChecksum(initialBuffer);
+  const defaultLabel = isPs2
+    ? "Primary PS2 Memory Card (Slot 1)"
+    : "Primary Memory Card (Slot 1)";
 
   await execute(
-    `INSERT INTO user_memory_cards (id, user_id, slot_index, card_name, file_path, size_bytes, checksum, version)
-     VALUES (?, ?, 1, 'Primary Memory Card (Slot 1)', ?, ?, ?, 1)`,
-    [cardId, userId, filePath, initialBuffer.byteLength, checksum]
+    `INSERT INTO user_memory_cards (id, user_id, system, slot_index, card_name, file_path, size_bytes, checksum, version)
+     VALUES (?, ?, ?, 1, ?, ?, ?, ?, 1)`,
+    [cardId, userId, system, defaultLabel, filePath, initialBuffer.byteLength, checksum]
   );
 
   const [created] = await query<UserMemoryCard>(
@@ -151,26 +185,37 @@ export async function ensureDefaultCard(userId: string): Promise<UserMemoryCard>
 }
 
 /**
- * Creates an additional memory card for the user (up to 5 cards max).
+ * Creates an additional memory card for the user (up to 5 cards max per system).
  */
-export async function createUserMemoryCard(userId: string, cardName?: string): Promise<UserMemoryCard> {
+export async function createUserMemoryCard(
+  userId: string,
+  systemInput: string = "psx",
+  cardName?: string
+): Promise<UserMemoryCard> {
+  const system = normalizeCardSystem(systemInput);
   const existing = await query<UserMemoryCard>(
-    "SELECT * FROM user_memory_cards WHERE user_id = ? ORDER BY slot_index ASC",
-    [userId]
+    "SELECT * FROM user_memory_cards WHERE user_id = ? AND system = ? ORDER BY slot_index ASC",
+    [userId, system]
   );
 
   if (existing.length >= MAX_CARDS_PER_USER) {
-    throw new Error(`Maximum limit of ${MAX_CARDS_PER_USER} virtual memory cards reached.`);
+    throw new Error(`Maximum limit of ${MAX_CARDS_PER_USER} virtual memory cards reached for ${system.toUpperCase()}.`);
   }
 
   const nextSlot = existing.length + 1;
   const cardId = generateUUID();
-  const label = cardName?.trim() || `Memory Card ${nextSlot}`;
+  const isPs2 = system === "ps2";
+  const defaultBaseName = isPs2 ? `PS2 Memory Card ${nextSlot}` : `Memory Card ${nextSlot}`;
+  const label = cardName?.trim() || defaultBaseName;
 
   const userDir = getUserMemoryCardDir(userId);
-  const filePath = path.join(userDir, `card_slot${nextSlot}_${cardId}.mcr`);
+  const ext = isPs2 ? "ps2" : "mcr";
+  const filePath = path.join(userDir, `${system}_card_slot${nextSlot}_${cardId}.${ext}`);
 
-  const initialBuffer = createFormattedPs1MemoryCard();
+  const initialBuffer = isPs2
+    ? createFormattedPs2MemoryCard()
+    : createFormattedPs1MemoryCard();
+
   fs.writeFileSync(filePath, initialBuffer);
   try {
     fs.copyFileSync(filePath, `${filePath}.bak`);
@@ -179,9 +224,9 @@ export async function createUserMemoryCard(userId: string, cardName?: string): P
   const checksum = computeCardChecksum(initialBuffer);
 
   await execute(
-    `INSERT INTO user_memory_cards (id, user_id, slot_index, card_name, file_path, size_bytes, checksum, version)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-    [cardId, userId, nextSlot, label, filePath, initialBuffer.byteLength, checksum]
+    `INSERT INTO user_memory_cards (id, user_id, system, slot_index, card_name, file_path, size_bytes, checksum, version)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [cardId, userId, system, nextSlot, label, filePath, initialBuffer.byteLength, checksum]
   );
 
   const [created] = await query<UserMemoryCard>(
@@ -209,6 +254,8 @@ export async function updateUserMemoryCard(
     throw new Error("Memory card not found.");
   }
 
+  const system = normalizeCardSystem(card.system);
+
   // Handle renaming
   if (updates.cardName && updates.cardName.trim()) {
     const cleanName = updates.cardName.trim().slice(0, 100);
@@ -221,15 +268,14 @@ export async function updateUserMemoryCard(
   // Handle slot reordering (e.g. promoting card to Slot 1 / top)
   if (typeof updates.targetSlot === "number" && updates.targetSlot >= 1 && updates.targetSlot <= MAX_CARDS_PER_USER) {
     const allCards = await query<UserMemoryCard>(
-      "SELECT * FROM user_memory_cards WHERE user_id = ? ORDER BY slot_index ASC",
-      [userId]
+      "SELECT * FROM user_memory_cards WHERE user_id = ? AND system = ? ORDER BY slot_index ASC",
+      [userId, system]
     );
 
     const oldSlot = card.slot_index;
     const newSlot = Math.min(updates.targetSlot, allCards.length);
 
     if (oldSlot !== newSlot) {
-      // Reorder cards array
       const reordered = allCards.filter((c) => c.id !== cardId);
       reordered.splice(newSlot - 1, 0, card);
 
@@ -260,21 +306,26 @@ export async function updateUserMemoryCard(
 }
 
 /**
- * Deletes a memory card (enforcing at least 1 remaining card).
+ * Deletes a memory card (enforcing at least 1 remaining card for that system).
  */
 export async function deleteUserMemoryCard(userId: string, cardId: string): Promise<void> {
+  const [target] = await query<UserMemoryCard>(
+    "SELECT * FROM user_memory_cards WHERE id = ? AND user_id = ? LIMIT 1",
+    [cardId, userId]
+  );
+
+  if (!target) {
+    throw new Error("Memory card not found.");
+  }
+
+  const system = normalizeCardSystem(target.system);
   const allCards = await query<UserMemoryCard>(
-    "SELECT * FROM user_memory_cards WHERE user_id = ? ORDER BY slot_index ASC",
-    [userId]
+    "SELECT * FROM user_memory_cards WHERE user_id = ? AND system = ? ORDER BY slot_index ASC",
+    [userId, system]
   );
 
   if (allCards.length <= 1) {
-    throw new Error("Cannot delete your only memory card. At least one virtual memory card is required.");
-  }
-
-  const target = allCards.find((c) => c.id === cardId);
-  if (!target) {
-    throw new Error("Memory card not found.");
+    throw new Error(`Cannot delete your only ${system.toUpperCase()} memory card. At least one virtual card is required.`);
   }
 
   // Remove file from disk
@@ -308,18 +359,20 @@ export async function deleteUserMemoryCard(userId: string, cardId: string): Prom
  */
 export async function getUserMemoryCardBinary(
   userId: string,
-  cardIdOrSlot: string
+  cardIdOrSlot: string,
+  systemInput: string = "psx"
 ): Promise<{ card: UserMemoryCard; buffer: Buffer }> {
+  const system = normalizeCardSystem(systemInput);
   let card: UserMemoryCard | undefined;
 
   if (cardIdOrSlot === "active" || cardIdOrSlot === "top" || cardIdOrSlot === "1") {
     const rows = await query<UserMemoryCard>(
-      "SELECT * FROM user_memory_cards WHERE user_id = ? AND slot_index = 1 LIMIT 1",
-      [userId]
+      "SELECT * FROM user_memory_cards WHERE user_id = ? AND system = ? AND slot_index = 1 LIMIT 1",
+      [userId, system]
     );
     card = rows[0];
     if (!card) {
-      card = await ensureDefaultCard(userId);
+      card = await ensureDefaultCard(userId, system);
     }
   } else {
     const rows = await query<UserMemoryCard>(
@@ -333,12 +386,16 @@ export async function getUserMemoryCardBinary(
     throw new Error("Memory card not found.");
   }
 
+  const expectedSize = normalizeCardSystem(card.system) === "ps2" ? PS2_CARD_SIZE : PS1_CARD_SIZE;
   let buffer: Buffer;
+
   if (fs.existsSync(card.file_path)) {
     buffer = fs.readFileSync(card.file_path);
   } else {
     // Reconstruct missing file from template
-    buffer = createFormattedPs1MemoryCard();
+    buffer = normalizeCardSystem(card.system) === "ps2"
+      ? createFormattedPs2MemoryCard()
+      : createFormattedPs1MemoryCard();
     fs.writeFileSync(card.file_path, buffer);
   }
 
@@ -352,23 +409,28 @@ export async function syncUserMemoryCard(
   userId: string,
   cardIdOrSlot: string,
   newBuffer: Buffer,
+  systemInput: string = "psx",
   expectedChecksum?: string
 ): Promise<UserMemoryCard> {
-  const { card } = await getUserMemoryCardBinary(userId, cardIdOrSlot);
+  const system = normalizeCardSystem(systemInput);
+  const { card } = await getUserMemoryCardBinary(userId, cardIdOrSlot, system);
 
   // Validate payload size
   if (!newBuffer || newBuffer.byteLength === 0) {
     throw new Error("Empty memory card payload.");
   }
 
-  // Format check: Pad or trim to standard 128 KB if necessary
+  const isPs2 = normalizeCardSystem(card.system) === "ps2";
+  const requiredSize = isPs2 ? PS2_CARD_SIZE : PS1_CARD_SIZE;
+
+  // Format check: Pad or trim to standard size if necessary
   let finalBuffer = newBuffer;
-  if (newBuffer.byteLength !== PS1_CARD_SIZE) {
-    if (newBuffer.byteLength < PS1_CARD_SIZE) {
-      finalBuffer = Buffer.alloc(PS1_CARD_SIZE, 0);
+  if (newBuffer.byteLength !== requiredSize) {
+    if (newBuffer.byteLength < requiredSize) {
+      finalBuffer = Buffer.alloc(requiredSize, isPs2 ? 0xff : 0x00);
       newBuffer.copy(finalBuffer);
     } else {
-      finalBuffer = newBuffer.subarray(0, PS1_CARD_SIZE);
+      finalBuffer = newBuffer.subarray(0, requiredSize);
     }
   }
 

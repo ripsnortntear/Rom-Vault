@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { getCurrentSession } from "@/lib/auth/session";
-import { syncUserMemoryCard } from "@/lib/memory-cards";
+import { syncUserMemoryCard, normalizeCardSystem } from "@/lib/memory-cards";
 
 interface RouteContext {
   params: Promise<{
@@ -24,6 +24,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 
     const buffer = Buffer.from(arrayBuffer);
     const session = await getCurrentSession();
+    const system = normalizeCardSystem(req.nextUrl.searchParams.get("system"));
 
     // 1. Authenticated User Flow: Write to user's assigned card
     if (session?.user?.id) {
@@ -35,12 +36,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
           session.user.id,
           id,
           buffer,
+          system,
           expectedChecksum
         );
 
         return NextResponse.json({
           success: true,
           type: "user_card",
+          system: updatedCard.system,
           card: updatedCard,
           version: updatedCard.version,
           checksum: updatedCard.checksum,
@@ -51,9 +54,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       }
     }
 
-    // 2. Unauthenticated / Iframe Fallback: Write directly to global system .srm file
-    const system = req.nextUrl.searchParams.get("system") || "psx";
-    const gameId = req.nextUrl.searchParams.get("gameId") || "Final Fantasy VII (USA)";
+    // 2. Unauthenticated / Iframe Fallback: Write directly to global system save file
+    const gameId = req.nextUrl.searchParams.get("gameId") || (system === "ps2" ? "ps2_memory_card" : "Final Fantasy VII (USA)");
     const cleanName = decodeURIComponent(gameId)
       .replace(/[\/\\?%*:|"<>]/g, "_")
       .trim();
@@ -61,7 +63,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const saveDir = path.join(SAVES_ROOT, system);
     fs.mkdirSync(saveDir, { recursive: true });
 
-    const targetFile = path.join(saveDir, `${cleanName}.srm`);
+    const ext = system === "ps2" ? "ps2" : "srm";
+    const targetFile = path.join(saveDir, `${cleanName}.${ext}`);
     const tmpFile = `${targetFile}.${Date.now()}.tmp`;
 
     fs.writeFileSync(tmpFile, buffer);
@@ -75,7 +78,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       success: true,
-      type: "fallback_srm",
+      type: "fallback_file",
       file: targetFile,
       checksum,
     });

@@ -60,6 +60,7 @@ export interface AuthSession {
 export interface UserMemoryCard {
   id: string;
   user_id: string;
+  system?: "psx" | "ps2" | string;
   slot_index: number; // 1 to 5
   card_name: string;
   file_path: string;

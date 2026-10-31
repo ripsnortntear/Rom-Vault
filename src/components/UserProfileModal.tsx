@@ -62,6 +62,7 @@ export function UserProfileModal({
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Memory cards state
+  const [cardSystem, setCardSystem] = useState<"psx" | "ps2">("psx");
   const [cards, setCards] = useState<UserMemoryCard[]>([]);
   const [isLoadingCards, setIsLoadingCards] = useState<boolean>(false);
   const [cardsError, setCardsError] = useState<string | null>(null);
@@ -74,11 +75,11 @@ export function UserProfileModal({
   // Logout state
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
-  const fetchCards = useCallback(async () => {
+  const fetchCards = useCallback(async (sys: "psx" | "ps2" = cardSystem) => {
     setIsLoadingCards(true);
     setCardsError(null);
     try {
-      const res = await fetch("/roms/api/users/me/cards");
+      const res = await fetch(`/roms/api/users/me/cards?system=${sys}`);
       const data = await res.json();
       if (res.ok && data.cards) {
         setCards(data.cards);
@@ -90,13 +91,13 @@ export function UserProfileModal({
     } finally {
       setIsLoadingCards(false);
     }
-  }, []);
+  }, [cardSystem]);
 
   useEffect(() => {
     if (isOpen && activeTab === "cards") {
-      fetchCards();
+      fetchCards(cardSystem);
     }
-  }, [isOpen, activeTab, fetchCards]);
+  }, [isOpen, activeTab, cardSystem, fetchCards]);
 
   if (!isOpen) return null;
 
@@ -183,17 +184,20 @@ export function UserProfileModal({
       const res = await fetch("/roms/api/users/me/cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardName: newCardName.trim() || undefined }),
+        body: JSON.stringify({
+          system: cardSystem,
+          cardName: newCardName.trim() || undefined,
+        }),
       });
 
       const data = await res.json();
       if (!res.ok) {
         setCardsError(data.error || "Failed to create memory card.");
       } else {
-        setCardsSuccess("New virtual memory card initialized!");
+        setCardsSuccess(`New virtual ${cardSystem.toUpperCase()} memory card initialized!`);
         setNewCardName("");
         setIsCreatingCard(false);
-        await fetchCards();
+        await fetchCards(cardSystem);
       }
     } catch {
       setCardsError("Network error creating memory card.");
@@ -218,8 +222,8 @@ export function UserProfileModal({
       if (!res.ok) {
         setCardsError(data.error || "Failed to set card as active.");
       } else {
-        setCardsSuccess("Memory card set as Slot 1 (Active Boot Card)!");
-        await fetchCards();
+        setCardsSuccess(`Memory card set as Slot 1 (Active Boot Card for ${cardSystem.toUpperCase()})!`);
+        await fetchCards(cardSystem);
       }
     } catch {
       setCardsError("Network error setting active card.");
@@ -249,7 +253,7 @@ export function UserProfileModal({
       } else {
         setCardsSuccess("Card renamed successfully.");
         setEditingCardId(null);
-        await fetchCards();
+        await fetchCards(cardSystem);
       }
     } catch {
       setCardsError("Network error renaming card.");
@@ -258,7 +262,7 @@ export function UserProfileModal({
 
   const handleDeleteCard = async (card: UserMemoryCard) => {
     if (cards.length <= 1) {
-      setCardsError("Cannot delete your only memory card.");
+      setCardsError(`Cannot delete your only ${cardSystem.toUpperCase()} memory card.`);
       return;
     }
     if (!window.confirm(`Are you sure you want to delete "${card.card_name}"? All saves stored on this card will be permanently deleted.`)) {
@@ -279,7 +283,7 @@ export function UserProfileModal({
         setCardsError(data.error || "Failed to delete card.");
       } else {
         setCardsSuccess(`Memory card "${card.card_name}" deleted.`);
-        await fetchCards();
+        await fetchCards(cardSystem);
       }
     } catch {
       setCardsError("Network error deleting card.");
@@ -511,16 +515,57 @@ export function UserProfileModal({
 
           {activeTab === "cards" && (
             <div className="space-y-4">
+              {/* Platform Switcher Strip: PS1 vs PS2 */}
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/60 border border-white/10 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardSystem("psx");
+                    setIsCreatingCard(false);
+                    setEditingCardId(null);
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    cardSystem === "psx"
+                      ? "bg-red-600 text-white shadow-md shadow-red-600/30"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <Gamepad2 className="w-3.5 h-3.5" />
+                  <span>PlayStation 1</span>
+                  <span className="text-[10px] opacity-75 font-mono">(128 KB)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardSystem("ps2");
+                    setIsCreatingCard(false);
+                    setEditingCardId(null);
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    cardSystem === "ps2"
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>PlayStation 2</span>
+                  <span className="text-[10px] opacity-75 font-mono">(8 MB)</span>
+                </button>
+              </div>
+
               <div className="flex items-center justify-between pb-2 border-b border-white/10">
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>Virtual Memory Cards</span>
+                    <span>{cardSystem === "ps2" ? "PS2 Virtual Memory Cards" : "PS1 Virtual Memory Cards"}</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-zinc-300">
                       {cards.length} / 5 Cards
                     </span>
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    PS1 games automatically boot using your top card (<strong className="text-emerald-400">Slot 1</strong>).
+                    {cardSystem === "ps2"
+                      ? "PS2 games automatically boot using your top card in TabStationToo ("
+                      : "PS1 games automatically boot using your top card in PCSX-ReARMed ("}
+                    <strong className="text-emerald-400">Slot 1</strong>).
                   </p>
                 </div>
 
@@ -529,9 +574,13 @@ export function UserProfileModal({
                     type="button"
                     onClick={() => {
                       setIsCreatingCard(true);
-                      setNewCardName(`Memory Card ${cards.length + 1}`);
+                      setNewCardName(cardSystem === "ps2" ? `PS2 Memory Card ${cards.length + 1}` : `Memory Card ${cards.length + 1}`);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30 transition cursor-pointer"
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md transition cursor-pointer ${
+                      cardSystem === "ps2"
+                        ? "bg-blue-600 hover:bg-blue-500 shadow-blue-600/30"
+                        : "bg-red-600 hover:bg-red-500 shadow-red-600/30"
+                    }`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>New Card</span>
@@ -556,12 +605,14 @@ export function UserProfileModal({
               {isCreatingCard && (
                 <form
                   onSubmit={handleCreateCard}
-                  className="p-4 rounded-xl bg-zinc-950 border border-red-500/40 space-y-3"
+                  className={`p-4 rounded-xl bg-zinc-950 border space-y-3 ${
+                    cardSystem === "ps2" ? "border-blue-500/40" : "border-red-500/40"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Gamepad2 className="w-3.5 h-3.5 text-red-400" />
-                      Initialize New Virtual Memory Card
+                      {cardSystem === "ps2" ? <HardDrive className="w-3.5 h-3.5 text-blue-400" /> : <Gamepad2 className="w-3.5 h-3.5 text-red-400" />}
+                      Initialize New Virtual {cardSystem.toUpperCase()} Memory Card
                     </span>
                     <button
                       type="button"
@@ -576,7 +627,7 @@ export function UserProfileModal({
                       type="text"
                       autoFocus
                       required
-                      placeholder="e.g. JRPGs &amp; Final Fantasy, Racing..."
+                      placeholder={cardSystem === "ps2" ? "e.g. Gran Turismo 4, GTA, RPGs..." : "e.g. JRPGs & Final Fantasy, Racing..."}
                       value={newCardName}
                       onChange={(e) => setNewCardName(e.target.value)}
                       className="w-full px-3.5 py-2 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500/80"
@@ -593,10 +644,14 @@ export function UserProfileModal({
                     <button
                       type="submit"
                       disabled={isLoadingCards}
-                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white transition cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition cursor-pointer ${
+                        cardSystem === "ps2"
+                          ? "bg-blue-600 hover:bg-blue-500"
+                          : "bg-red-600 hover:bg-red-500"
+                      }`}
                     >
                       {isLoadingCards ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      <span>Format &amp; Create (128 KB)</span>
+                      <span>Format &amp; Create ({cardSystem === "ps2" ? "8 MB" : "128 KB"})</span>
                     </button>
                   </div>
                 </form>
@@ -686,7 +741,7 @@ export function UserProfileModal({
                                     </button>
                                   </div>
                                   <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-0.5">
-                                    <span>128 KB (15 blocks)</span>
+                                    <span>{cardSystem === "ps2" ? "8 MB (PCSX2 raw)" : "128 KB (15 blocks)"}</span>
                                     <span>&bull;</span>
                                     <span>v{card.version}</span>
                                     <span>&bull;</span>
@@ -706,7 +761,7 @@ export function UserProfileModal({
                                 type="button"
                                 onClick={() => handleSetSlot1(card.id)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white/10 hover:bg-emerald-600/80 hover:text-white text-zinc-300 transition cursor-pointer"
-                                title="Move to Slot 1 (Default boot memory card for PS1 games)"
+                                title={`Move to Slot 1 (Default boot memory card for ${cardSystem.toUpperCase()} games)`}
                               >
                                 <ArrowUp className="w-3.5 h-3.5" />
                                 <span className="hidden sm:inline">Set Active</span>
@@ -714,9 +769,9 @@ export function UserProfileModal({
                             )}
 
                             <a
-                              href={`/roms/api/users/me/cards/${card.id}/download?download=1`}
+                              href={`/roms/api/users/me/cards/${card.id}/download?system=${cardSystem}&download=1`}
                               className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition"
-                              title="Download .MCR raw card binary (DuckStation / RetroArch compatible)"
+                              title={`Download .${cardSystem === "ps2" ? "PS2" : "MCR"} raw card binary`}
                             >
                               <Download className="w-4 h-4" />
                             </a>

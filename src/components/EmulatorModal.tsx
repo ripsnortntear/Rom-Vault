@@ -336,7 +336,8 @@ export function EmulatorModal({
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
   const ps2BiosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
   const ps2DiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.chd`)}`;
-  const ps2RunnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}`;
+  const ps2MemcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
+  const ps2RunnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}&memcard=${encodeURIComponent(ps2MemcardUrl)}`;
 
   const playerUrl =
     game.system === "ps2"
@@ -644,13 +645,17 @@ export function EmulatorModal({
               <a
                 href={
                   game.system === "psx"
-                    ? `${BASE_PATH}/api/users/me/cards/active/download?download=1`
+                    ? `${BASE_PATH}/api/users/me/cards/active/download?system=psx&download=1`
+                    : game.system === "ps2"
+                    ? `${BASE_PATH}/api/users/me/cards/active/download?system=ps2&download=1`
                     : `${BASE_PATH}/api/saves/${encodeURIComponent(game.id)}?system=${encodeURIComponent(game.system)}&download=1`
                 }
                 className="hidden md:inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 text-zinc-200 transition"
                 title={
                   game.system === "psx"
                     ? "Export User PS1 Virtual Memory Card (.MCR / DuckStation)"
+                    : game.system === "ps2"
+                    ? "Export User PS2 Virtual Memory Card (.PS2 / PCSX2)"
                     : "Export .SRM Memory Card (for DuckStation / RetroArch)"
                 }
               >

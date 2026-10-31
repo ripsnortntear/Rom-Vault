@@ -4390,6 +4390,50 @@
 			}
 			if (changed)
 				saveCardMeta();
+
+			// ROM Vault Cloud Virtual Memory Card for PS2:
+			const searchParams = new URLSearchParams(location.search);
+			const cloudMemcardUrl = searchParams.get('memcard');
+			if (cloudMemcardUrl) {
+				try {
+					pageLog(`Fetching cloud virtual memory card from ${cloudMemcardUrl}...`);
+					const res = await fetch(cloudMemcardUrl, { credentials: 'include' });
+					if (res.ok) {
+						const ab = await res.arrayBuffer();
+						if (ab.byteLength === CARD_BYTES) {
+							const cardNameHeader = res.headers.get('X-Card-Name');
+							const cardName = cardNameHeader ? decodeURIComponent(cardNameHeader) : 'Cloud Virtual Memory Card (Slot 1)';
+							const cardId = 'cloud_ps2_slot1';
+							const cloudCard = {
+								id: cardId,
+								name: cardName,
+								created: Date.now(),
+								used: Date.now(),
+								isCloud: true,
+								cloudSyncUrl: cloudMemcardUrl.replace(/\/download(\?|$)/, '/sync$1'),
+							};
+							cards.list.set(cardId, cloudCard);
+							cards.slots[0] = cardId;
+							cards.boot[0] = new Uint8Array(ab);
+							pageLog(`Attached ${cardName} to Slot 1.`);
+							if (window.parent && window.parent !== window) {
+								window.parent.postMessage({
+									type: 'VAULT_SAVE_STATUS',
+									status: 'loaded',
+									cardName: cardName,
+								}, '*');
+							}
+						} else {
+							pageLog(`Cloud memory card size invalid (${ab.byteLength} bytes, expected ${CARD_BYTES}).`, 'warn');
+						}
+					} else {
+						pageLog(`Cloud memory card fetch returned status ${res.status}.`, 'warn');
+					}
+				} catch (err) {
+					pageLog(`Failed to fetch cloud memory card: ${errorText(err)}`, 'warn');
+				}
+			}
+
 			if (cards.list.size)
 				askPersistentStorage();
 			cards.loaded = true;
@@ -4744,6 +4788,48 @@
 			persistMemoryCards();
 	}
 
+	async function syncCloudCard(c, bytes) {
+		if (!c || !bytes) return;
+		const syncUrl = c.cloudSyncUrl || (c.id === 'cloud_ps2_slot1' ? '/roms/api/users/me/cards/active/sync?system=ps2' : null);
+		if (!syncUrl) return;
+
+		try {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saving', cardName: c.name }, '*');
+			}
+			const res = await fetch(syncUrl, {
+				method: 'PUT',
+				credentials: 'include',
+				headers: {
+					'Content-Type': 'application/octet-stream',
+				},
+				body: new Blob([bytes]),
+			});
+			if (res.ok) {
+				pageLog(`Cloud virtual memory card synced to ROM Vault: ${c.name}`);
+				if (window.parent && window.parent !== window) {
+					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saved', cardName: c.name }, '*');
+				}
+			} else {
+				pageLog(`Cloud memory card sync failed: HTTP ${res.status}`, 'warn');
+			}
+		} catch (err) {
+			pageLog(`Cloud memory card sync error: ${errorText(err)}`, 'warn');
+		}
+	}
+
+	window.addEventListener('message', (e) => {
+		if (e.data?.type === 'VAULT_FORCE_SAVE') {
+			const id = cards.slots[0];
+			if (id) {
+				const bytes = cards.fsReady ? readCardFile(id) : cards.boot[0];
+				if (bytes) {
+					syncCloudCard(cards.list.get(id) || { id, name: 'Cloud Virtual Memory Card (Slot 1)' }, bytes);
+				}
+			}
+		}
+	});
+
 	// leaving: the page is being hidden or left. That copy does not wait for the retry pause (it may be the
 	// last chance to keep the card), and its failure does not count toward giving up: a few quick tab switches
 	// say nothing new about IndexedDB, so only the timed copies decide that.
@@ -4769,6 +4855,11 @@
 				const bytes = readCardFile(id);
 				if (bytes)
 					copies.push({ c: cards.list.get(id), bytes });
+			}
+		}
+		for (const { c, bytes } of copies) {
+			if (c && (c.isCloud || c.cloudSyncUrl || c.id === 'cloud_ps2_slot1')) {
+				syncCloudCard(c, bytes);
 			}
 		}
 		memcards.syncing = true;

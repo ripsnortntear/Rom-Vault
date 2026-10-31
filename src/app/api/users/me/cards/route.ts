@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
-import { listUserMemoryCards, createUserMemoryCard, MAX_CARDS_PER_USER } from "@/lib/memory-cards";
+import {
+  listUserMemoryCards,
+  createUserMemoryCard,
+  normalizeCardSystem,
+  MAX_CARDS_PER_USER,
+} from "@/lib/memory-cards";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    const cards = await listUserMemoryCards(session.user.id);
+    const system = normalizeCardSystem(req.nextUrl.searchParams.get("system"));
+    const cards = await listUserMemoryCards(session.user.id, system);
     return NextResponse.json({
       success: true,
+      system,
       cards,
       count: cards.length,
       maxLimit: MAX_CARDS_PER_USER,
@@ -35,10 +42,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}));
     const cardName = typeof body?.cardName === "string" ? body.cardName : undefined;
+    const system = normalizeCardSystem(body?.system || req.nextUrl.searchParams.get("system"));
 
-    const card = await createUserMemoryCard(session.user.id, cardName);
+    const card = await createUserMemoryCard(session.user.id, system, cardName);
     return NextResponse.json(
-      { success: true, card, message: "Virtual memory card initialized successfully." },
+      { success: true, card, message: `Virtual ${system.toUpperCase()} memory card initialized successfully.` },
       { status: 201 }
     );
   } catch (error: any) {

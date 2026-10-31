@@ -46,10 +46,11 @@ export function PS2EmulatorView({ game }: PS2EmulatorViewProps) {
       : (game.romFileName || `${game.title}.chd`);
   const biosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
   const discUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeFileName)}`;
+  const memcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
 
   const runnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(
     biosUrl
-  )}&disc=${encodeURIComponent(discUrl)}`;
+  )}&disc=${encodeURIComponent(discUrl)}&memcard=${encodeURIComponent(memcardUrl)}`;
 
   const handleBackToLibrary = () => {
     window.location.assign("/roms");
