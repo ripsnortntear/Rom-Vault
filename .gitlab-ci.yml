@@ -6,9 +6,10 @@
 # Note that environment variables can be set in several places
 # See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
 stages:
-- test
-- build
-- deploy
+  - test
+  - build
+  - deploy
+
 variables:
   GITLAB_FEATURES: ''
   SECRET_DETECTION_DISABLED: 'true'
@@ -24,21 +25,22 @@ cache:
     - package-lock.json
     prefix: "${CI_COMMIT_REF_SLUG}"
   paths:
-  - ".next/cache/"
-  - ".npm/"
+    - ".next/cache/"
+    - ".npm/"
 unit_test:
   stage: test
   before_script:
-  - export PATH="/usr/local/bin:/usr/bin:$PATH"
+    - export PATH="/usr/local/bin:/usr/bin:$PATH"
   script:
-  - echo "[*] Installing dependencies..."
-  - npm ci --include=dev --ignore-scripts --prefer-offline
-  - echo "[*] Running unit tests with JUnit report output..."
-  - npx vitest run --passWithNoTests --reporter=default --reporter=junit --outputFile=junit.xml
+    - echo "[*] Installing dependencies..."
+    - npm ci --include=dev --ignore-scripts --prefer-offline
+    - echo "[*] Running unit tests with JUnit report output..."
+    - npx vitest run --passWithNoTests --reporter=default --reporter=junit --outputFile=junit.xml
   artifacts:
     when: always
     reports:
       junit: junit.xml
+
 build_and_verify:
   stage: build
   before_script:
