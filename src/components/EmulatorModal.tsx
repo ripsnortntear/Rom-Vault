@@ -436,7 +436,7 @@ export function EmulatorModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-0 sm:p-6 overflow-hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-0 sm:p-2 md:p-3 overflow-hidden"
       onClick={handleExit}
       role="dialog"
       aria-modal="true"
@@ -450,7 +450,7 @@ export function EmulatorModal({
         className={`relative flex flex-col bg-zinc-950 overflow-hidden ${
           isFullscreen
             ? "fixed inset-0 z-50 w-screen h-screen max-w-none rounded-none border-0 " + (!showFullscreenBars ? "cursor-none" : "")
-            : "w-full sm:max-w-6xl h-full sm:h-[92vh] rounded-none sm:rounded-2xl border-0 sm:border sm:border-white/15 shadow-2xl"
+            : "w-full md:w-[98vw] h-full md:h-[97vh] max-w-[99vw] 2xl:max-w-[1920px] max-h-[98vh] rounded-none md:rounded-2xl border-0 md:border md:border-white/15 shadow-2xl"
         }`}
       >
         {gamepadNeedsActivation && (
@@ -576,7 +576,7 @@ export function EmulatorModal({
                 <span>{game.systemLabel}</span>
                 <span className="hidden sm:inline">LIVE EMULATOR</span>
               </span>
-              <h2 className="text-sm sm:text-lg font-bold text-white truncate max-w-[130px] xs:max-w-[190px] sm:max-w-md">
+              <h2 className="text-sm sm:text-lg font-bold text-white truncate max-w-[130px] xs:max-w-[190px] sm:max-w-md md:max-w-xl lg:max-w-2xl">
                 {game.displayTitle}
               </h2>
               {game.discs && game.discs.length > 1 && (

@@ -232,14 +232,14 @@ export function GameDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-xl p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-xl p-2 sm:p-3 md:p-4 overflow-y-auto"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl rounded-3xl border border-white/15 bg-zinc-950 shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        className="relative w-full md:w-[98vw] max-w-[99vw] 2xl:max-w-[1920px] rounded-2xl md:rounded-3xl border border-white/15 bg-zinc-950 shadow-2xl overflow-hidden my-auto h-full sm:h-[95vh] max-h-[96vh] flex flex-col"
       >
         {backdropUrl && (
           <div
@@ -249,7 +249,7 @@ export function GameDetailModal({
         )}
 
         {/* Modal Header */}
-        <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-zinc-900/80 backdrop-blur-md">
+        <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/10 bg-zinc-900/80 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <span
               className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase text-white ${
@@ -279,7 +279,7 @@ export function GameDetailModal({
           gameTitle={game.displayTitle}
           system={game.system}
         >
-          <div className="relative z-10 overflow-y-auto p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="relative z-10 overflow-y-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 flex-1">
             {/* Left Column: Media Viewport + Red Play Button Directly Under Media */}
             <div className="lg:col-span-6 flex flex-col gap-4">
               {/* Media Viewport */}
