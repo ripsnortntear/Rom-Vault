@@ -23,7 +23,7 @@ export function PS2EmulatorView({ game }: PS2EmulatorViewProps) {
   }, []);
 
   const romStreamUrl = `/roms/api/roms/${encodeURIComponent(game.id)}/stream`;
-  const runnerUrl = `/roms/playjs/index.html?rom=${encodeURIComponent(romStreamUrl)}`;
+  const runnerUrl = `/roms/playjs/index.html?rom=${encodeURIComponent(romStreamUrl)}&title=${encodeURIComponent(game.title)}&embedded=1`;
 
   const handleBackToLibrary = () => {
     window.location.assign("/roms");
