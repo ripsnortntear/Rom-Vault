@@ -95,8 +95,8 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     company: "Nintendo",
     badgeColor: "bg-violet-700",
     colorHex: "#6d28d9",
-    ejsCore: null,
-    playable: false,
+    ejsCore: "gamecube",
+    playable: true,
     romExtensions: [".rvz", ".iso", ".gcm"],
   },
   genesis: {
@@ -161,8 +161,8 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     company: "Sega",
     badgeColor: "bg-rose-600",
     colorHex: "#e11d48",
-    ejsCore: null,
-    playable: false,
+    ejsCore: "dreamcast",
+    playable: true,
     romExtensions: [".chd", ".gdi", ".cdi"],
   },
   psx: {

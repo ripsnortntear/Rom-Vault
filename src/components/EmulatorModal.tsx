@@ -383,6 +383,25 @@ export function EmulatorModal({
             <span><strong className="text-zinc-200">R-Shift</strong> Select</span>
           </>
         );
+      case "gamecube":
+        return (
+          <>
+            <span><strong className="text-zinc-200">Arrows / Analog</strong> Control Stick</span>
+            <span><strong className="text-zinc-200">A / B / X / Y</strong> Action Buttons</span>
+            <span><strong className="text-zinc-200">L / R</strong> Triggers</span>
+            <span><strong className="text-zinc-200">Z</strong> Z-Button</span>
+            <span><strong className="text-zinc-200">Enter</strong> Start</span>
+          </>
+        );
+      case "dreamcast":
+        return (
+          <>
+            <span><strong className="text-zinc-200">Arrows</strong> D-Pad</span>
+            <span><strong className="text-zinc-200">A / B / X / Y</strong> Action Buttons</span>
+            <span><strong className="text-zinc-200">Q / W</strong> L / R Triggers</span>
+            <span><strong className="text-zinc-200">Enter</strong> Start</span>
+          </>
+        );
       default:
         return (
           <>
@@ -691,12 +710,48 @@ export function EmulatorModal({
             </div>
           )}
 
-          {showNotice && game.playable && (game.system === "saturn" || game.system === "psx") && (
+          {showNotice && game.playable && (game.system === "saturn" || game.system === "psx" || game.system === "gamecube" || game.system === "dreamcast") && (
             <div className="bg-amber-950/80 border-b border-amber-600/30 px-4 py-1.5 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <span className="flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>
-                  {game.system === "saturn" ? (
+                  {game.system === "gamecube" ? (
+                    <>
+                      <strong>Nintendo GameCube Notice:</strong> In-browser GameCube emulation requires heavy WebAssembly compute. For best performance, 60 FPS, and hardware rendering, you can also click <strong>Download</strong> and play in desktop{" "}
+                      <a
+                        href="https://dolphin-emu.org/download/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download Dolphin Emulator"
+                      >
+                        Dolphin
+                      </a>.
+                    </>
+                  ) : game.system === "dreamcast" ? (
+                    <>
+                      <strong>Sega Dreamcast Notice:</strong> In-browser Dreamcast emulation runs via WebAssembly. For full 60 FPS and enhanced 3D resolution, you can also click <strong>Download</strong> and play in desktop{" "}
+                      <a
+                        href="https://flycast.emuplace.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download Flycast"
+                      >
+                        Flycast
+                      </a>{" "}
+                      or{" "}
+                      <a
+                        href="https://redream.io/download"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold underline hover:text-white transition"
+                        title="Download Redream"
+                      >
+                        Redream
+                      </a>.
+                    </>
+                  ) : game.system === "saturn" ? (
                     <>
                       <strong>Sega Saturn Notice:</strong> In-browser Saturn emulation uses software rendering and runs at ~1–5 FPS. For full 60 FPS, click <strong>Download</strong> and play in desktop{" "}
                       <a
@@ -742,7 +797,7 @@ export function EmulatorModal({
                   download={activeRomFileName}
                   className="underline hover:text-white font-medium shrink-0"
                 >
-                  Download {game.system === "saturn" || game.system === "psx" ? (activeDisc ? `Disc ${activeDiscNum} CHD` : "CHD") : "ROM"}
+                  Download {game.system === "saturn" || game.system === "psx" || game.system === "dreamcast" || game.system === "gamecube" ? (activeDisc ? `Disc ${activeDiscNum}` : "Game") : "ROM"}
                 </a>
                 {game.discs && game.discs.length > 1 && (
                   <span className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-amber-600/40 text-[11px]">

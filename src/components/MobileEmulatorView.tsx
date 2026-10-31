@@ -484,6 +484,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           if (loadUrl) {
             window.EJS_loadSaveUrl = loadUrl;
           }
+        } else if (game.system === "dreamcast") {
+          window.EJS_biosUrl = "/roms/api/bios/dc_boot.bin?system=dreamcast";
         }
         window.EJS_gamePath = cleanFileName;
         window.EJS_disableCue = true;

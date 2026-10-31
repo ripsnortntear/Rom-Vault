@@ -346,7 +346,7 @@ export function RetroLibraryClient({
       return next;
     });
 
-    // Non-playable systems (PS2, GameCube, Dreamcast) show the standalone recommendation modal
+    // Non-playable systems (such as PS2) show the standalone recommendation modal
     if (!game.playable) {
       setPlayingGame(game);
       return;
