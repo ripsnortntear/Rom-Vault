@@ -212,4 +212,22 @@
     if (typeof window.EJS_onSaveSave === "function") {
         window.EJS_emulator.on("saveSave", window.EJS_onSaveSave);
     }
+    window.EJS_emulator.on("saveSaveFiles", function(saveBuffer) {
+        if (typeof window.EJS_onSaveSaveFiles === "function") {
+            try {
+                window.EJS_onSaveSaveFiles(saveBuffer);
+            } catch(e) {
+                console.warn("[loader.js] EJS_onSaveSaveFiles error:", e);
+            }
+        }
+    });
+    window.EJS_emulator.on("saveDatabaseLoaded", function(fs) {
+        if (typeof window.EJS_onSaveDatabaseLoaded === "function") {
+            try {
+                window.EJS_onSaveDatabaseLoaded(fs);
+            } catch(e) {
+                console.warn("[loader.js] EJS_onSaveDatabaseLoaded error:", e);
+            }
+        }
+    });
 })();

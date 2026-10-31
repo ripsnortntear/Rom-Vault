@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const session = await getCurrentSession();
 
     // 1. Authenticated User Flow: Write to user's assigned card
-    if (session?.user?.id && id !== "active") {
+    if (session?.user?.id) {
       try {
         const ifMatch = req.headers.get("if-match")?.replace(/"/g, "") || undefined;
         const expectedChecksum = req.headers.get("x-expected-checksum") || ifMatch;
