@@ -13,6 +13,8 @@ import {
   Tv,
   BookOpen,
   MessageSquare,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
 import {
@@ -56,6 +58,7 @@ export function GameDetailModal({
   onPlay,
 }: GameDetailModalProps): React.ReactElement | null {
   const [activeTab, setActiveTab] = useState<MediaTab>("video");
+  const [isMuted, setIsMuted] = useState<boolean>(true);
   const [selectedDiscIndex, setSelectedDiscIndex] = useState<number>(0);
   const [enrichedMeta, setEnrichedMeta] = useState<{
     year?: number | null;
@@ -66,6 +69,7 @@ export function GameDetailModal({
 
   useEffect(() => {
     if (game) {
+      setIsMuted(true);
       setSelectedDiscIndex(0);
       setEnrichedMeta(null);
       setActiveTab(
@@ -283,17 +287,32 @@ export function GameDetailModal({
             {/* Left Column: Media Viewport + Red Play Button Directly Under Media */}
             <div className="lg:col-span-6 flex flex-col gap-4">
               {/* Media Viewport */}
-              <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl">
+              <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl group">
                 {activeTab === "video" && game.media.video ? (
-                  <video
-                    key={game.media.video}
-                    src={game.media.video}
-                    poster={game.media.screenTitle ?? undefined}
-                    controls
-                    autoPlay
-                    loop
-                    className="w-full h-full object-contain"
-                  />
+                  <>
+                    <video
+                      key={game.media.video}
+                      src={game.media.video}
+                      poster={game.media.screenTitle ?? game.media.screenshot ?? undefined}
+                      autoPlay
+                      loop
+                      muted={isMuted}
+                      playsInline
+                      className="w-full h-full object-contain bg-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsMuted((prev) => !prev)}
+                      className="absolute bottom-3 right-3 p-2.5 rounded-full bg-black/70 hover:bg-black text-white border border-white/20 backdrop-blur-md transition cursor-pointer"
+                      aria-label={isMuted ? "Unmute preview video" : "Mute preview video"}
+                    >
+                      {isMuted ? (
+                        <VolumeX className="w-4 h-4" />
+                      ) : (
+                        <Volume2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  </>
                 ) : (
                   <img
                     src={getActiveImageUrl() ?? ""}
