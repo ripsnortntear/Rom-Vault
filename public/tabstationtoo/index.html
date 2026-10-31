@@ -8,6 +8,41 @@
 <meta name="description" content="TabStationToo runs PCSX2, the PlayStation 2 emulator, compiled to WebAssembly, in this browser tab with a BIOS from your own console and disc images of your own games.">
 <meta name="application-name" content="TabStationToo">
 <title>TabStationToo</title>
+<!-- Synchronous Gamepad & Haptic Shield: prevents Chromium / XInput controller disconnects -->
+<script>
+(function() {
+  try {
+    window.GamepadHapticActuator = undefined;
+    if (window.Gamepad && window.Gamepad.prototype) {
+      Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+        get: function() { return null; },
+        set: function() {},
+        configurable: false,
+        enumerable: false
+      });
+      Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+        get: function() { return []; },
+        set: function() {},
+        configurable: false,
+        enumerable: false
+      });
+    }
+    if (typeof navigator !== "undefined") {
+      if (navigator.hid) {
+        navigator.hid.getDevices = () => Promise.resolve([]);
+        navigator.hid.requestDevice = () => Promise.reject(new Error("WebHID disabled"));
+      }
+      if (navigator.usb) {
+        navigator.usb.getDevices = () => Promise.resolve([]);
+        navigator.usb.requestDevice = () => Promise.reject(new Error("WebUSB disabled"));
+      }
+      if (navigator.vibrate) {
+        navigator.vibrate = () => false;
+      }
+    }
+  } catch (e) {}
+})();
+</script>
 <!-- Everything is same-origin: the page is cross-origin isolated (COEP require-corp), so any resource
      from another origin would be blocked. No CDNs; same-origin, self-hosted fonts. -->
 <!-- First, before anything else loads: on hosts that cannot send the isolation headers (GitHub

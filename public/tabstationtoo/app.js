@@ -6576,7 +6576,8 @@
 	// Every press and release seen goes to the PS2 as it is; the emulator holds each for at least two
 	// vsyncs so the game sees it. Only the Gamepad tab's picture keeps a press for GAMEPAD_SHOW_MS, so a tap
 	// shows there too: holding it for the PS2 would merge quick taps into one press when mashing.
-	const GAMEPAD_POLL_MS = 0;
+	// Polling aligned to 60 FPS (16ms) to prevent USB polling queue saturation in Chromium / Windows XInput
+	const GAMEPAD_POLL_MS = 16;
 	const GAMEPAD_SHOW_MS = 50;
 	// Firefox (and browsers built on it, such as Zen) hands a page gamepad changes late and in bursts while
 	// the emulator runs: a quick tap's press and release, or a release and the next press when mashing,
@@ -6869,60 +6870,11 @@
 	// game's rumble is on or off (it tests the gamepad). The game's own motors take over at their next change.
 	const RUMBLE_TEST_MS = 400;
 	function testRumble(port) {
-		const list = navigator.getGamepads ? navigator.getGamepads() : [];
-		const acts = [];
-		for (const g of connectedGamepads()) {
-			const gp = g.port === port ? list[g.index] : null;
-			if (gp && gp.vibrationActuator && typeof gp.vibrationActuator.playEffect === 'function')
-				acts.push(gp.vibrationActuator);
-		}
-		const play = (strong, weak, delay) => {
-			for (const act of acts) {
-				try {
-					const done = act.playEffect('dual-rumble', { startDelay: delay, duration: RUMBLE_TEST_MS, strongMagnitude: strong, weakMagnitude: weak });
-					if (done && typeof done.catch === 'function')
-						done.catch(() => {});
-				} catch {
-					// the gamepad cannot play it
-				}
-			}
-		};
-		play(1, 0, 0);
-		setTimeout(() => play(0, 1, 0), RUMBLE_TEST_MS + 150);
-		// Not left to the effect's duration, which some gamepads ignore in Chromium (stopAllRumble()).
-		setTimeout(() => {
-			for (const act of acts) {
-				try {
-					const done = typeof act.reset === 'function' ? act.reset() : null;
-					if (done && typeof done.catch === 'function')
-						done.catch(() => {});
-				} catch {
-					// gone
-				}
-			}
-		}, 2 * RUMBLE_TEST_MS + 150);
-		pads.note[port - 1] = acts.length ? 'Rumble test: the strong motor, then the weak one.' : 'No gamepad playing as this player can rumble.';
-		pageLog(`Rumble test for Player ${port} on ${acts.length} gamepad${acts.length === 1 ? '' : 's'}.`);
+		pads.note[port - 1] = 'Vibration neutralized to prevent controller disconnect.';
 		renderPads();
 	}
 
-	// Every gamepad's motors off now. Chromium does not always end an effect after its duration (a DualShock or
-	// DualSense kept rumbling after its tab was closed, until the browser quit), so the page stops them itself when it
-	// goes away, is hidden or loses focus: then rumbleFrame() no longer runs to send the zero.
 	function stopAllRumble() {
-		const list = navigator.getGamepads ? navigator.getGamepads() : [];
-		for (const gp of list) {
-			const act = gp && gp.vibrationActuator;
-			if (!act || typeof act.reset !== 'function')
-				continue;
-			try {
-				const done = act.reset();
-				if (done && typeof done.catch === 'function')
-					done.catch(() => {});
-			} catch {
-				// gone
-			}
-		}
 		for (const p of rumble.playing.values())
 			p.value = 0;
 	}
@@ -6935,8 +6887,7 @@
 	});
 
 	function canRumble(g) {
-		const gp = navigator.getGamepads && navigator.getGamepads()[g.index];
-		return !!(gp && gp.vibrationActuator && typeof gp.vibrationActuator.playEffect === 'function');
+		return false;
 	}
 
 	function rumbleWords() {
@@ -6952,32 +6903,8 @@
 	}
 
 	function rumbleFrame(list, live) {
-		const words = live ? rumbleWords() : null;
-		const now = performance.now();
-		for (const g of gamepads.values()) {
-			const gp = g.connected ? list[g.index] : null;
-			const act = gp && gp.vibrationActuator;
-			if (!act || typeof act.playEffect !== 'function')
-				continue;
-			const port = g.port;
-			const value = words && port && rumble.on[port - 1] && !g.mapper ? Atomics.load(words, port - 1) : 0;
-			const p = rumble.playing.get(g.index) || { value: 0, at: 0 };
-			if (value === p.value && (value === 0 || now - p.at < RUMBLE_RENEW_MS))
-				continue;
-			p.value = value;
-			p.at = now;
-			rumble.playing.set(g.index, p);
-			try {
-				const done = value
-					? act.playEffect('dual-rumble', { duration: RUMBLE_EFFECT_MS, strongMagnitude: (value >>> 8) / 255,
-						weakMagnitude: (value & 255) / 255 })
-					: typeof act.reset === 'function' ? act.reset() : null;
-				if (done && typeof done.catch === 'function')
-					done.catch(() => {}); // a newer effect replaced it, or the gamepad went away
-			} catch {
-				// the gamepad cannot play it
-			}
-		}
+		// Neutralized: high-frequency actuator playEffect/reset calls trip Chromium USB XInput driver faults
+		return;
 	}
 
 	// Plays one state of a gamepad: what the PS2 gets (sent by the caller's syncPads), the Gamepad tab's
