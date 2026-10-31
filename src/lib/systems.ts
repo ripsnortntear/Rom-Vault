@@ -183,8 +183,8 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     company: "Sony",
     badgeColor: "bg-blue-950",
     colorHex: "#00205b",
-    ejsCore: null,
-    playable: false,
+    ejsCore: "ps2",
+    playable: true,
     romExtensions: [".zip", ".iso", ".chd", ".cso", ".bin", ".gz"],
   },
 };

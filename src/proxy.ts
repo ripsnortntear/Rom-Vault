@@ -7,6 +7,7 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/scores",
   "/emulatorjs",
+  "/tabstationtoo",
   "/api/roms",
   "/api/bios",
   "/_next",

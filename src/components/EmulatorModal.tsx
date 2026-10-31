@@ -334,7 +334,14 @@ export function EmulatorModal({
   const activeDiscNum = activeDisc ? activeDisc.discNumber : 1;
 
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
-  const playerUrl = `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName || "")}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
+  const ps2BiosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
+  const ps2DiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.chd`)}`;
+  const ps2RunnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}`;
+
+  const playerUrl =
+    game.system === "ps2"
+      ? ps2RunnerUrl
+      : `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName || "")}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
   const downloadUrl = activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
 
   const renderControls = () => {
@@ -400,6 +407,18 @@ export function EmulatorModal({
             <span><strong className="text-zinc-200">A / B / X / Y</strong> Action Buttons</span>
             <span><strong className="text-zinc-200">Q / W</strong> L / R Triggers</span>
             <span><strong className="text-zinc-200">Enter</strong> Start</span>
+          </>
+        );
+      case "ps2":
+        return (
+          <>
+            <span><strong className="text-zinc-200">Arrows / WASD</strong> D-Pad / Left Stick</span>
+            <span><strong className="text-zinc-200">J / K</strong> Square / Cross</span>
+            <span><strong className="text-zinc-200">I / L</strong> Triangle / Circle</span>
+            <span><strong className="text-zinc-200">Q / E</strong> L1 / R1</span>
+            <span><strong className="text-zinc-200">1 / 3</strong> L2 / R2</span>
+            <span><strong className="text-zinc-200">Enter</strong> Start</span>
+            <span><strong className="text-zinc-200">Backspace</strong> Select</span>
           </>
         );
       default:
@@ -710,12 +729,16 @@ export function EmulatorModal({
             </div>
           )}
 
-          {showNotice && game.playable && (game.system === "saturn" || game.system === "psx" || game.system === "gamecube" || game.system === "dreamcast") && (
+          {showNotice && game.playable && (game.system === "saturn" || game.system === "psx" || game.system === "gamecube" || game.system === "dreamcast" || game.system === "ps2") && (
             <div className="bg-amber-950/80 border-b border-amber-600/30 px-4 py-1.5 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <span className="flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>
-                  {game.system === "gamecube" ? (
+                  {game.system === "ps2" ? (
+                    <>
+                      <strong>PlayStation 2 Notice:</strong> In-browser PS2 emulation runs via PCSX2 WebAssembly &amp; WebGPU (TabStationToo). For optimal 60 FPS performance, use Chrome, Edge, or Brave with hardware acceleration enabled.
+                    </>
+                  ) : game.system === "gamecube" ? (
                     <>
                       <strong>Nintendo GameCube Notice:</strong> In-browser GameCube emulation requires heavy WebAssembly compute. For best performance, 60 FPS, and hardware rendering, you can also click <strong>Download</strong> and play in desktop{" "}
                       <a
@@ -797,7 +820,7 @@ export function EmulatorModal({
                   download={activeRomFileName}
                   className="underline hover:text-white font-medium shrink-0"
                 >
-                  Download {game.system === "saturn" || game.system === "psx" || game.system === "dreamcast" || game.system === "gamecube" ? (activeDisc ? `Disc ${activeDiscNum}` : "Game") : "ROM"}
+                  Download {game.system === "saturn" || game.system === "psx" || game.system === "dreamcast" || game.system === "gamecube" || game.system === "ps2" ? (activeDisc ? `Disc ${activeDiscNum}` : "Game") : "ROM"}
                 </a>
                 {game.discs && game.discs.length > 1 && (
                   <span className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-amber-600/40 text-[11px]">
@@ -848,7 +871,7 @@ export function EmulatorModal({
               title={`Emulator - ${game.displayTitle}${activeDisc ? ` (Disc ${activeDiscNum})` : ""}`}
               src={playerUrl}
               className="w-full h-full border-0"
-              allow="autoplay; fullscreen; gamepad"
+              allow="autoplay; fullscreen; gamepad; cross-origin-isolated"
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center max-w-xl">

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
+import { PS2EmulatorView } from "./PS2EmulatorView";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -99,6 +100,10 @@ function checkPhysicalGamepadConnected(): boolean {
 }
 
 export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
+  if (game.system === "ps2") {
+    return <PS2EmulatorView game={game} />;
+  }
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [bootState, setBootState] = useState<"idle" | "booting" | "running" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata, Viewport } from "next";
 import { getGameById } from "@/lib/scanner";
 import { MobileEmulatorView } from "@/components/MobileEmulatorView";
+import { PS2EmulatorView } from "@/components/PS2EmulatorView";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -121,15 +122,27 @@ export default async function PlayPage({ params }: PlayPageProps) {
       />
 
       <main className="fixed inset-0 w-screen h-screen bg-black overflow-hidden flex flex-col">
-        <MobileEmulatorView
-          game={{
-            id: game.id,
-            title: game.displayTitle || game.baseName,
-            system: game.system,
-            romFileName: game.romFileName,
-            discs: game.discs,
-          }}
-        />
+        {game.system === "ps2" ? (
+          <PS2EmulatorView
+            game={{
+              id: game.id,
+              title: game.displayTitle || game.baseName,
+              system: game.system,
+              romFileName: game.romFileName,
+              discs: game.discs,
+            }}
+          />
+        ) : (
+          <MobileEmulatorView
+            game={{
+              id: game.id,
+              title: game.displayTitle || game.baseName,
+              system: game.system,
+              romFileName: game.romFileName,
+              discs: game.discs,
+            }}
+          />
+        )}
       </main>
     </>
   );
