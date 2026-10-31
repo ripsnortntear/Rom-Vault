@@ -74,14 +74,18 @@ With `cacheComponents: true` active:
 ## 7. ROM Streaming, Authentication & Route Handlers
 Route Handlers (`src/app/api/**/route.ts`): Reserved exclusively for non-UI data exchange:
 - HTTP 206 Partial Content: High-frequency byte-range streaming for disc images (`.chd`, `.iso`) and ROM binaries from `/mnt/storage/roms/`.
-- Memory Card Binary Endpoints: Raw `.mcr` / `.srm` import and export downloads.
+- Memory Card Binary Endpoints: Raw `.mcr`, `.ps2`, and `.srm` import and export downloads.
+- Memory Card Specifications:
+  - PS1 (DuckStation / RetroArch): 131,072 bytes (128 KB) `.mcr`, initialized with `0x00`.
+  - PS2 (PCSX2 / TabStationToo): 8,650,752 bytes (8 MB + ECC) `.ps2`, initialized with `0xff`.
+- Graceful Guest Fallbacks: Memory card download (`/api/users/me/cards/[id]/download`) and sync (`/api/users/me/cards/[id]/sync`) endpoints must provide guest fallback binaries rather than returning 401 errors when unauthenticated emulator iframes mount cards.
 - Background Save Ingestion: Non-blocking target for emulator save sync queues.
 - Session Auth Performance: Validate HMAC-SHA256 signed session cookies with key caching to process rapid byte-range requests with zero auth bottleneck.
 - Secure Boundaries: Mark backend modules (`db.ts`, `auth/*`, `scanner.ts`) with `import "server-only"`. Keep storage mount paths and Twitch API credentials confined to the server layer.
 
 ## 8. State Mutations: Server Functions
 Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/actions.ts`):
-- Cloud memory card slot reordering, renaming, and default slot assignment (supporting up to 5 virtual 128 KB cards per user).
+- Cloud memory card slot reordering, renaming, and default slot assignment (supporting up to 5 virtual cards per platform per user for PS1 and PS2).
 - User profile updates, favorites toggles, and metadata manual override flags.
 - Zero-Stutter Save Sync: Background auto-saves during emulation compute SHA-256 checksums client-side and push to save APIs via background `fetch()` queues to preserve 60 FPS WebGL/WebAudio execution without micro-stutters.
 - Validation & Authorization: Validate all inputs using Zod schemas, verify session identity, and check rate/quota limits before executing DB or filesystem writes.
@@ -92,6 +96,8 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Multi-Disc Handling: Group multi-disc titles under unified parent entities with disc-index metadata; ensure UI switching triggers no full-page reloads.
 - Multi-Layer Artwork: Render 2D/3D box art, cartridge media, transparent logos, and screenshots using `next/image` with explicit dimensions or fill alongside defined sizes.
 - Video Previews: Deliver MP4 preview loops via standard HTML5 `<video>` tags backed by HTTP 206 streaming endpoints.
+- Mobile Video Invariants: All preview `<video>` elements (hero spotlights, cards, detail modals) MUST specify `playsInline` and initial `muted={isMuted}` with an overlay toggle button. Never use unmuted autoplay or default `controls` which cause mobile browsers (iOS Safari / Mobile Chrome) to hijack the viewport into native fullscreen.
+- Expansive Desktop Viewports: Do not restrict game detail cards (`GameDetailModal`) or live emulator windows (`EmulatorModal`) to narrow widths (`max-w-5xl` or `max-w-6xl`) on desktop. Viewports must nearly fill the screen (`w-full md:w-[98vw] max-w-[99vw] 2xl:max-w-[1920px]` and `h-[95-97vh]`) to maximize game canvas real estate on widescreen displays.
 - Remote Patterns: Configure `images.remotePatterns` in `next.config.ts` for IGDB / Twitch media CDNs.
 
 ## 10. Strict Anti-Patterns ("Do Not")
