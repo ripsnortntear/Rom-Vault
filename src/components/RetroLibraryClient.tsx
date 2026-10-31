@@ -346,6 +346,12 @@ export function RetroLibraryClient({
       return next;
     });
 
+    // Non-playable systems (PS2, GameCube, Dreamcast) show the standalone recommendation modal
+    if (!game.playable) {
+      setPlayingGame(game);
+      return;
+    }
+
     // Detect mobile viewports (< 768px or coarse touch) to avoid dual-tree memory overhead
     const isMobile =
       typeof window !== "undefined" &&

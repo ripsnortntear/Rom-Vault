@@ -6,8 +6,7 @@
     "dev": "next dev -p 39254",
     "build": "next build",
     "start": "next start -p 39254",
-    "lint": "eslint",
-    "recompile-ps2": "bash scripts/recompile-ps2.sh"
+    "lint": "eslint"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

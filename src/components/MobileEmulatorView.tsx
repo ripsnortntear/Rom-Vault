@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
-import { PS2EmulatorView } from "@/components/PS2EmulatorView";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -100,8 +99,6 @@ function checkPhysicalGamepadConnected(): boolean {
 }
 
 export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
-  const isPs2 = (game.system || "").toLowerCase().trim() === "ps2";
-
   const containerRef = useRef<HTMLDivElement>(null);
   const [bootState, setBootState] = useState<"idle" | "booting" | "running" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -117,7 +114,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   // Unified save pusher: syncs to card slot if available, else falls back to game save route
   const pushSaveToServer = useCallback(
     async (buffer: ArrayBuffer | Uint8Array) => {
-      if (isPs2 || !buffer || buffer.byteLength === 0) return;
+      if (!buffer || buffer.byteLength === 0) return;
       const cardId = activeCardIdRef.current;
 
       try {
@@ -159,11 +156,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         setIsSaving(false);
       }
     },
-    [isPs2, cleanGameId, game.system]
+    [cleanGameId, game.system]
   );
 
   useEffect(() => {
-    if (isPs2) return;
     if (typeof window !== "undefined") {
       setIsInIframe(window.self !== window.top);
 
@@ -189,13 +185,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       window.addEventListener("unhandledrejection", handleUnhandledRejection);
       return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     }
-  }, [isPs2]);
+  }, []);
 
   const activeDisc =
     game.discs && game.discs[selectedDiscIndex] ? game.discs[selectedDiscIndex] : null;
 
   const stopEmulator = useCallback(async () => {
-    if (isPs2) return;
     const emu = window.EJS_emulator;
     if (emu) {
       try {
@@ -235,18 +230,17 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     if (containerRef.current) {
       containerRef.current.innerHTML = "";
     }
-  }, [isPs2, pushSaveToServer]);
+  }, [pushSaveToServer]);
 
   useEffect(() => {
-    if (isPs2) return;
     return () => {
       stopEmulator();
     };
-  }, [isPs2, stopEmulator]);
+  }, [stopEmulator]);
 
   const updatePadMode = useCallback(
     (connected: boolean) => {
-      if (isPs2 || (game.system !== "psx" && game.system !== "ps1")) return;
+      if (game.system !== "psx" && game.system !== "ps1") return;
 
       if (window.EJS_coreSettings) {
         window.EJS_coreSettings.pcsx_rearmed_pad1type = connected ? "dualshock" : "standard";
@@ -286,11 +280,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         }
       }
     },
-    [isPs2, game.system]
+    [game.system]
   );
 
   useEffect(() => {
-    if (isPs2) return;
     const handleParentMessage = (e: MessageEvent) => {
       if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
         updatePadMode(true);
@@ -304,10 +297,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
     window.addEventListener("message", handleParentMessage);
     return () => window.removeEventListener("message", handleParentMessage);
-  }, [isPs2, bootState, updatePadMode, stopEmulator]);
+  }, [bootState, updatePadMode, stopEmulator]);
 
   useEffect(() => {
-    if (isPs2 || bootState !== "running") return;
+    if (bootState !== "running") return;
 
     let animId: number;
     const DEADZONE = 0.4;
@@ -373,10 +366,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
     animId = requestAnimationFrame(pollPhysicalStick);
     return () => cancelAnimationFrame(animId);
-  }, [isPs2, bootState]);
+  }, [bootState]);
 
   useEffect(() => {
-    if (isPs2 || bootState !== "running") return;
+    if (bootState !== "running") return;
 
     const handleGamepadConnected = (e: GamepadEvent) => {
       const pad = e.gamepad;
@@ -421,7 +414,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       window.removeEventListener("gamepadconnected", handleGamepadConnected);
       window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
     };
-  }, [isPs2, bootState, updatePadMode]);
+  }, [bootState, updatePadMode]);
 
   const handleStartGame = async () => {
     if (bootState !== "idle") return;
@@ -640,11 +633,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       }
     } catch {}
   };
-
-  // Safe early render AFTER all hooks have executed
-  if (isPs2) {
-    return <PS2EmulatorView game={game} />;
-  }
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden select-none">

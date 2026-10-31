@@ -37,7 +37,7 @@ export default async function PlayPage({ params }: PlayPageProps) {
   const { id } = await params;
   const game = await getGameById(id);
 
-  if (!game) {
+  if (!game || !game.playable) {
     notFound();
   }
 

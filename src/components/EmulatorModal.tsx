@@ -372,7 +372,6 @@ export function EmulatorModal({
           </>
         );
       case "psx":
-      case "ps2":
         return (
           <>
             <span><strong className="text-zinc-200">Arrows</strong> D-Pad</span>
@@ -692,7 +691,7 @@ export function EmulatorModal({
             </div>
           )}
 
-          {showNotice && game.playable && (game.system === "saturn" || game.system === "ps2" || game.system === "psx") && (
+          {showNotice && game.playable && (game.system === "saturn" || game.system === "psx") && (
             <div className="bg-amber-950/80 border-b border-amber-600/30 px-4 py-1.5 text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <span className="flex items-center gap-1.5">
                 <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -711,7 +710,7 @@ export function EmulatorModal({
                       </a>{" "}
                       (Beetle Saturn core).
                     </>
-                  ) : game.system === "psx" ? (
+                  ) : (
                     <>
                       <strong>PlayStation Notice:</strong> In-browser PS1 emulation runs via WebAssembly. For full 60 FPS, enhanced 3D resolution, and multi-disc save swapping, you can also click <strong>Download</strong> and play in desktop{" "}
                       <a
@@ -722,29 +721,6 @@ export function EmulatorModal({
                         title="Download DuckStation"
                       >
                         DuckStation
-                      </a>{" "}
-                      or{" "}
-                      <a
-                        href="https://buildbot.libretro.com/stable/1.22.2/windows-msvc2010/x86_64/RetroArch-MSVC10-Win64-setup.exe"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-bold underline hover:text-white transition"
-                        title="Download RetroArch Installer (Win64 v1.22.2)"
-                      >
-                        RetroArch
-                      </a>.
-                    </>
-                  ) : (
-                    <>
-                      <strong>PlayStation 2 Notice:</strong> In-browser PS2 emulation requires WebGPU hardware acceleration and modern browser support. For full 60 FPS, high-res rendering, and controller rumble, click <strong>Download</strong> and play in desktop{" "}
-                      <a
-                        href="https://pcsx2.net/downloads/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-bold underline hover:text-white transition"
-                        title="Download PCSX2 (PlayStation 2 Emulator)"
-                      >
-                        PCSX2
                       </a>{" "}
                       or{" "}
                       <a
