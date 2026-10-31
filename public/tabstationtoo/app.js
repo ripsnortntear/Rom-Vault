@@ -1910,8 +1910,15 @@
 			render();
 			return;
 		}
-		// Not remembered in IndexedDB: ?bios= is for automated runs.
+		// Auto-remember BIOS in IndexedDB across visits
 		setBios(name, bytes, 'url', false);
+		try {
+			await idbPut({ name, size: bytes.length, lastModified: Date.now(), savedAt: Date.now(), data: bytes.buffer });
+			if (page.bios && page.bios.name === name) {
+				page.bios.remembered = true;
+				render();
+			}
+		} catch (e) {}
 		maybeAutoBoot();
 	}
 
@@ -1978,12 +1985,18 @@
 	async function restoreRememberedBios() {
 		const op = page.biosOp;
 		const rec = await idbGet();
-		if (!rec || !rec.data || page.bios || op !== page.biosOp)
+		if (!rec || !rec.data || page.bios || op !== page.biosOp) {
+			if (!page.bios) {
+				loadBiosFromUrl('/roms/api/bios/scph39001.bin?system=ps2');
+			}
 			return;
+		}
 		const bytes = new Uint8Array(rec.data);
 		const name = sanitizeBiosName(rec.name);
-		if (checkBiosSize(bytes.length, name))
+		if (checkBiosSize(bytes.length, name)) {
+			loadBiosFromUrl('/roms/api/bios/scph39001.bin?system=ps2');
 			return;
+		}
 		setBios(name, bytes, 'idb', true);
 		ensureRuntime();
 		pageLog(`Using the BIOS remembered in this browser: ${name}`);
@@ -11242,7 +11255,7 @@
 			pageLog('A service worker (coi-serviceworker.js) serves this page and adds the cross-origin isolation headers.');
 		loadCardLibrary();
 
-		const biosParam = params.get('bios');
+		const biosParam = params.get('bios') || '/roms/api/bios/scph39001.bin?system=ps2';
 		const discParam = params.get('disc');
 		const elfParam = params.get('elf');
 		const stateParam = params.get('state');

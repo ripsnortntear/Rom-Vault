@@ -12,7 +12,7 @@ export interface SystemBiosInfo {
  * 1. /mnt/storage/roms/{system}/bios/
  * 2. /mnt/storage/roms/{system}/roms/
  */
-export function findSystemBios(system: string): SystemBiosInfo | null {
+export function findSystemBios(system: string, requestedFileName?: string): SystemBiosInfo | null {
   const norm = normalizeSystem(system);
   const root = getStorageRoot();
   const searchDirs = [
@@ -21,6 +21,19 @@ export function findSystemBios(system: string): SystemBiosInfo | null {
     path.join(root, norm),
     path.join(root, "bios"),
   ];
+
+  if (requestedFileName) {
+    const cleanReq = path.basename(requestedFileName);
+    for (const dir of searchDirs) {
+      const candidate = path.join(dir, cleanReq);
+      if (fs.existsSync(/*turbopackIgnore: true*/ candidate) && fs.statSync(/*turbopackIgnore: true*/ candidate).isFile()) {
+        return {
+          expectedFileName: cleanReq,
+          biosPath: candidate,
+        };
+      }
+    }
+  }
 
   const patterns: Record<string, { expected: string; test: (name: string) => boolean }> = {
     saturn: {
@@ -75,9 +88,10 @@ export function findSystemBios(system: string): SystemBiosInfo | null {
       test: (name) => {
         const l = name.toLowerCase();
         return (
-          l.includes("scph") ||
-          (l.includes("ps2") && l.includes("bios"))
-        ) && l.endsWith(".bin");
+          l === "scph39001.bin" ||
+          l.includes("39001") ||
+          (l.includes("scph") && l.endsWith(".bin"))
+        );
       },
     },
   };

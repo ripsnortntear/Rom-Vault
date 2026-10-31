@@ -30,7 +30,7 @@ export async function HEAD(
 ): Promise<NextResponse> {
   const resolvedParams = await context.params;
   const system = normalizeSystem(request.nextUrl.searchParams.get("system"));
-  const biosInfo = findSystemBios(system);
+  const biosInfo = findSystemBios(system, resolvedParams.fileName);
 
   if (!biosInfo || !fs.existsSync(biosInfo.biosPath)) {
     return new NextResponse(null, { status: 404, headers: CORS_HEADERS });
@@ -56,7 +56,7 @@ export async function GET(
   try {
     const resolvedParams = await context.params;
     const system = normalizeSystem(request.nextUrl.searchParams.get("system"));
-    const biosInfo = findSystemBios(system);
+    const biosInfo = findSystemBios(system, resolvedParams.fileName);
 
     if (!biosInfo || !fs.existsSync(biosInfo.biosPath)) {
       return NextResponse.json(
