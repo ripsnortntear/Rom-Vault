@@ -32,17 +32,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/tabstationtoo/:path*",
-        headers: [
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-          { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
-          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
-        ],
-      },
-      {
         source: "/api/:path*",
         headers: [
-          { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
           { key: "Access-Control-Allow-Origin", value: "*" },
         ],
       },

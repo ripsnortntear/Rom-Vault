@@ -62,10 +62,7 @@
 	}
 
 	window.coi = {
-		// COEP require-corp, the policy serve.py sends. Every file is same-origin, so nothing needs
-		// "credentialless", which Safari lacks and which this worker forgets whenever the browser
-		// restarts it.
-		coepCredentialless: () => false,
+		coepCredentialless: () => true,
 		// Only asked while the page is not isolated (crossOriginIsolated === false).
 		shouldRegister: () => {
 			if (!window.isSecureContext) {
