@@ -1,4 +1,5 @@
 stages:
+  - test
   - build
   - deploy
 
@@ -20,6 +21,20 @@ cache:
   paths:
     - .next/cache/
     - .npm/
+
+unit_test:
+  stage: test
+  before_script:
+    - export PATH="/usr/local/bin:/usr/bin:$PATH"
+  script:
+    - echo "[*] Installing dependencies..."
+    - npm ci --include=dev --ignore-scripts --prefer-offline
+    - echo "[*] Running unit tests with JUnit report output..."
+    - npx vitest run --passWithNoTests --reporter=default --reporter=junit --outputFile=junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
 
 build_and_verify:
   stage: build
