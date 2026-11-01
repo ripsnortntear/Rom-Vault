@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSafeHttpUrl, getSafeHttpUrl } from "./lib/security";
+import { isSafeHttpUrl, getSafeHttpUrl, validateSaveFormatForPlatform } from "./lib/security";
 import { getClientIp, getTrustedClientIp } from "./lib/ip";
 import { submitScoreSchema } from "./app/actions/scores";
 import { signSessionToken, validateSessionToken, verifySessionTokenFast } from "./lib/auth/session";
@@ -156,3 +156,44 @@ describe("Client IP Extraction and Anti-Spoofing", () => {
     expect(getTrustedClientIp(req)).toBe("127.0.0.1");
   });
 });
+
+describe("Save State Platform Validation (SEC-06)", () => {
+  it("validates PS1 saves require exactly 128 KB", () => {
+    const validPs1 = Buffer.alloc(131072, 0);
+    expect(validateSaveFormatForPlatform("psx", validPs1)).toBeNull();
+    expect(validateSaveFormatForPlatform("ps1", validPs1)).toBeNull();
+
+    const invalidSize = Buffer.alloc(65536, 0);
+    expect(validateSaveFormatForPlatform("psx", invalidSize)).toContain("requires exactly 128 KB");
+
+    const ps2OnPs1 = Buffer.alloc(131072, 0);
+    ps2OnPs1.write("Sony PS2 Memory Card Format", 0);
+    expect(validateSaveFormatForPlatform("ps1", ps2OnPs1)).toContain("PlayStation 2 memory card cannot be uploaded to PlayStation 1");
+  });
+
+  it("validates PS2 saves reject PS1 payloads", () => {
+    const ps1OnPs2 = Buffer.alloc(131072, 0);
+    ps1OnPs2.write("MC", 0);
+    expect(validateSaveFormatForPlatform("ps2", ps1OnPs2)).toContain("PlayStation 1 memory card cannot be uploaded to PlayStation 2");
+
+    const validPs2 = Buffer.alloc(8650752, 0xff);
+    expect(validateSaveFormatForPlatform("ps2", validPs2)).toBeNull();
+  });
+
+  it("rejects PlayStation payloads on non-PlayStation platforms (e.g. SNES/NES)", () => {
+    const ps1Save = Buffer.alloc(131072, 0);
+    ps1Save.write("MC", 0);
+    expect(validateSaveFormatForPlatform("snes", ps1Save)).toContain("PlayStation memory cards cannot be uploaded");
+
+    const ps2Save = Buffer.alloc(131072, 0);
+    ps2Save.write("Sony PS2 Memory Card Format", 0);
+    expect(validateSaveFormatForPlatform("nes", ps2Save)).toContain("PlayStation memory cards cannot be uploaded");
+
+    const oversizedSnes = Buffer.alloc(5 * 1024 * 1024, 0);
+    expect(validateSaveFormatForPlatform("snes", oversizedSnes)).toContain("exceeds maximum allowable SRAM capacity");
+
+    const validSnesSram = Buffer.alloc(32768, 0);
+    expect(validateSaveFormatForPlatform("snes", validSnesSram)).toBeNull();
+  });
+});
+

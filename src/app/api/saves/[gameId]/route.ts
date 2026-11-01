@@ -3,6 +3,9 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeSystem } from "@/lib/paths";
 import { getCurrentSession } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { generateUUID } from "@/lib/auth/crypto";
+import { validateSaveFormatForPlatform } from "@/lib/security";
 
 interface RouteContext {
   params: Promise<{
@@ -43,48 +46,12 @@ function getCandidateKeys(rawId: string): string[] {
 
 const SAVES_ROOT = "/mnt/storage/roms/saves";
 
-function detectCrossPlatformMismatch(system: string, buffer: Buffer): string | null {
-  const norm = normalizeSystem(system);
-
-  // Check PS2 Memory Card Superblock (contains "Sony Computer Entertainment Inc." at header)
-  const headerStr = buffer.slice(0, 64).toString("utf8");
-  const isPs2Payload = headerStr.includes("Sony Computer Entertainment");
-
-  // Check PS1 Memory Card Header ("MC" / 0x4D 0x43 at offset 0 and exactly 128KB)
-  const isPs1Payload = buffer.length === 131072 && buffer[0] === 0x4d && buffer[1] === 0x43;
-
-  if (norm !== "ps2" && isPs2Payload) {
-    return `Cross-platform save injection rejected: PlayStation 2 memory card payload cannot be uploaded to '${norm}'.`;
-  }
-
-  if (norm !== "psx" && isPs1Payload) {
-    return `Cross-platform save injection rejected: PlayStation 1 memory card payload cannot be uploaded to '${norm}'.`;
-  }
-
-  // 8-bit / 16-bit / handheld systems SRAM capacity sanity limit (max 4MB)
-  const smallRomSystems = ["nes", "snes", "gb", "gbc", "gba", "genesis", "megadrive", "mastersystem", "gamegear"];
-  if (smallRomSystems.includes(norm) && buffer.byteLength > 4 * 1024 * 1024) {
-    return `Save file size (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB) exceeds maximum allowable SRAM capacity for ${norm.toUpperCase()} (4MB).`;
-  }
-
-  // PS1 memory card limit (128KB standard, or up to 2MB max for multi-block formats)
-  if (norm === "psx" && buffer.byteLength > 2 * 1024 * 1024) {
-    return `Save file size exceeds maximum allowable PlayStation 1 memory card size (2MB).`;
-  }
-
-  // Global ceiling for any save payload (16MB)
-  if (buffer.byteLength > 16 * 1024 * 1024) {
-    return `Save payload exceeds maximum allowable limit (16MB).`;
-  }
-
-  return null;
-}
-
 export async function GET(
   request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
   try {
+    // 1. Enforce strict authentication check
     const session = await getCurrentSession();
     if (!session || !session.user) {
       return NextResponse.json(
@@ -93,10 +60,25 @@ export async function GET(
       );
     }
 
+    const userId = String(session.user.id);
     const { gameId } = await context.params;
     const decoded = deepClean(gameId);
 
+    const slotParam = request.nextUrl.searchParams.get("slot");
+    const slot = slotParam ? Math.max(1, parseInt(slotParam, 10) || 1) : 1;
+
+    // 2. Resolve canonical platform from database or ID prefix
     let system = normalizeSystem(request.nextUrl.searchParams.get("system"));
+    try {
+      const [games] = await db.query<any>(
+        "SELECT id, system FROM game_metadata WHERE id = ? LIMIT 1",
+        [gameId]
+      );
+      if (Array.isArray(games) && games.length > 0 && games[0].system) {
+        system = normalizeSystem(games[0].system);
+      }
+    } catch {}
+
     if (decoded.includes("__")) {
       const gameSystem = normalizeSystem(decoded.split("__")[0]);
       if (system && system !== gameSystem) {
@@ -111,67 +93,91 @@ export async function GET(
       system = "psx";
     }
 
-    const systemDir = path.resolve(SAVES_ROOT, system);
-    if (!systemDir.startsWith(path.resolve(SAVES_ROOT))) {
-      return NextResponse.json({ error: "Invalid target platform." }, { status: 400 });
-    }
-
-    if (!fs.existsSync(systemDir)) {
-      return NextResponse.json({ exists: false }, { status: 404 });
-    }
-
-    const candidateKeys = getCandidateKeys(gameId);
+    let foundData: Buffer | null = null;
     let foundPath: string | null = null;
+    let mtime: Date = new Date();
 
-    // 1. Search directly in system directory and immediate subdirectories
-    for (const key of candidateKeys) {
-      const possibleNames = [`${key}.srm`, `${key}.sav`, `${key}.mcr`];
-      for (const name of possibleNames) {
-        const direct = path.join(systemDir, name);
-        if (fs.existsSync(direct)) {
-          foundPath = direct;
-          break;
+    // 3. User-Scoped Database Lookup (WHERE user_id = ? AND game_id = ?)
+    try {
+      const [rows] = await db.query<any>(
+        "SELECT save_data, file_path, updated_at FROM user_saves WHERE user_id = ? AND game_id = ? AND slot = ? LIMIT 1",
+        [userId, gameId, slot]
+      );
+      if (Array.isArray(rows) && rows.length > 0) {
+        if (rows[0].save_data) {
+          foundData = Buffer.isBuffer(rows[0].save_data)
+            ? rows[0].save_data
+            : Buffer.from(rows[0].save_data);
+          if (rows[0].updated_at) mtime = new Date(rows[0].updated_at);
+        } else if (rows[0].file_path && fs.existsSync(rows[0].file_path)) {
+          foundPath = rows[0].file_path;
         }
       }
-      if (foundPath) break;
+    } catch (dbErr) {
+      console.warn("[api/saves GET] Database save check failed:", dbErr);
     }
 
-    // 2. Search client subdirectories if not found in root
-    if (!foundPath) {
-      const entries = fs.readdirSync(systemDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory() && entry.name !== "users") {
-          const subDir = path.join(systemDir, entry.name);
-          for (const key of candidateKeys) {
-            const possibleNames = [`${key}.srm`, `${key}.sav`, `${key}.mcr`];
-            for (const name of possibleNames) {
-              const subPath = path.join(subDir, name);
-              if (fs.existsSync(subPath)) {
-                foundPath = subPath;
-                break;
-              }
-            }
-            if (foundPath) break;
+    // 4. User-Scoped Filesystem Lookup (/mnt/storage/roms/saves/users/{userId}/{system}/)
+    const userSystemDir = path.resolve(SAVES_ROOT, "users", userId, system);
+    const candidateKeys = getCandidateKeys(gameId);
+
+    if (!foundData && !foundPath && fs.existsSync(userSystemDir)) {
+      for (const key of candidateKeys) {
+        const possibleNames = [
+          slot > 1 ? `${key}_slot${slot}.srm` : null,
+          `${key}.srm`,
+          `${key}.sav`,
+          `${key}.mcr`,
+        ].filter(Boolean) as string[];
+
+        for (const name of possibleNames) {
+          const direct = path.join(userSystemDir, name);
+          if (fs.existsSync(direct)) {
+            foundPath = direct;
+            break;
           }
         }
         if (foundPath) break;
       }
     }
 
-    if (!foundPath) {
+    // 5. Fallback: Read-only template / legacy save from system root if user save not yet created
+    const systemDir = path.resolve(SAVES_ROOT, system);
+    if (!foundData && !foundPath && fs.existsSync(systemDir)) {
+      for (const key of candidateKeys) {
+        const possibleNames = [`${key}.srm`, `${key}.sav`, `${key}.mcr`];
+        for (const name of possibleNames) {
+          const direct = path.join(systemDir, name);
+          if (fs.existsSync(direct)) {
+            foundPath = direct;
+            break;
+          }
+        }
+        if (foundPath) break;
+      }
+    }
+
+    if (!foundData && !foundPath) {
       return NextResponse.json({ exists: false }, { status: 404 });
     }
 
-    const data = fs.readFileSync(foundPath);
-    const stat = fs.statSync(foundPath);
+    let data: Buffer;
+    if (foundData) {
+      data = foundData;
+    } else {
+      data = fs.readFileSync(/*turbopackIgnore: true*/ foundPath!);
+      const stat = fs.statSync(/*turbopackIgnore: true*/ foundPath!);
+      mtime = stat.mtime;
+    }
+
     const isDownload = request.nextUrl.searchParams.get("download") === "1";
 
-    return new NextResponse(data, {
+    return new NextResponse(new Uint8Array(data), {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Length": String(data.byteLength),
-        "Last-Modified": stat.mtime.toUTCString(),
+        "Last-Modified": mtime.toUTCString(),
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Content-Disposition": isDownload ? `attachment; filename="save.srm"` : "inline",
       },
@@ -187,6 +193,7 @@ export async function POST(
   context: RouteContext
 ): Promise<NextResponse> {
   try {
+    // 1. Enforce strict authentication check
     const session = await getCurrentSession();
     if (!session || !session.user) {
       return NextResponse.json(
@@ -195,45 +202,79 @@ export async function POST(
       );
     }
 
+    const userId = String(session.user.id);
     const { gameId } = await context.params;
     const decoded = deepClean(gameId);
 
-    let system = normalizeSystem(request.nextUrl.searchParams.get("system"));
-    if (decoded.includes("__")) {
-      const gameSystem = normalizeSystem(decoded.split("__")[0]);
-      if (system && system !== gameSystem) {
-        return NextResponse.json(
-          { error: `Platform mismatch: specified system '${system}' does not match game platform '${gameSystem}'.` },
-          { status: 400 }
-        );
+    // 2. Resolve canonical platform from database game_metadata or gameId prefix
+    let canonicalPlatform: string | null = null;
+    try {
+      const [games] = await db.query<any>(
+        "SELECT id, system FROM game_metadata WHERE id = ? LIMIT 1",
+        [gameId]
+      );
+      if (Array.isArray(games) && games.length > 0 && games[0].system) {
+        canonicalPlatform = normalizeSystem(games[0].system);
       }
-      system = gameSystem;
-    }
-    if (!system) {
-      system = "psx";
+    } catch (metaErr) {
+      console.warn("[api/saves POST] DB metadata check warning:", metaErr);
     }
 
-    const systemDir = path.resolve(SAVES_ROOT, system);
-    if (!systemDir.startsWith(path.resolve(SAVES_ROOT))) {
-      return NextResponse.json({ error: "Invalid target platform." }, { status: 400 });
+    if (!canonicalPlatform && decoded.includes("__")) {
+      canonicalPlatform = normalizeSystem(decoded.split("__")[0]);
     }
 
-    const arrayBuffer = await request.arrayBuffer();
-    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-      return NextResponse.json({ error: "Empty save payload." }, { status: 400 });
+    const requestedSystem = normalizeSystem(request.nextUrl.searchParams.get("system"));
+    if (canonicalPlatform && requestedSystem && requestedSystem !== canonicalPlatform) {
+      return NextResponse.json(
+        { error: `Platform mismatch: specified system '${requestedSystem}' does not match canonical game platform '${canonicalPlatform}'.` },
+        { status: 400 }
+      );
     }
 
-    const buffer = Buffer.from(arrayBuffer);
+    const platform = canonicalPlatform || requestedSystem || "psx";
 
-    // Validate platform scope and check for cross-platform save injection
-    const mismatchError = detectCrossPlatformMismatch(system, buffer);
-    if (mismatchError) {
-      return NextResponse.json({ error: mismatchError }, { status: 400 });
+    // 3. Parse payload (support both JSON { saveData: "base64", slot: 1 } and binary octet-stream)
+    let buffer: Buffer;
+    let slot = 1;
+    const contentType = request.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const body = await request.json().catch(() => null);
+      if (!body) {
+        return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+      }
+      if (body.slot && typeof body.slot === "number" && body.slot > 0) {
+        slot = body.slot;
+      }
+      if (typeof body.saveData === "string" && body.saveData.length > 0) {
+        buffer = Buffer.from(body.saveData, "base64");
+      } else {
+        return NextResponse.json({ error: "Missing or invalid saveData." }, { status: 400 });
+      }
+    } else {
+      const arrayBuffer = await request.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        return NextResponse.json({ error: "Empty save payload." }, { status: 400 });
+      }
+      buffer = Buffer.from(arrayBuffer);
+      const slotParam = request.nextUrl.searchParams.get("slot");
+      if (slotParam) {
+        const parsed = parseInt(slotParam, 10);
+        if (!isNaN(parsed) && parsed > 0) slot = parsed;
+      }
     }
 
-    fs.mkdirSync(systemDir, { recursive: true });
+    // 4. Validate platform-specific save format constraints
+    const formatError = validateSaveFormatForPlatform(platform, buffer);
+    if (formatError) {
+      return NextResponse.json({ error: formatError }, { status: 400 });
+    }
 
-    // Canonical filename uses clean spaces: e.g. "Final Fantasy VII (USA).srm"
+    // 5. Partitioned user filesystem storage (/mnt/storage/roms/saves/users/{userId}/{platform}/)
+    const userSystemDir = path.resolve(SAVES_ROOT, "users", userId, platform);
+    fs.mkdirSync(userSystemDir, { recursive: true });
+
     const cleanBase = (decoded.includes("__") ? decoded.slice(decoded.indexOf("__") + 2) : decoded)
       .replace(/\.(chd|rvz|iso|bin|cue|zip|7z|sfc|smc|nes|z64|v64|n64|gba|gbc|gb)$/i, "")
       .replace(/[\s\(\[]+(?:disc|disk)\s*[^)\]]*[)\]]+/gi, "")
@@ -241,38 +282,39 @@ export async function POST(
       .trim();
 
     if (!cleanBase || cleanBase.includes("..")) {
-      return NextResponse.json({ error: "Invalid save file target." }, { status: 400 });
+      return NextResponse.json({ error: "Invalid save target identifier." }, { status: 400 });
     }
 
-    const targetFile = path.resolve(systemDir, `${cleanBase}.srm`);
+    const fileName = slot === 1 ? `${cleanBase}.srm` : `${cleanBase}_slot${slot}.srm`;
+    const targetFile = path.resolve(userSystemDir, fileName);
+
     if (!targetFile.startsWith(path.resolve(SAVES_ROOT) + path.sep)) {
       return NextResponse.json({ error: "Invalid target path." }, { status: 403 });
     }
-    const tmpFile = `${targetFile}.${Date.now()}.tmp`;
 
+    const tmpFile = `${targetFile}.${Date.now()}.tmp`;
     fs.writeFileSync(tmpFile, buffer);
     fs.renameSync(tmpFile, targetFile);
 
-    try {
-      fs.copyFileSync(targetFile, `${targetFile}.bak`);
-    } catch {}
-
-    // Mirror to legacy %20 name if it exists on disk to ensure backward compatibility
-    const legacyNames = [
-      `${cleanBase.replace(/[\s]+/g, "_20")}_20.srm`,
-      `${cleanBase.replace(/[\s]+/g, "_20")}.srm`,
-      `${cleanBase.replace(/[\s]+/g, "_")}.srm`
-    ];
-    for (const leg of legacyNames) {
-      const legPath = path.join(systemDir, leg);
-      if (fs.existsSync(legPath)) {
-        try { fs.copyFileSync(targetFile, legPath); } catch {}
-      }
-    }
+    // 6. Database Upsert strictly scoped to user_id + game_id + slot
+    const saveId = generateUUID();
+    await db.query(
+      `INSERT INTO user_saves (id, user_id, game_id, slot, platform, save_data, file_path, size_bytes, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE 
+         save_data = VALUES(save_data),
+         file_path = VALUES(file_path),
+         size_bytes = VALUES(size_bytes),
+         platform = VALUES(platform),
+         updated_at = NOW()`,
+      [saveId, userId, gameId, slot, platform, buffer, targetFile, buffer.length]
+    );
 
     return NextResponse.json({
       success: true,
       bytes: buffer.byteLength,
+      slot,
+      platform,
       target: targetFile,
     });
   } catch (error) {

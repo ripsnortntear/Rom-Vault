@@ -1,3 +1,5 @@
+import { normalizeSystem } from "./paths";
+
 /**
  * Application security utilities for URL validation and scheme sanitization.
  */
@@ -30,4 +32,57 @@ export function isSafeHttpUrl(url: string | null | undefined): boolean {
 export function getSafeHttpUrl(url: string | null | undefined): string | null {
   if (!isSafeHttpUrl(url)) return null;
   return url!.trim();
+}
+
+/**
+ * Validates save state binary payload according to platform requirements.
+ * Rejects cross-platform injections (e.g. uploading PS2/PS1 saves to 2D retro consoles).
+ */
+export function validateSaveFormatForPlatform(platform: string, buffer: Buffer): string | null {
+  const norm = normalizeSystem(platform);
+
+  // Check PS2 Memory Card Superblock (contains "Sony Computer Entertainment" or "Sony PS2" at header)
+  const headerStr = buffer.slice(0, 64).toString("utf8");
+  const isPs2Payload = headerStr.includes("Sony Computer Entertainment") || headerStr.includes("Sony PS2");
+
+  // Check PS1 Memory Card Header ("MC" / 0x4D 0x43 at offset 0 and exactly 128KB)
+  const isPs1Payload = buffer.length === 131072 && buffer[0] === 0x4d && buffer[1] === 0x43;
+
+  if (norm === "psx" || norm === "ps1") {
+    // PS1 expects exactly 128 KB (131,072 bytes)
+    if (buffer.length !== 131072) {
+      return "Invalid save state payload format for the target platform. PS1 memory card requires exactly 128 KB (131,072 bytes).";
+    }
+    if (isPs2Payload) {
+      return "Invalid save state payload format for the target platform. PlayStation 2 memory card cannot be uploaded to PlayStation 1.";
+    }
+    return null;
+  }
+
+  if (norm === "ps2") {
+    if (isPs1Payload) {
+      return "Invalid save state payload format for the target platform. PlayStation 1 memory card cannot be uploaded to PlayStation 2.";
+    }
+    if (buffer.length > 16 * 1024 * 1024) {
+      return "Save file size exceeds maximum allowable PlayStation 2 memory card size (16MB).";
+    }
+    return null;
+  }
+
+  // Non-PlayStation platforms (NES, SNES, GBA, GBC, GB, N64, Genesis, etc.)
+  if (isPs2Payload || isPs1Payload) {
+    return `Invalid save state payload format for the target platform. PlayStation memory cards cannot be uploaded to '${norm}'.`;
+  }
+
+  // 8-bit / 16-bit / handheld systems SRAM capacity sanity limit (max 4MB)
+  const smallRomSystems = ["nes", "snes", "gb", "gbc", "gba", "genesis", "megadrive", "mastersystem", "gamegear"];
+  if (smallRomSystems.includes(norm) && buffer.byteLength > 4 * 1024 * 1024) {
+    return `Save file size (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB) exceeds maximum allowable SRAM capacity for ${norm.toUpperCase()} (4MB).`;
+  }
+
+  if (buffer.byteLength > 16 * 1024 * 1024) {
+    return "Save payload exceeds maximum allowable limit (16MB).";
+  }
+
+  return null;
 }
