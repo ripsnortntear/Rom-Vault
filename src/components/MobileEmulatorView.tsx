@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
+import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save, Check } from "lucide-react";
 import { PS2EmulatorView } from "./PS2EmulatorView";
 import { GameCubeEmulatorView } from "./GameCubeEmulatorView";
 import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
@@ -145,6 +145,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [justSaved, setJustSaved] = useState<boolean>(false);
 
   const cleanGameId = deepDecode(game.id).trim();
   const activeCardIdRef = useRef<string | null>(null);
@@ -199,6 +200,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           );
           if (res.ok) {
             lastSyncedChecksumRef.current = checksumStr;
+            setJustSaved(true);
+            setTimeout(() => setJustSaved(false), 3000);
             console.log("[SaveSync] Cloud Memory Card synchronized to slot:", cardId);
             if (typeof window !== "undefined" && window.parent && window.parent !== window) {
               window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saved" }, "*");
@@ -221,6 +224,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
         if (fallbackRes.ok) {
           lastSyncedChecksumRef.current = checksumStr;
+          setJustSaved(true);
+          setTimeout(() => setJustSaved(false), 3000);
           console.log("[SaveSync] Save written to global repository:", cleanGameId);
           if (typeof window !== "undefined" && window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saved" }, "*");
@@ -971,6 +976,34 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             >
               <ArrowLeft className="w-4 h-4" /> Library
             </button>
+
+            {bootState === "running" && (
+              <button
+                type="button"
+                onClick={() => flushSaveNow()}
+                disabled={isSaving}
+                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md transition cursor-pointer shadow-sm ${
+                  justSaved
+                    ? "bg-emerald-600 text-white"
+                    : isSaving
+                    ? "bg-amber-600/80 text-white animate-pulse"
+                    : "bg-emerald-700/80 hover:bg-emerald-600 active:bg-emerald-800 text-white"
+                }`}
+                title="Force Cloud Memory Card Save"
+              >
+                {justSaved ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Saved!</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaving ? "Saving..." : "Save Card"}</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {game.discs && game.discs.length > 1 && (
               <div className="flex items-center gap-1 bg-zinc-900/80 p-0.5 rounded-md border border-white/10 backdrop-blur">
