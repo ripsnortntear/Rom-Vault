@@ -11,7 +11,8 @@
     "scan": "bash scripts/scan.sh",
     "sync-metadata": "node scripts/sync-metadata.mjs",
     "download-screenshots": "node scripts/download-screenshots.mjs",
-    "download-boxart": "node scripts/download-boxart.mjs"
+    "download-boxart": "node scripts/download-boxart.mjs",
+    "download-metadata": "node scripts/download-metadata.mjs"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
