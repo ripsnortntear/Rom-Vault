@@ -108,6 +108,9 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Do not leak raw database models, secret environment keys, or internal storage paths to Client Components.
 - Do not call `revalidateTag(tag)` without the mandatory profile argument (e.g., `revalidateTag(tag, "max")`).
 - Do not invoke `redirect()` inside try blocks.
+- Do not silence compiler, bundler, or linter warnings with suppression comments (e.g., `/*turbopackIgnore*/`, `// eslint-disable`, `@ts-ignore`) instead of fixing root causes. Diagnose the underlying architectural issue and ensure the build compiles cleanly on its own merit.
+- Do not anchor external storage paths to `process.cwd()` (e.g. `path.join(process.cwd(), "storage/...")`), which misleads Turbopack static analysis into tracing the entire repository into server bundles. Keep external mount paths absolute.
+- Do not use unhandled `decodeURIComponent()` on game titles or URL parameters; always use `safeDecodeURIComponent()` to prevent `URIError: URI malformed` on titles containing literal percent signs (`%`).
 
 ## 11. Pre-Flight Verification
 - Typecheck & Lint: Execute `tsc --noEmit` and the configured Biome/ESLint checks; ensure zero type mismatches across App Router contracts.
