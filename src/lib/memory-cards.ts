@@ -13,7 +13,7 @@ export const MAX_CARDS_PER_USER = 5;
 function getStorageRootPrimary(): string {
   return path.join(getStorageRoot(), "saves/users");
 }
-const STORAGE_ROOT_FALLBACK = path.join(process.cwd(), "storage/saves/users");
+const STORAGE_ROOT_FALLBACK = "/storage/saves/users";
 
 export function normalizeCardSystem(sys?: string | null): "psx" | "ps2" {
   if (!sys) return "psx";
@@ -30,17 +30,15 @@ export function getUserMemoryCardDir(userId: string): string {
   const primary = getStorageRootPrimary();
   let baseDir = primary;
   try {
-    if (!fs.existsSync(primary)) {
-      fs.mkdirSync(primary, { recursive: true });
-    }
+    fs.mkdirSync(primary, { recursive: true });
   } catch {
     baseDir = STORAGE_ROOT_FALLBACK;
   }
 
-  const userDir = path.join(/*turbopackIgnore: true*/ baseDir, cleanUserId);
-  if (!fs.existsSync(/*turbopackIgnore: true*/ userDir)) {
-    fs.mkdirSync(/*turbopackIgnore: true*/ userDir, { recursive: true });
-  }
+  const userDir = path.resolve(baseDir, cleanUserId);
+  try {
+    fs.mkdirSync(userDir, { recursive: true });
+  } catch {}
   return userDir;
 }
 
