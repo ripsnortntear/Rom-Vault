@@ -741,11 +741,11 @@ export function EmulatorModal({
                 <span>
                   {game.system === "ps2" ? (
                     <>
-                      <strong>PlayStation 2 Notice:</strong> In-browser PS2 emulation runs via PCSX2 WebAssembly &amp; WebGPU (TabStationToo). For optimal 60 FPS performance, use Chrome, Edge, or Brave with hardware acceleration enabled.
+                      <strong>PlayStation 2 Notice:</strong> In-browser PS2 emulation runs via PCSX2 WebAssembly &amp; WebGPU (TabStationToo). For optimal 60 FPS performance, <strong>Microsoft Edge</strong> is recommended on desktop with hardware acceleration enabled.
                     </>
                   ) : game.system === "gamecube" ? (
                     <>
-                      <strong>Nintendo GameCube Notice:</strong> In-browser GameCube emulation requires heavy WebAssembly compute. For best performance, 60 FPS, and hardware rendering, you can also click <strong>Download</strong> and play in desktop{" "}
+                      <strong>Nintendo GameCube Notice:</strong> In-browser GameCube emulation requires heavy WebAssembly compute. For best performance, <strong>Microsoft Edge</strong> is recommended on desktop. You can also click <strong>Download</strong> and play in desktop{" "}
                       <a
                         href="https://dolphin-emu.org/download/"
                         target="_blank"
@@ -758,7 +758,7 @@ export function EmulatorModal({
                     </>
                   ) : game.system === "dreamcast" ? (
                     <>
-                      <strong>Sega Dreamcast Notice:</strong> In-browser Dreamcast emulation runs via WebAssembly. For full 60 FPS and enhanced 3D resolution, you can also click <strong>Download</strong> and play in desktop{" "}
+                      <strong>Sega Dreamcast Notice:</strong> In-browser Dreamcast emulation runs via WebAssembly. <strong>Microsoft Edge</strong> is recommended on desktop for optimal 60 FPS performance. You can also click <strong>Download</strong> and play in desktop{" "}
                       <a
                         href="https://flycast.emuplace.com/"
                         target="_blank"

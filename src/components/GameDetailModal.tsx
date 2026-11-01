@@ -15,8 +15,11 @@ import {
   MessageSquare,
   Volume2,
   VolumeX,
+  Monitor,
+  Info,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
+import { isDesktopOnlySystem } from "@/lib/systems";
 import {
   GameSocialProvider,
   GameRatingWidget,
@@ -27,6 +30,7 @@ import {
 interface GameDetailModalProps {
   game: GameItem | null;
   isFavorite: boolean;
+  isMobile?: boolean;
   onToggleFavorite: (gameId: string) => void;
   onClose: () => void;
   onPlay: (game: GameItem) => void;
@@ -53,6 +57,7 @@ interface MediaTabOption {
 export function GameDetailModal({
   game,
   isFavorite,
+  isMobile = false,
   onToggleFavorite,
   onClose,
   onPlay,
@@ -66,6 +71,9 @@ export function GameDetailModal({
     publisher?: string | null;
     genres?: string[];
   } | null>(null);
+
+  const isDesktopOnly = game ? isDesktopOnlySystem(game.system) : false;
+  const isBlockedOnMobile = isMobile && isDesktopOnly;
 
   useEffect(() => {
     if (game) {
@@ -324,20 +332,55 @@ export function GameDetailModal({
 
               {/* Big Red Play Button & Disc Selector - Placed immediately beneath media container */}
               <div className="flex flex-col gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={handlePlayActive}
-                  className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-black text-base bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:from-red-700 active:to-red-800 text-white shadow-xl shadow-red-600/30 transition transform active:scale-[0.98] cursor-pointer"
-                >
-                  <Play className="w-5 h-5 fill-current" />
-                  <span>
-                    {game.playable
-                      ? game.discs && game.discs.length > 1
-                        ? `Play Disc ${activeDiscNum} in Browser Now`
-                        : "Play in Browser Now"
-                      : "Play / Download Options"}
-                  </span>
-                </button>
+                {isBlockedOnMobile ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-bold text-sm bg-zinc-900 border border-amber-500/40 text-amber-300 shadow-md cursor-not-allowed"
+                    >
+                      <Monitor className="w-5 h-5 text-amber-400" />
+                      <span>Playable on Desktop Only</span>
+                    </button>
+                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
+                      <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="flex flex-col gap-0.5">
+                        <strong className="text-white">Desktop Required for {game.systemLabel}</strong>
+                        <span>
+                          PlayStation 2, Sega Dreamcast, and Nintendo GameCube emulation requires desktop hardware and is not supported on mobile devices. Open ROM Vault on a desktop browser (Microsoft Edge recommended).
+                        </span>
+                        <span className="text-zinc-400 text-[11px] mt-1">
+                          PS1 (PlayStation) and retro 16-bit / 32-bit consoles remain fully playable on mobile.
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handlePlayActive}
+                      className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-black text-base bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:from-red-700 active:to-red-800 text-white shadow-xl shadow-red-600/30 transition transform active:scale-[0.98] cursor-pointer"
+                    >
+                      <Play className="w-5 h-5 fill-current" />
+                      <span>
+                        {game.playable
+                          ? game.discs && game.discs.length > 1
+                            ? `Play Disc ${activeDiscNum} in Browser Now`
+                            : "Play in Browser Now"
+                          : "Play / Download Options"}
+                      </span>
+                    </button>
+                    {isDesktopOnly && (
+                      <div className="p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-xs text-cyan-200 flex items-center gap-2">
+                        <Monitor className="w-4 h-4 text-cyan-400 shrink-0" />
+                        <span>
+                          <strong>Edge Recommended:</strong> For optimal 60 FPS performance on {game.systemLabel}, Microsoft Edge is recommended on desktop.
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* Multi-disc Starting Disc Selector */}
                 {game.discs && game.discs.length > 1 && (

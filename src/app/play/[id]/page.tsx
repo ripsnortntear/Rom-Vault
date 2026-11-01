@@ -1,9 +1,12 @@
 import "server-only";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import { getGameById } from "@/lib/scanner";
+import { isDesktopOnlySystem } from "@/lib/systems";
 import { MobileEmulatorView } from "@/components/MobileEmulatorView";
 import { PS2EmulatorView } from "@/components/PS2EmulatorView";
+import { MobileDesktopRequired } from "@/components/MobileDesktopRequired";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -40,6 +43,23 @@ export default async function PlayPage({ params }: PlayPageProps) {
 
   if (!game || !game.playable) {
     notFound();
+  }
+
+  const headerList = await headers();
+  const ua = headerList.get("user-agent") || "";
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+  if (isMobileUA && isDesktopOnlySystem(game.system)) {
+    return (
+      <MobileDesktopRequired
+        game={{
+          id: game.id,
+          title: game.displayTitle || game.baseName,
+          system: game.system,
+          romFileName: game.romFileName,
+        }}
+      />
+    );
   }
 
   return (

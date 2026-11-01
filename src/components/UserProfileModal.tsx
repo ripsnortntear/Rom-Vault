@@ -399,7 +399,7 @@ export function UserProfileModal({
               }`}
             >
               <Gamepad2 className="w-3.5 h-3.5 text-red-400" />
-              <span>PS1 Memory Cards</span>
+              <span>PS Memory Cards</span>
             </button>
             <button
               type="button"

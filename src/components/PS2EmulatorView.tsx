@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
+import { MobileDesktopRequired } from "@/components/MobileDesktopRequired";
 
 interface PS2EmulatorViewProps {
   game: {
@@ -22,10 +23,18 @@ export function PS2EmulatorView({ game }: PS2EmulatorViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setIsInIframe(window.self !== window.top);
+      const inFrame = window.self !== window.top;
+      setIsInIframe(inFrame);
+
+      const ua = navigator.userAgent || "";
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const isSmall = window.innerWidth < 768;
+      const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+      setIsMobileDevice(!inFrame && (isMobileUA || isSmall || isCoarse));
     }
   }, []);
 
@@ -66,6 +75,10 @@ export function PS2EmulatorView({ game }: PS2EmulatorViewProps) {
       }
     } catch {}
   };
+
+  if (isMobileDevice) {
+    return <MobileDesktopRequired game={game} />;
+  }
 
   return (
     <div

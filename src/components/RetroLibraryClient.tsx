@@ -16,6 +16,8 @@ import { GameDetailModal } from "@/components/GameDetailModal";
 import { EmulatorModal } from "@/components/EmulatorModal";
 import { EmulatorErrorBoundary } from "@/components/EmulatorErrorBoundary";
 import { UserProfileModal } from "@/components/UserProfileModal";
+import { EdgeRecommendationBadge } from "@/components/EdgeRecommendationBadge";
+import { isDesktopOnlySystem } from "@/lib/systems";
 
 interface RetroLibraryClientProps {
   initialGames: GameItem[];
@@ -110,6 +112,21 @@ export function RetroLibraryClient({
 
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkMobile = () => {
+      const ua = navigator.userAgent || "";
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const isSmallScreen = window.innerWidth < 768;
+      const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+      setIsMobileDevice(isMobileUA || isSmallScreen || isCoarse);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     fetch("/roms/api/users/me")
@@ -346,16 +363,24 @@ export function RetroLibraryClient({
       return next;
     });
 
-    // Non-playable systems (such as PS2) show the standalone recommendation modal
+    // Detect mobile viewports (< 768px, coarse touch, or mobile user agent)
+    const isMobile =
+      typeof window !== "undefined" &&
+      (window.innerWidth < 768 ||
+        window.matchMedia("(pointer: coarse)").matches ||
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || ""));
+
+    // PS2, Dreamcast, and GameCube are NOT playable on mobile devices; PSX remains playable!
+    if (isMobile && isDesktopOnlySystem(game.system)) {
+      setDetailGame(game);
+      return;
+    }
+
+    // Non-playable systems show the standalone recommendation modal
     if (!game.playable) {
       setPlayingGame(game);
       return;
     }
-
-    // Detect mobile viewports (< 768px or coarse touch) to avoid dual-tree memory overhead
-    const isMobile =
-      typeof window !== "undefined" &&
-      (window.innerWidth < 768 || window.matchMedia("(pointer: coarse)").matches);
 
     if (isMobile) {
       window.location.assign(`/roms/play/${encodeURIComponent(decodeURIComponent(game.id))}`);
@@ -541,6 +566,8 @@ export function RetroLibraryClient({
               </span>
             </div>
 
+            <EdgeRecommendationBadge />
+
             <button
               type="button"
               onClick={() => {
@@ -610,6 +637,7 @@ export function RetroLibraryClient({
         {featuredGame && (
           <HeroSpotlight
             game={featuredGame}
+            isMobile={isMobileDevice}
             onPlay={handlePlayGame}
             onSelectDetail={setDetailGame}
             onShuffle={handleShuffleFeatured}
@@ -664,6 +692,7 @@ export function RetroLibraryClient({
                   game={game}
                   coverStyle={coverStyle}
                   isFavorite={favoritesSet.has(game.id)}
+                  isMobile={isMobileDevice}
                   onToggleFavorite={toggleFavorite}
                   onSelectDetail={setDetailGame}
                   onPlay={handlePlayGame}
@@ -698,6 +727,7 @@ export function RetroLibraryClient({
       <GameDetailModal
         game={detailGame}
         isFavorite={detailGame ? favoritesSet.has(detailGame.id) : false}
+        isMobile={isMobileDevice}
         onToggleFavorite={toggleFavorite}
         onClose={() => setDetailGame(null)}
         onPlay={(game) => {

@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Play, Info, Heart, Download } from "lucide-react";
+import { Play, Info, Heart, Download, Monitor } from "lucide-react";
 import type { CoverArtStyle, GameItem } from "@/types/game";
+import { isDesktopOnlySystem } from "@/lib/systems";
 
 interface GameCardProps {
   game: GameItem;
   coverStyle: CoverArtStyle;
   isFavorite: boolean;
+  isMobile?: boolean;
   onToggleFavorite: (gameId: string) => void;
   onSelectDetail: (game: GameItem) => void;
   onPlay: (game: GameItem) => void;
@@ -43,12 +45,16 @@ export function GameCard({
   game,
   coverStyle,
   isFavorite,
+  isMobile = false,
   onToggleFavorite,
   onSelectDetail,
   onPlay,
 }: GameCardProps): React.ReactElement {
   const [showVideoPreview, setShowVideoPreview] = useState<boolean>(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isDesktopOnly = isDesktopOnlySystem(game.system);
+  const isBlockedOnMobile = isMobile && isDesktopOnly;
 
   const coverUrl = getCoverUrl(game, coverStyle);
   const isWideAspect = coverStyle === "screentitle";
@@ -145,17 +151,32 @@ export function GameCard({
         </div>
 
         <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black via-black/85 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlay(game);
-            }}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/40 transition cursor-pointer"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            {game.playable ? "Play" : "Details"}
-          </button>
+          {isBlockedOnMobile ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectDetail(game);
+              }}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-zinc-800/90 hover:bg-zinc-700 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+              title="PS2, Dreamcast, and GameCube emulation requires desktop"
+            >
+              <Monitor className="w-3.5 h-3.5 text-amber-400" />
+              Desktop Only
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay(game);
+              }}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/40 transition cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              {game.playable ? "Play" : "Details"}
+            </button>
+          )}
 
           <button
             type="button"

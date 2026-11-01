@@ -214,7 +214,35 @@ export function normalizeSystem(system: string | null | undefined): string {
   if (lower === "nintendo") return "nes";
   if (lower === "ps1" || lower === "playstation") return "psx";
   if (lower === "playstation2") return "ps2";
+  if (lower === "gc") return "gamecube";
+  if (lower === "dc") return "dreamcast";
   return lower;
+}
+
+export const ADVANCED_DESKTOP_ONLY_SYSTEMS = ["ps2", "dreamcast", "gamecube"] as const;
+export type AdvancedDesktopOnlySystem = (typeof ADVANCED_DESKTOP_ONLY_SYSTEMS)[number];
+
+/**
+ * Returns true if the system requires desktop hardware and is not playable on mobile devices.
+ * Systems: PS2, Dreamcast, GameCube.
+ * PSX (PS1) is specifically allowed and playable on mobile.
+ */
+export function isDesktopOnlySystem(systemId: string | null | undefined): boolean {
+  if (!systemId) return false;
+  const norm = normalizeSystem(systemId);
+  return norm === "ps2" || norm === "dreamcast" || norm === "gamecube";
+}
+
+/**
+ * Check whether a system is playable on a given device form-factor.
+ */
+export function isSystemPlayableOnDevice(systemId: string | null | undefined, isMobile: boolean): boolean {
+  if (!systemId) return false;
+  if (isMobile && isDesktopOnlySystem(systemId)) {
+    return false;
+  }
+  const meta = getSystemMeta(systemId);
+  return meta.playable;
 }
 
 export function toCleanSlug(fileName: string, system = "nes"): string {

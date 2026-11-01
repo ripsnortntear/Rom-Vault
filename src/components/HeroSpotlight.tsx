@@ -9,11 +9,14 @@ import {
   Volume2,
   VolumeX,
   Sparkles,
+  Monitor,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
+import { isDesktopOnlySystem } from "@/lib/systems";
 
 interface HeroSpotlightProps {
   game: GameItem;
+  isMobile?: boolean;
   onPlay: (game: GameItem) => void;
   onSelectDetail: (game: GameItem) => void;
   onShuffle: () => void;
@@ -21,6 +24,7 @@ interface HeroSpotlightProps {
 
 export function HeroSpotlight({
   game,
+  isMobile = false,
   onPlay,
   onSelectDetail,
   onShuffle,
@@ -101,14 +105,26 @@ export function HeroSpotlight({
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => onPlay(game)}
-              className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl font-bold text-sm sm:text-base bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30 transition transform hover:-translate-y-0.5 cursor-pointer"
-            >
-              <Play className="w-5 h-5 fill-current" />
-              Play Now
-            </button>
+            {isMobile && isDesktopOnlySystem(game.system) ? (
+              <button
+                type="button"
+                onClick={() => onSelectDetail(game)}
+                className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl font-bold text-sm sm:text-base bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-500/30 transition transform hover:-translate-y-0.5 cursor-pointer"
+                title="PS2, Dreamcast, and GameCube emulation requires a desktop computer"
+              >
+                <Monitor className="w-5 h-5 text-amber-400" />
+                <span>Desktop Only</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onPlay(game)}
+                className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl font-bold text-sm sm:text-base bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30 transition transform hover:-translate-y-0.5 cursor-pointer"
+              >
+                <Play className="w-5 h-5 fill-current" />
+                Play Now
+              </button>
+            )}
 
             <button
               type="button"

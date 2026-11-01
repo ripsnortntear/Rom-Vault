@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
 import { PS2EmulatorView } from "./PS2EmulatorView";
-import { getSystemMeta } from "@/lib/systems";
+import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
+import { MobileDesktopRequired } from "./MobileDesktopRequired";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -130,6 +131,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     return 0;
   });
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -225,7 +227,14 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setIsInIframe(window.self !== window.top);
+      const inFrame = window.self !== window.top;
+      setIsInIframe(inFrame);
+
+      const ua = navigator.userAgent || "";
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const isSmall = window.innerWidth < 768;
+      const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+      setIsMobileDevice(!inFrame && (isMobileUA || isSmall || isCoarse));
 
       window.EJS_rumble = false;
       window.EJS_vibration = false;
@@ -897,6 +906,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       }
     } catch {}
   };
+
+  if (isMobileDevice && isDesktopOnlySystem(game.system)) {
+    return <MobileDesktopRequired game={game} />;
+  }
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden select-none">
