@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { normalizeSystem } from "@/lib/paths";
 import { getCurrentSession } from "@/lib/auth/session";
 import { query } from "@/lib/db";
+import { getCorsHeaders, handleCorsPreflight } from "@/lib/cors";
 
 interface RouteContext {
   params: Promise<{
@@ -16,19 +17,23 @@ interface RouteContext {
 
 const STORAGE_ROOT = path.resolve("/mnt/storage/roms");
 
-const CORS_STREAM_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "Range, Content-Range, Content-Type, Accept-Ranges, If-Range, Authorization",
-  "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
-  "Cross-Origin-Resource-Policy": "cross-origin",
-};
+function getCorsStreamHeaders(request?: Request | NextRequest | null): Record<string, string> {
+  return {
+    ...getCorsHeaders(
+      request,
+      "GET, HEAD, OPTIONS",
+      "Range, Content-Range, Content-Type, Accept-Ranges, If-Range, Authorization"
+    ),
+    "Cross-Origin-Resource-Policy": "same-site",
+  };
+}
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, {
-    status: 204,
-    headers: CORS_STREAM_HEADERS,
-  });
+export async function OPTIONS(request?: NextRequest): Promise<NextResponse> {
+  return handleCorsPreflight(
+    request,
+    "GET, HEAD, OPTIONS",
+    "Range, Content-Range, Content-Type, Accept-Ranges, If-Range, Authorization"
+  );
 }
 
 function getMimeType(filePath: string): string {
@@ -293,6 +298,7 @@ async function handleStream(
   context: RouteContext,
   isHeadMethod: boolean
 ): Promise<NextResponse> {
+  const corsHeaders = getCorsStreamHeaders(request);
   try {
     const { id: rawId } = await context.params;
     const id = decodeURIComponent(rawId);
@@ -303,15 +309,15 @@ async function handleStream(
     // 1. Path resolution & Traversal Prevention
     const { filePath, isForbidden } = resolveRomFilePath(id, fileParam, discParam, systemParam);
     if (isForbidden) {
-      return NextResponse.json({ error: "Access denied." }, { status: 403, headers: CORS_STREAM_HEADERS });
+      return NextResponse.json({ error: "Access denied." }, { status: 403, headers: corsHeaders });
     }
     if (!filePath || !fs.existsSync(/*turbopackIgnore: true*/ filePath)) {
-      return NextResponse.json({ error: "ROM not found." }, { status: 404, headers: CORS_STREAM_HEADERS });
+      return NextResponse.json({ error: "ROM not found." }, { status: 404, headers: corsHeaders });
     }
 
     const stat = fs.statSync(/*turbopackIgnore: true*/ filePath);
     if (!stat.isFile()) {
-      return NextResponse.json({ error: "Invalid file target." }, { status: 404, headers: CORS_STREAM_HEADERS });
+      return NextResponse.json({ error: "Invalid file target." }, { status: 404, headers: corsHeaders });
     }
 
     // 2. Authentication & Authorization (Resolve strictly from signed session)
@@ -319,7 +325,7 @@ async function handleStream(
     if (!session || !session.user) {
       return NextResponse.json(
         { error: "Authentication required to access ROM stream." },
-        { status: 401, headers: CORS_STREAM_HEADERS }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -346,7 +352,7 @@ async function handleStream(
           if (count >= quota) {
             return NextResponse.json(
               { error: `Daily download quota exceeded (${quota}/${quota}). Please try again tomorrow.` },
-              { status: 429, headers: CORS_STREAM_HEADERS }
+              { status: 429, headers: corsHeaders }
             );
           }
         }
@@ -363,7 +369,7 @@ async function handleStream(
     if (!rangeHeader) {
       // 200 OK Full Stream
       const headers: Record<string, string> = {
-        ...CORS_STREAM_HEADERS,
+        ...corsHeaders,
         "Content-Type": mimeType,
         "Accept-Ranges": "bytes",
         "Content-Length": fileSize.toString(),
@@ -389,7 +395,7 @@ async function handleStream(
       return new NextResponse(null, {
         status: 416,
         headers: {
-          ...CORS_STREAM_HEADERS,
+          ...corsHeaders,
           "Content-Range": `bytes */${fileSize}`,
           "Accept-Ranges": "bytes",
         },
@@ -400,7 +406,7 @@ async function handleStream(
     const chunkSize = end - start + 1;
 
     const headers: Record<string, string> = {
-      ...CORS_STREAM_HEADERS,
+      ...corsHeaders,
       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
       "Accept-Ranges": "bytes",
       "Content-Length": chunkSize.toString(),
@@ -430,7 +436,7 @@ async function handleStream(
     console.error("[api/roms/[id]/stream] Error streaming ROM:", error);
     return NextResponse.json(
       { error: "Internal server error while streaming ROM." },
-      { status: 500, headers: CORS_STREAM_HEADERS }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

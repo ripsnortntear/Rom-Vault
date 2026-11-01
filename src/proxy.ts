@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { handleCorsPreflight } from "@/lib/cors";
 
 // Public paths that do not require authentication
 const PUBLIC_PREFIXES = [
@@ -16,7 +17,12 @@ const PUBLIC_PREFIXES = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Allow public authentication routes, static assets, and preflight CORS requests
+  // 1. Intercept preflight CORS requests on API endpoints immediately without auth or DB overhead
+  if (request.method === "OPTIONS" && (pathname.startsWith("/api/") || pathname.startsWith("/roms/api/"))) {
+    return handleCorsPreflight(request);
+  }
+
+  // Allow public authentication routes, static assets, and other preflight requests
   const isPublic = PUBLIC_PREFIXES.some(
     (prefix) => pathname.startsWith(prefix) || pathname.startsWith(`/roms${prefix}`)
   );

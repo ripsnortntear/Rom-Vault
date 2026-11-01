@@ -8,8 +8,8 @@ interface RouteContext {
   }>;
 }
 
-export async function OPTIONS() {
-  return streamOPTIONS();
+export async function OPTIONS(request: NextRequest) {
+  return streamOPTIONS(request);
 }
 
 export async function HEAD(request: NextRequest, context: RouteContext): Promise<NextResponse> {

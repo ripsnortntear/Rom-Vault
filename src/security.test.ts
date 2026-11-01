@@ -7,6 +7,12 @@ import {
   isSafeAvatarUrl,
   getSafeAvatarUrl,
 } from "./lib/security";
+import {
+  isAllowedOrigin,
+  getCorsHeaders,
+  applyCorsHeaders,
+  handleCorsPreflight,
+} from "./lib/cors";
 import { getClientIp, getTrustedClientIp } from "./lib/ip";
 import { submitScoreSchema } from "./app/actions/scores";
 import { signSessionToken, validateSessionToken, verifySessionTokenFast } from "./lib/auth/session";
@@ -254,5 +260,53 @@ describe("Avatar Protocol & Scheme Sanitization (SEC-07)", () => {
     expect(getSafeAvatarUrl("javascript:alert(1)", null)).toBeNull();
   });
 });
+
+describe("CORS Origin Validation and Preflight Handling (SEC-08)", () => {
+  it("allows trusted production domains", () => {
+    expect(isAllowedOrigin("https://oldsmarchaos.com")).toBe(true);
+    expect(isAllowedOrigin("https://www.oldsmarchaos.com")).toBe(true);
+  });
+
+  it("rejects untrusted third-party origins", () => {
+    expect(isAllowedOrigin("https://evil-attacker.com")).toBe(false);
+    expect(isAllowedOrigin("https://phishing.oldsmarchaos.com.attacker.com")).toBe(false);
+    expect(isAllowedOrigin("null")).toBe(false);
+    expect(isAllowedOrigin("")).toBe(false);
+    expect(isAllowedOrigin(undefined)).toBe(false);
+  });
+
+  it("dynamically reflects trusted origin with credentials and Vary header", () => {
+    const req = new Request("http://localhost/api/test", {
+      headers: { origin: "https://www.oldsmarchaos.com" },
+    });
+    const headers = getCorsHeaders(req);
+    expect(headers["Access-Control-Allow-Origin"]).toBe("https://www.oldsmarchaos.com");
+    expect(headers["Access-Control-Allow-Credentials"]).toBe("true");
+    expect(headers["Vary"]).toBe("Origin");
+  });
+
+  it("falls back to primary domain and excludes Vary when origin is untrusted", () => {
+    const req = new Request("http://localhost/api/test", {
+      headers: { origin: "https://untrusted-site.com" },
+    });
+    const headers = getCorsHeaders(req);
+    expect(headers["Access-Control-Allow-Origin"]).toBe("https://oldsmarchaos.com");
+    expect(headers["Access-Control-Allow-Credentials"]).toBeUndefined();
+    expect(headers["Vary"]).toBeUndefined();
+  });
+
+  it("handles preflight OPTIONS requests cleanly with 204 No Content", () => {
+    const req = new Request("http://localhost/api/test", {
+      method: "OPTIONS",
+      headers: { origin: "https://oldsmarchaos.com" },
+    });
+    const res = handleCorsPreflight(req);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://oldsmarchaos.com");
+    expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+    expect(res.headers.get("Access-Control-Max-Age")).toBe("86400");
+  });
+});
+
 
 

@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { extractNesFromZip } from "@/lib/nesExtractor";
 import { normalizeSystem, resolveSafeMediaPath } from "@/lib/paths";
+import { getCorsHeaders, handleCorsPreflight } from "@/lib/cors";
 
 interface NesRouteContext {
   params: Promise<{
@@ -11,18 +12,15 @@ interface NesRouteContext {
   }>;
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-  "Cross-Origin-Resource-Policy": "cross-origin",
-};
+function getNesCorsHeaders(request?: Request | NextRequest | null): Record<string, string> {
+  return {
+    ...getCorsHeaders(request, "GET, HEAD, OPTIONS", "*"),
+    "Cross-Origin-Resource-Policy": "same-site",
+  };
+}
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
+  return handleCorsPreflight(request, "GET, HEAD, OPTIONS", "*");
 }
 
 function resolveRomTarget(fileName: string, system: string): {
@@ -67,6 +65,7 @@ export async function HEAD(
   request: NextRequest,
   context: NesRouteContext
 ): Promise<NextResponse> {
+  const corsHeaders = getNesCorsHeaders(request);
   try {
     const resolved = await context.params;
     const fileName = safeDecode(resolved.fileName);
@@ -82,7 +81,7 @@ export async function HEAD(
         return new NextResponse(null, {
           status: 200,
           headers: {
-            ...CORS_HEADERS,
+            ...corsHeaders,
             "Content-Type": "application/octet-stream",
             "Content-Length": nesBuffer.byteLength.toString(),
             "Content-Disposition": `inline; filename="${slug}"`,
@@ -98,7 +97,7 @@ export async function HEAD(
       return new NextResponse(null, {
         status: 200,
         headers: {
-          ...CORS_HEADERS,
+          ...corsHeaders,
           "Content-Type": "application/octet-stream",
           "Content-Length": stat.size.toString(),
           "Content-Disposition": `inline; filename="${slug}"`,
@@ -108,10 +107,10 @@ export async function HEAD(
       });
     }
 
-    return new NextResponse(null, { status: 404, headers: CORS_HEADERS });
+    return new NextResponse(null, { status: 404, headers: corsHeaders });
   } catch (error) {
     console.error("[api/nes HEAD] Error:", error);
-    return new NextResponse(null, { status: 500, headers: CORS_HEADERS });
+    return new NextResponse(null, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -119,6 +118,7 @@ export async function GET(
   request: NextRequest,
   context: NesRouteContext
 ): Promise<NextResponse> {
+  const corsHeaders = getNesCorsHeaders(request);
   try {
     const resolved = await context.params;
     const fileName = safeDecode(resolved.fileName);
@@ -134,7 +134,7 @@ export async function GET(
       if (nesBuffer) {
         const totalSize = nesBuffer.byteLength;
         const commonHeaders: Record<string, string> = {
-          ...CORS_HEADERS,
+          ...corsHeaders,
           "Content-Type": "application/octet-stream",
           "Content-Disposition": `inline; filename="${slug}"`,
           "Accept-Ranges": "bytes",
@@ -183,7 +183,7 @@ export async function GET(
       const fileSize = stat.size;
 
       const commonHeaders: Record<string, string> = {
-        ...CORS_HEADERS,
+        ...corsHeaders,
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `inline; filename="${slug}"`,
         "Accept-Ranges": "bytes",
@@ -230,13 +230,13 @@ export async function GET(
 
     return NextResponse.json(
       { error: "Failed to extract or read ROM file" },
-      { status: 404, headers: CORS_HEADERS }
+      { status: 404, headers: corsHeaders }
     );
   } catch (error) {
     console.error("[api/nes GET] Error serving ROM:", error);
     return NextResponse.json(
       { error: "Internal server error extracting ROM" },
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

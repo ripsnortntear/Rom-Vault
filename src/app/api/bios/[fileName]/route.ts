@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { findSystemBios } from "@/lib/bios";
 import { normalizeSystem } from "@/lib/paths";
+import { getCorsHeaders, handleCorsPreflight } from "@/lib/cors";
 
 interface BiosRouteContext {
   params: Promise<{
@@ -10,37 +11,35 @@ interface BiosRouteContext {
   }>;
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-  "Cross-Origin-Resource-Policy": "cross-origin",
-};
+function getBiosCorsHeaders(request?: Request | NextRequest | null): Record<string, string> {
+  return {
+    ...getCorsHeaders(request, "GET, HEAD, OPTIONS", "*"),
+    "Cross-Origin-Resource-Policy": "same-site",
+  };
+}
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  });
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
+  return handleCorsPreflight(request, "GET, HEAD, OPTIONS", "*");
 }
 
 export async function HEAD(
   request: NextRequest,
   context: BiosRouteContext
 ): Promise<NextResponse> {
+  const corsHeaders = getBiosCorsHeaders(request);
   const resolvedParams = await context.params;
   const system = normalizeSystem(request.nextUrl.searchParams.get("system"));
   const biosInfo = findSystemBios(system, resolvedParams.fileName);
 
   if (!biosInfo || !fs.existsSync(biosInfo.biosPath)) {
-    return new NextResponse(null, { status: 404, headers: CORS_HEADERS });
+    return new NextResponse(null, { status: 404, headers: corsHeaders });
   }
 
   const stat = fs.statSync(biosInfo.biosPath);
   return new NextResponse(null, {
     status: 200,
     headers: {
-      ...CORS_HEADERS,
+      ...corsHeaders,
       "Content-Type": "application/octet-stream",
       "Content-Length": stat.size.toString(),
       "Content-Disposition": `inline; filename="${resolvedParams.fileName || biosInfo.expectedFileName}"`,
@@ -53,6 +52,7 @@ export async function GET(
   request: NextRequest,
   context: BiosRouteContext
 ): Promise<NextResponse> {
+  const corsHeaders = getBiosCorsHeaders(request);
   try {
     const resolvedParams = await context.params;
     const system = normalizeSystem(request.nextUrl.searchParams.get("system"));
@@ -61,7 +61,7 @@ export async function GET(
     if (!biosInfo || !fs.existsSync(biosInfo.biosPath)) {
       return NextResponse.json(
         { error: "BIOS not found for system" },
-        { status: 404, headers: CORS_HEADERS }
+        { status: 404, headers: corsHeaders }
       );
     }
 
@@ -72,7 +72,7 @@ export async function GET(
     return new NextResponse(webStream, {
       status: 200,
       headers: {
-        ...CORS_HEADERS,
+        ...corsHeaders,
         "Content-Type": "application/octet-stream",
         "Content-Length": stat.size.toString(),
         "Content-Disposition": `inline; filename="${resolvedParams.fileName || biosInfo.expectedFileName}"`,
@@ -83,7 +83,7 @@ export async function GET(
     console.error("[api/bios] Failed to serve BIOS:", error);
     return NextResponse.json(
       { error: "Failed to read BIOS file" },
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
