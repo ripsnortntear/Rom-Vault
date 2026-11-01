@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { isSafeHttpUrl, getSafeHttpUrl, validateSaveFormatForPlatform } from "./lib/security";
+import {
+  isSafeHttpUrl,
+  getSafeHttpUrl,
+  validateSaveFormatForPlatform,
+  avatarUrlSchema,
+  isSafeAvatarUrl,
+  getSafeAvatarUrl,
+} from "./lib/security";
 import { getClientIp, getTrustedClientIp } from "./lib/ip";
 import { submitScoreSchema } from "./app/actions/scores";
 import { signSessionToken, validateSessionToken, verifySessionTokenFast } from "./lib/auth/session";
@@ -196,4 +203,56 @@ describe("Save State Platform Validation (SEC-06)", () => {
     expect(validateSaveFormatForPlatform("snes", validSnesSram)).toBeNull();
   });
 });
+
+describe("Avatar Protocol & Scheme Sanitization (SEC-07)", () => {
+  it("accepts safe relative local asset paths", () => {
+    expect(avatarUrlSchema.safeParse("/avatars/default.png").success).toBe(true);
+    expect(avatarUrlSchema.safeParse("/images/profiles/user123.jpg").success).toBe(true);
+    expect(avatarUrlSchema.safeParse("/roms/avatars/retro.png").success).toBe(true);
+    expect(isSafeAvatarUrl("/avatars/default.png")).toBe(true);
+  });
+
+  it("accepts secure HTTPS URLs", () => {
+    expect(avatarUrlSchema.safeParse("https://avatars.githubusercontent.com/u/12345").success).toBe(true);
+    expect(avatarUrlSchema.safeParse("https://secure.gravatar.com/avatar/hash").success).toBe(true);
+    expect(isSafeAvatarUrl("https://secure.gravatar.com/avatar/hash")).toBe(true);
+  });
+
+  it("accepts null and undefined (optional / nullable)", () => {
+    expect(avatarUrlSchema.safeParse(null).success).toBe(true);
+    expect(avatarUrlSchema.safeParse(undefined).success).toBe(true);
+  });
+
+  it("rejects dangerous pseudo-protocols (XSS vectors)", () => {
+    expect(avatarUrlSchema.safeParse("javascript:alert(1)").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("data:text/html,<script>alert(1)</script>").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("vbscript:msgbox(1)").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("file:///etc/passwd").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("blob:https://example.com/uuid").success).toBe(false);
+    expect(isSafeAvatarUrl("javascript:alert(1)")).toBe(false);
+  });
+
+  it("rejects unencrypted HTTP URLs", () => {
+    expect(avatarUrlSchema.safeParse("http://insecure.example.com/avatar.png").success).toBe(false);
+    expect(isSafeAvatarUrl("http://insecure.example.com/avatar.png")).toBe(false);
+  });
+
+  it("rejects directory traversal and protocol-relative local paths", () => {
+    expect(avatarUrlSchema.safeParse("/avatars/../../etc/passwd").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("/images/../secrets/config.json").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("//malicious-site.com/avatar.png").success).toBe(false);
+    expect(avatarUrlSchema.safeParse("/avatars\\evil.png").success).toBe(false);
+    expect(isSafeAvatarUrl("/avatars/../../etc/passwd")).toBe(false);
+  });
+
+  it("provides defensive fallback via getSafeAvatarUrl", () => {
+    expect(getSafeAvatarUrl("https://safe.com/pic.png")).toBe("https://safe.com/pic.png");
+    expect(getSafeAvatarUrl("/avatars/custom.png")).toBe("/avatars/custom.png");
+    expect(getSafeAvatarUrl("javascript:alert(1)")).toBe("/avatars/default.png");
+    expect(getSafeAvatarUrl("http://insecure.com/pic.png")).toBe("/avatars/default.png");
+    expect(getSafeAvatarUrl(null, null)).toBeNull();
+    expect(getSafeAvatarUrl("javascript:alert(1)", null)).toBeNull();
+  });
+});
+
 

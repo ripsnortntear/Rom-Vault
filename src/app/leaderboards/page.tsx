@@ -15,6 +15,7 @@ import {
 import { getLeaderboards } from "@/lib/community";
 import { getGameById } from "@/lib/scanner";
 import { KNOWN_SYSTEMS } from "@/lib/systems";
+import { getSafeAvatarUrl } from "@/lib/security";
 
 export const metadata: Metadata = {
   title: "Community Leaderboards & Records | ROM Vault",
@@ -197,10 +198,10 @@ export default async function LeaderboardsPage(props: LeaderboardsPageProps) {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2.5">
                             <div className="w-7 h-7 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center font-bold text-xs text-white uppercase overflow-hidden shrink-0">
-                              {score.user.avatarUrl ? (
+                              {getSafeAvatarUrl(score.user.avatarUrl, null) ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                  src={score.user.avatarUrl}
+                                  src={getSafeAvatarUrl(score.user.avatarUrl)!}
                                   alt=""
                                   className="w-full h-full object-cover"
                                 />

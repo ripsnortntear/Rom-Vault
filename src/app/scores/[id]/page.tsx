@@ -15,7 +15,7 @@ import {
 import { getHighScoreById } from "@/lib/community";
 import { getGameById } from "@/lib/scanner";
 import { ScoreShareButtons } from "@/components/community/ScoreShareButtons";
-import { getSafeHttpUrl } from "@/lib/security";
+import { getSafeHttpUrl, getSafeAvatarUrl } from "@/lib/security";
 
 interface ScorePageProps {
   params: Promise<{ id: string }>;
@@ -131,9 +131,13 @@ export default async function ScorePage(props: ScorePageProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-zinc-900/60 border border-white/10">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-red-600/30 border border-red-500/40 flex items-center justify-center font-bold text-lg text-white uppercase overflow-hidden shrink-0">
-                {score.user.avatarUrl ? (
+                {getSafeAvatarUrl(score.user.avatarUrl, null) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={score.user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={getSafeAvatarUrl(score.user.avatarUrl)!}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   playerName.charAt(0)
                 )}

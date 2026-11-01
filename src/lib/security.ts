@@ -1,8 +1,68 @@
-import { normalizeSystem } from "./paths";
+import { z } from "zod";
+import { normalizeSystem } from "./systems";
 
 /**
  * Application security utilities for URL validation and scheme sanitization.
  */
+
+export const avatarUrlSchema = z
+  .string()
+  .max(1024)
+  .refine(
+    (val) => {
+      if (!val) return true;
+      const trimmed = val.trim();
+      // Reject dangerous pseudo-protocols explicitly
+      if (/^(javascript|data|vbscript|file|blob):/i.test(trimmed)) {
+        return false;
+      }
+      // Allow relative local asset paths
+      if (
+        (trimmed.startsWith("/avatars/") ||
+          trimmed.startsWith("/images/") ||
+          trimmed.startsWith("/roms/") ||
+          trimmed.startsWith("/")) &&
+        !trimmed.startsWith("//")
+      ) {
+        // Prevent directory traversal and Windows backslashes
+        return !trimmed.includes("..") && !trimmed.includes("\\");
+      }
+      try {
+        const url = new URL(trimmed);
+        // Only allow secure HTTPS URLs
+        return url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "Avatar must be a valid local path or secure HTTPS URL." }
+  )
+  .optional()
+  .nullable();
+
+/**
+ * Validates that an avatar URL is a safe local path or secure HTTPS URL.
+ */
+export function isSafeAvatarUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 1024) return false;
+  const parsed = avatarUrlSchema.safeParse(trimmed);
+  return parsed.success && !!parsed.data;
+}
+
+/**
+ * Defensive runtime check returning the safe avatar URL, or fallback default avatar.
+ */
+export function getSafeAvatarUrl(
+  url: string | null | undefined,
+  fallback: string | null = "/avatars/default.png"
+): string | null {
+  if (isSafeAvatarUrl(url)) {
+    return url!.trim();
+  }
+  return fallback;
+}
 
 /**
  * Validate that a URL uses safe HTTP/HTTPS protocols

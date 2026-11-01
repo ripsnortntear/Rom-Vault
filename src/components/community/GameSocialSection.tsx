@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { submitGameRating, postGameComment, deleteGameComment } from "@/app/actions/social";
 import { submitHighScoreAction } from "@/app/actions/scores";
-import { getSafeHttpUrl } from "@/lib/security";
+import { getSafeHttpUrl, getSafeAvatarUrl } from "@/lib/security";
 import type { GameSocialStats, GameComment, GameHighScore } from "@/types/community";
 import type { AuthSession } from "@/types/auth";
 
@@ -715,10 +715,10 @@ export function GameCommentsFeedInternal() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-5 h-5 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center font-bold text-[9px] text-zinc-300 uppercase overflow-hidden shrink-0">
-                      {comment.author.avatarUrl ? (
+                      {getSafeAvatarUrl(comment.author.avatarUrl, null) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={comment.author.avatarUrl}
+                          src={getSafeAvatarUrl(comment.author.avatarUrl)!}
                           alt=""
                           className="w-full h-full object-cover"
                         />

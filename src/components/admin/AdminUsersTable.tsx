@@ -22,6 +22,7 @@ import {
   resetUserPasswordAction,
   purgeUserAction,
 } from "@/app/actions/admin";
+import { getSafeAvatarUrl } from "@/lib/security";
 import type { AdminUserListItem } from "@/types/community";
 
 interface AdminUsersTableProps {
@@ -207,9 +208,13 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center font-bold text-xs text-white uppercase overflow-hidden shrink-0">
-                            {user.avatarUrl ? (
+                            {getSafeAvatarUrl(user.avatarUrl, null) ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                              <img
+                                src={getSafeAvatarUrl(user.avatarUrl)!}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
                             ) : (
                               (user.displayName || user.username).charAt(0)
                             )}

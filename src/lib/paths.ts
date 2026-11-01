@@ -1,6 +1,9 @@
 import fs from "fs";
 import path from "path";
 import type { MediaCategory } from "@/types/game";
+import { normalizeSystem } from "./systems";
+
+export { normalizeSystem };
 
 export const BASE_PATH = "/roms";
 export const DEFAULT_STORAGE_ROOT = "/mnt/storage/roms";
@@ -18,15 +21,6 @@ export function getStorageRoot(): string {
     return path.resolve(process.env.STORAGE_ROOT);
   }
   return DEFAULT_STORAGE_ROOT;
-}
-
-export function normalizeSystem(system: string | null | undefined): string {
-  if (!system) return "nes";
-  const s = system.toLowerCase().trim();
-  if (s === "nintendo") return "nes";
-  if (s === "ps1" || s === "playstation") return "psx";
-  if (s === "playstation2") return "ps2";
-  return s;
 }
 
 export function isValidConsoleSystem(value: string | null | undefined): boolean {
