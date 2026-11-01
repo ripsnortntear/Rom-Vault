@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeSystem } from "@/lib/paths";
+import { normalizeSystem, getStorageRoot } from "@/lib/paths";
 import { getCurrentSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { generateUUID } from "@/lib/auth/crypto";
@@ -44,7 +44,7 @@ function getCandidateKeys(rawId: string): string[] {
   return Array.from(keys);
 }
 
-const SAVES_ROOT = "/mnt/storage/roms/saves";
+const getSavesRoot = () => path.join(getStorageRoot(), "saves");
 
 export async function GET(
   request: NextRequest,
@@ -117,8 +117,8 @@ export async function GET(
       console.warn("[api/saves GET] Database save check failed:", dbErr);
     }
 
-    // 4. User-Scoped Filesystem Lookup (/mnt/storage/roms/saves/users/{userId}/{system}/)
-    const userSystemDir = path.resolve(SAVES_ROOT, "users", userId, system);
+    // 4. User-Scoped Filesystem Lookup
+    const userSystemDir = path.resolve(getSavesRoot(), "users", userId, system);
     const candidateKeys = getCandidateKeys(gameId);
 
     if (!foundData && !foundPath && fs.existsSync(userSystemDir)) {
@@ -142,7 +142,7 @@ export async function GET(
     }
 
     // 5. Fallback: Read-only template / legacy save from system root if user save not yet created
-    const systemDir = path.resolve(SAVES_ROOT, system);
+    const systemDir = path.resolve(getSavesRoot(), system);
     if (!foundData && !foundPath && fs.existsSync(systemDir)) {
       for (const key of candidateKeys) {
         const possibleNames = [`${key}.srm`, `${key}.sav`, `${key}.mcr`];
@@ -271,8 +271,8 @@ export async function POST(
       return NextResponse.json({ error: formatError }, { status: 400 });
     }
 
-    // 5. Partitioned user filesystem storage (/mnt/storage/roms/saves/users/{userId}/{platform}/)
-    const userSystemDir = path.resolve(SAVES_ROOT, "users", userId, platform);
+    // 5. Partitioned user filesystem storage
+    const userSystemDir = path.resolve(getSavesRoot(), "users", userId, platform);
     fs.mkdirSync(userSystemDir, { recursive: true });
 
     const cleanBase = (decoded.includes("__") ? decoded.slice(decoded.indexOf("__") + 2) : decoded)
@@ -288,7 +288,7 @@ export async function POST(
     const fileName = slot === 1 ? `${cleanBase}.srm` : `${cleanBase}_slot${slot}.srm`;
     const targetFile = path.resolve(userSystemDir, fileName);
 
-    if (!targetFile.startsWith(path.resolve(SAVES_ROOT) + path.sep)) {
+    if (!targetFile.startsWith(path.resolve(getSavesRoot()) + path.sep)) {
       return NextResponse.json({ error: "Invalid target path." }, { status: 403 });
     }
 

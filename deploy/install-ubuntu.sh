@@ -25,7 +25,7 @@ User=${SUDO_USER:-$USER}
 WorkingDirectory=${APP_DIR}
 Environment=NODE_ENV=production
 Environment=PORT=${PORT}
-Environment=STORAGE_ROOT=${STORAGE_ROOT:-/mnt/storage/roms}
+Environment=STORAGE_ROOT=${STORAGE_ROOT:-/mnt/storage/oldsmarchaos.com/roms}
 ExecStart=$(command -v npm) run start
 Restart=always
 RestartSec=5

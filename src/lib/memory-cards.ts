@@ -3,13 +3,16 @@ import path from "path";
 import crypto from "crypto";
 import { query, execute } from "@/lib/db";
 import { generateUUID } from "@/lib/auth/crypto";
+import { getStorageRoot } from "@/lib/paths";
 import type { UserMemoryCard } from "@/types/auth";
 
 export const PS1_CARD_SIZE = 131072; // 128 KB (15 save blocks of 8 KB + 1 directory frame)
 export const PS2_CARD_SIZE = 8650752; // 8 MB (8,650,752 bytes: 512-byte pages + 16 bytes ECC)
 export const MAX_CARDS_PER_USER = 5;
 
-const STORAGE_ROOT_PRIMARY = "/mnt/storage/roms/saves/users";
+function getStorageRootPrimary(): string {
+  return path.join(getStorageRoot(), "saves/users");
+}
 const STORAGE_ROOT_FALLBACK = path.join(process.cwd(), "storage/saves/users");
 
 export function normalizeCardSystem(sys?: string | null): "psx" | "ps2" {
@@ -24,10 +27,11 @@ export function normalizeCardSystem(sys?: string | null): "psx" | "ps2" {
  */
 export function getUserMemoryCardDir(userId: string): string {
   const cleanUserId = userId.replace(/[^a-zA-Z0-9_-]/g, "");
-  let baseDir = STORAGE_ROOT_PRIMARY;
+  const primary = getStorageRootPrimary();
+  let baseDir = primary;
   try {
-    if (!fs.existsSync(STORAGE_ROOT_PRIMARY)) {
-      fs.mkdirSync(STORAGE_ROOT_PRIMARY, { recursive: true });
+    if (!fs.existsSync(primary)) {
+      fs.mkdirSync(primary, { recursive: true });
     }
   } catch {
     baseDir = STORAGE_ROOT_FALLBACK;
@@ -145,7 +149,7 @@ export async function ensureDefaultCard(
     initialBuffer = createFormattedPs2MemoryCard();
   } else {
     // Check if there is an existing FF7 or PS1 save from prior sessions to preserve
-    const legacyCandidate = "/mnt/storage/roms/saves/psx/Final_20Fantasy_20VII_20(USA)_20.srm";
+    const legacyCandidate = path.join(getStorageRoot(), "saves/psx/Final_20Fantasy_20VII_20(USA)_20.srm");
     try {
       if (fs.existsSync(legacyCandidate)) {
         const legacyBuf = fs.readFileSync(legacyCandidate);

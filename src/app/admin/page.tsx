@@ -17,6 +17,7 @@ import {
   Clock,
 } from "lucide-react";
 import { getAdminStorageHealth, getAdminAuditLogs } from "@/lib/community";
+import { getStorageRoot } from "@/lib/paths";
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return "0 B";
@@ -131,7 +132,7 @@ export default async function AdminOverviewPage() {
               </div>
               <div>
                 <h3 className="font-bold text-base text-white">ROMs &amp; Media Pool</h3>
-                <span className="font-mono text-xs text-zinc-400">/mnt/storage/roms/</span>
+                <span className="font-mono text-xs text-zinc-400">{getStorageRoot()}/</span>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-zinc-300">

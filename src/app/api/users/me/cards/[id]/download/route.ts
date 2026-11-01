@@ -8,6 +8,7 @@ import {
   createFormattedPs1MemoryCard,
   createFormattedPs2MemoryCard,
 } from "@/lib/memory-cards";
+import { getStorageRoot } from "@/lib/paths";
 
 interface RouteContext {
   params: Promise<{
@@ -15,7 +16,7 @@ interface RouteContext {
   }>;
 }
 
-const SAVES_ROOT = "/mnt/storage/roms/saves";
+const getSavesRoot = () => path.join(getStorageRoot(), "saves");
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     if (!session) {
       // Unauthenticated / guest fallback
-      const saveDir = path.join(SAVES_ROOT, system);
+      const saveDir = path.join(getSavesRoot(), system);
       const fallbackFile = path.join(
         saveDir,
         isPs2 ? "ps2_memory_card.ps2" : "ps1_memory_card.mcr"

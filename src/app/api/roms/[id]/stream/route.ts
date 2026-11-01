@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeSystem } from "@/lib/paths";
+import { normalizeSystem, getStorageRoot } from "@/lib/paths";
 import { getCurrentSession } from "@/lib/auth/session";
 import { query } from "@/lib/db";
 import { getCorsHeaders, handleCorsPreflight } from "@/lib/cors";
@@ -15,7 +15,6 @@ interface RouteContext {
   }>;
 }
 
-const STORAGE_ROOT = path.resolve("/mnt/storage/roms");
 
 function getCorsStreamHeaders(request?: Request | NextRequest | null): Record<string, string> {
   return {
@@ -65,6 +64,8 @@ function resolveRomFilePath(
   discParam?: string | null,
   systemParam?: string | null
 ): { filePath: string | null; isForbidden: boolean } {
+  const STORAGE_ROOT = getStorageRoot();
+
   // Path traversal check
   if (
     id.includes("..") ||

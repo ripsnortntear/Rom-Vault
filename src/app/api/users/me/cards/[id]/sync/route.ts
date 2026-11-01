@@ -3,6 +3,7 @@ import path from "path";
 import { getCurrentSession } from "@/lib/auth/session";
 import { syncUserMemoryCard, normalizeCardSystem } from "@/lib/memory-cards";
 import { validateSaveFormatForPlatform } from "@/lib/security";
+import { getStorageRoot } from "@/lib/paths";
 
 interface RouteContext {
   params: Promise<{
@@ -10,10 +11,10 @@ interface RouteContext {
   }>;
 }
 
-const SAVES_BASE_DIR = path.resolve("/mnt/storage/roms/saves");
-
 export async function PUT(req: NextRequest, context: RouteContext) {
   try {
+    const savesBaseDir = path.resolve(path.join(getStorageRoot(), "saves"));
+
     // 1. Authenticate caller strictly - reject unauthenticated requests immediately
     const session = await getCurrentSession();
     if (!session?.user?.id) {
@@ -62,10 +63,10 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       expectedChecksum
     );
 
-    // Verify card's destination on disk is strictly contained within SAVES_BASE_DIR
+    // Verify card's destination on disk is strictly contained within savesBaseDir
     if (updatedCard.file_path) {
       const targetPath = path.resolve(updatedCard.file_path);
-      if (!targetPath.startsWith(SAVES_BASE_DIR + path.sep)) {
+      if (!targetPath.startsWith(savesBaseDir + path.sep)) {
         return NextResponse.json({ error: "Invalid save file destination." }, { status: 400 });
       }
     }

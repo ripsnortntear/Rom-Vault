@@ -3,6 +3,7 @@ import "server-only";
 import fs from "fs/promises";
 import { query, execute } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/crypto";
+import { getStorageRoot } from "@/lib/paths";
 import type {
   GameComment,
   GameHighScore,
@@ -604,7 +605,7 @@ export async function getAdminStorageHealth(): Promise<AdminStorageHealth> {
   let saveStats = { totalBytes: 0, usedBytes: 0, freeBytes: 0, percentUsed: 0 };
 
   try {
-    const romStat = await fs.statfs("/mnt/storage/roms/").catch(() => fs.statfs("/"));
+    const romStat = await fs.statfs(getStorageRoot()).catch(() => fs.statfs("/"));
     if (romStat) {
       const total = romStat.blocks * romStat.bsize;
       const free = romStat.bfree * romStat.bsize;

@@ -6,6 +6,7 @@ import {
   isValidMediaCategory,
   normalizeSystem,
   resolveSafeMediaPath,
+  getStorageRoot,
 } from "@/lib/paths";
 import { getCurrentSession } from "@/lib/auth/session";
 import { query, execute } from "@/lib/db";
@@ -77,7 +78,7 @@ export async function GET(
     }
 
     // Verify confinement strictly within storage root
-    const STORAGE_ROOT = path.resolve("/mnt/storage/roms");
+    const STORAGE_ROOT = getStorageRoot();
     const resolvedPath = path.resolve(filePath);
     if (!resolvedPath.startsWith(STORAGE_ROOT + path.sep)) {
       return NextResponse.json({ error: "Access denied." }, { status: 403 });
