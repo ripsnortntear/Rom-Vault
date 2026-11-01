@@ -7,6 +7,7 @@ import { isDesktopOnlySystem } from "@/lib/systems";
 import { MobileEmulatorView } from "@/components/MobileEmulatorView";
 import { PS2EmulatorView } from "@/components/PS2EmulatorView";
 import { MobileDesktopRequired } from "@/components/MobileDesktopRequired";
+import { StandaloneRecommendationView } from "@/components/StandaloneRecommendationView";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -41,8 +42,21 @@ export default async function PlayPage({ params }: PlayPageProps) {
   const { id } = await params;
   const game = await getGameById(id);
 
-  if (!game || !game.playable) {
+  if (!game) {
     notFound();
+  }
+
+  if (!game.playable) {
+    return (
+      <StandaloneRecommendationView
+        game={{
+          id: game.id,
+          title: game.displayTitle || game.baseName,
+          system: game.system,
+          romFileName: game.romFileName,
+        }}
+      />
+    );
   }
 
   const headerList = await headers();

@@ -69,11 +69,14 @@ describe("Device System Emulation Compatibility", () => {
       expect(isSystemPlayableOnDevice("genesis", true)).toBe(true);
     });
 
-    it("allows PS2, Dreamcast, GameCube, and PSX on desktop", () => {
+    it("distinguishes in-browser systems vs standalone-recommended desktop systems", () => {
+      // In-browser systems with WASM cores
       expect(isSystemPlayableOnDevice("ps2", false)).toBe(true);
-      expect(isSystemPlayableOnDevice("dreamcast", false)).toBe(true);
-      expect(isSystemPlayableOnDevice("gamecube", false)).toBe(true);
       expect(isSystemPlayableOnDevice("psx", false)).toBe(true);
+
+      // GameCube and Dreamcast require standalone emulators (Dolphin / Flycast)
+      expect(isSystemPlayableOnDevice("gamecube", false)).toBe(false);
+      expect(isSystemPlayableOnDevice("dreamcast", false)).toBe(false);
     });
   });
 

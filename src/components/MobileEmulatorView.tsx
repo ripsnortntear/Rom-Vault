@@ -5,6 +5,7 @@ import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-rea
 import { PS2EmulatorView } from "./PS2EmulatorView";
 import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
 import { MobileDesktopRequired } from "./MobileDesktopRequired";
+import { StandaloneRecommendationView } from "./StandaloneRecommendationView";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -110,6 +111,11 @@ function checkPhysicalGamepadConnected(): boolean {
 export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   if (game.system === "ps2") {
     return <PS2EmulatorView game={game} />;
+  }
+
+  const systemMeta = getSystemMeta(game.system);
+  if (!systemMeta.playable || !systemMeta.ejsCore || game.system === "gamecube" || game.system === "dreamcast") {
+    return <StandaloneRecommendationView game={game} />;
   }
 
   const containerRef = useRef<HTMLDivElement>(null);

@@ -16,6 +16,7 @@ import {
   Loader2,
   Disc3,
   Menu,
+  ExternalLink,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
 
@@ -890,7 +891,37 @@ export function EmulatorModal({
                 {game.systemLabel} releases are large full-disc images ({Math.round(game.fileSizeBytes / (1024 * 1024))} MB) optimized for standalone desktop emulators (such as{" "}
                 <strong className="text-zinc-200">
                   {game.system === "gamecube" ? (
-                    "Dolphin"
+                    <a
+                      href="https://dolphin-emu.org/download/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-white transition text-indigo-400 font-bold"
+                      title="Download Dolphin Emulator"
+                    >
+                      Dolphin
+                    </a>
+                  ) : game.system === "dreamcast" ? (
+                    <>
+                      <a
+                        href="https://flycast.emuplace.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-white transition text-rose-400 font-bold"
+                        title="Download Flycast"
+                      >
+                        Flycast
+                      </a>{" "}
+                      /{" "}
+                      <a
+                        href="https://redream.io/download"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-white transition text-rose-400 font-bold"
+                        title="Download Redream"
+                      >
+                        Redream
+                      </a>
+                    </>
                   ) : game.system === "ps2" ? (
                     <a
                       href="https://pcsx2.net/downloads/"
@@ -918,14 +949,38 @@ export function EmulatorModal({
                 </strong>
                 ) for maximum frame rate and audio quality.
               </p>
-              <a
-                href={downloadUrl}
-                download={game.romFileName}
-                className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl font-bold text-sm bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/30 transition transform hover:-translate-y-0.5"
-              >
-                <Download className="w-4 h-4" />
-                Download {game.romFileName} ({Math.round(game.fileSizeBytes / (1024 * 1024))} MB)
-              </a>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {game.system === "gamecube" ? (
+                  <a
+                    href="https://dolphin-emu.org/download/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Get Dolphin Emulator
+                  </a>
+                ) : game.system === "dreamcast" ? (
+                  <a
+                    href="https://flycast.emuplace.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition transform hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Get Flycast Emulator
+                  </a>
+                ) : null}
+
+                <a
+                  href={downloadUrl}
+                  download={game.romFileName}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-zinc-800 hover:bg-zinc-700 text-white border border-white/10 shadow-lg transition transform hover:-translate-y-0.5 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-purple-400" />
+                  Download Game ({Math.round(game.fileSizeBytes / (1024 * 1024))} MB)
+                </a>
+              </div>
             </div>
           )}
         </div>

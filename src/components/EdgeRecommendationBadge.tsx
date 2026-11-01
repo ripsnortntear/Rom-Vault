@@ -127,10 +127,8 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
           </div>
 
           <p className="text-xs text-zinc-300 leading-relaxed mb-3">
-            For advanced 3D game consoles (<strong className="text-white">PlayStation 2</strong>,{" "}
-            <strong className="text-white">Nintendo GameCube</strong>, and{" "}
-            <strong className="text-white">Sega Dreamcast</strong>),{" "}
-            <strong className="text-cyan-300">Microsoft Edge</strong> provides the most reliable WebAssembly SIMD and WebGPU hardware acceleration for smooth 60 FPS in-browser emulation.
+            For advanced 3D game consoles like <strong className="text-white">PlayStation 2</strong> (WebGPU / WASM),{" "}
+            <strong className="text-cyan-300">Microsoft Edge</strong> provides the most reliable WebAssembly SIMD and WebGPU hardware acceleration on desktop. High-demand disc systems like <strong className="text-white">Nintendo GameCube</strong> and <strong className="text-white">Sega Dreamcast</strong> are optimized for standalone emulators (Dolphin &amp; Flycast).
           </p>
 
           <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 text-[11px] flex items-center gap-2.5 mb-3">
@@ -138,7 +136,7 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
               <>
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span className="text-emerald-200">
-                  <strong>Edge Detected:</strong> Your desktop browser is fully optimized for PS2, GameCube, and Dreamcast!
+                  <strong>Edge Detected:</strong> Your desktop browser is fully accelerated for PS2 and retro browser emulation!
                 </span>
               </>
             ) : (
