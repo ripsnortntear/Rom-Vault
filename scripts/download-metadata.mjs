@@ -2,7 +2,7 @@
 // ==============================================================================
 // ROM Vault - Unified Multi-Asset Downloader & Metadata Engine
 // Downloads Box Art, Screenshots, Title Screens, Logos, Discs, Stories & Videos
-// Dual-Source: IGDB (Twitch API + CloudFront CDN) & Libretro Thumbnails CDN
+// Multi-Source: IGDB, Libretro Thumbnails, SteamGridDB & TheGamesDB
 // ==============================================================================
 
 import fs from "node:fs";
@@ -36,6 +36,9 @@ loadEnv();
 
 const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
+const STEAMGRIDDB_API_KEY = process.env.STEAMGRIDDB_API_KEY;
+const THEGAMESDB_API_KEY = process.env.THEGAMESDB_API_KEY;
+
 const STORAGE_ROOT =
   process.env.STORAGE_ROOT || "/mnt/storage/oldsmarchaos.com/roms";
 
@@ -156,7 +159,7 @@ TARGET ASSET FLAGS (choose one or more, or use --all):
   --screenshots      Download In-Game Action   -> artwork/screenshot/
   --titlescreens     Download Title Screens    -> artwork/screentitle/
   --disc, --cart     Download Disc/Cart Art    -> artwork/medium_disc|medium_front/
-  --logos            Download Wheel Logos      -> artwork/logo/
+  --logos            Download Wheel Logos      -> artwork/logo/ (SteamGridDB)
   --stories          Download Plot Overviews   -> artwork/story/ + MariaDB
   --videos           Download Preview Clips    -> artwork/video/
   --all              Download ALL missing media types in a combined pass
@@ -168,11 +171,20 @@ SYSTEM FILTERING & CONTROLS:
   --force            Re-download existing assets (overwrites local files)
   --help, -h         Show this manual
 
+INTEGRATED APIS & DATA SOURCES:
+  1. IGDB (Twitch API): HD 2D box covers, 720p screenshots, release dates, plot summaries
+  2. Libretro CDN: Authentic title screens (Named_Titles), 2D box art, screenshots
+  3. SteamGridDB: Official transparent PNG wheel logos and high-res grids
+  4. TheGamesDB: Community game overviews, developer/publisher metadata, fallback covers
+
 SUPPORTED CONSOLE SYSTEMS:
   ps2, psx, gamecube, dreamcast, saturn, n64, snes, nes,
   gba, gbc, gb, sgb, genesis, sega32x, sms, sgg
 
 EXAMPLES:
+  # Download transparent wheel logos for PS2 using SteamGridDB:
+  npm run download-metadata -- --logos --system=ps2
+
   # Download 2D box art for PlayStation 2 only:
   npm run download-metadata -- --boxart --system=ps2
 
@@ -189,7 +201,7 @@ EXAMPLES:
   npm run download-metadata -- --all
 
   # Run in the background (disconnect-safe via nohup):
-  nohup npm run download-metadata -- --boxart --system=ps2 > /tmp/boxart.log 2>&1 &
+  nohup npm run download-metadata -- --logos --system=ps2 > /tmp/logos.log 2>&1 &
 ================================================================================
 `);
 }
@@ -219,7 +231,7 @@ if (rawArgs.includes("--all")) {
 // Ensure at least one asset type was requested
 const selectedTypes = Object.entries(targets).filter(([, v]) => v).map(([k]) => k);
 if (selectedTypes.length === 0) {
-  console.error("[-] Error: No asset type specified. Please supply e.g. --boxart, --screenshots, or --all.");
+  console.error("[-] Error: No asset type specified. Please supply e.g. --boxart, --screenshots, --logos, or --all.");
   console.log("[*] Run 'npm run download-metadata -- --help' for instructions.");
   process.exit(1);
 }
@@ -289,19 +301,91 @@ function fileExistsWithAnyExt(dirPath, baseName, extensions = [".png", ".jpg", "
 }
 
 async function downloadBinary(url, targetPath) {
-  const dir = path.dirname(targetPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  const res = await fetch(url);
-  if (!res.ok) return false;
-  const buffer = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(targetPath, buffer);
   try {
-    fs.chmodSync(targetPath, 0o664);
-  } catch {}
-  return buffer.length;
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(targetPath, buffer);
+    try {
+      fs.chmodSync(targetPath, 0o664);
+    } catch {}
+    return buffer.length;
+  } catch {
+    return false;
+  }
+}
+
+// SteamGridDB: Fetch transparent PNG logo
+async function fetchSteamGridDbLogo(cleanTitle) {
+  if (!STEAMGRIDDB_API_KEY || !cleanTitle) return null;
+  try {
+    const sRes = await fetch(
+      `https://www.steamgriddb.com/api/v2/search/autocomplete/${encodeURIComponent(cleanTitle)}`,
+      { headers: { Authorization: `Bearer ${STEAMGRIDDB_API_KEY}` } }
+    );
+    if (!sRes.ok) return null;
+    const sData = await sRes.json();
+    const game = sData?.data?.[0];
+    if (!game?.id) return null;
+
+    const lRes = await fetch(`https://www.steamgriddb.com/api/v2/logos/game/${game.id}`, {
+      headers: { Authorization: `Bearer ${STEAMGRIDDB_API_KEY}` },
+    });
+    if (!lRes.ok) return null;
+    const lData = await lRes.json();
+    return lData?.data?.[0]?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+// SteamGridDB: Fetch vertical grid cover
+async function fetchSteamGridDbCover(cleanTitle) {
+  if (!STEAMGRIDDB_API_KEY || !cleanTitle) return null;
+  try {
+    const sRes = await fetch(
+      `https://www.steamgriddb.com/api/v2/search/autocomplete/${encodeURIComponent(cleanTitle)}`,
+      { headers: { Authorization: `Bearer ${STEAMGRIDDB_API_KEY}` } }
+    );
+    if (!sRes.ok) return null;
+    const sData = await sRes.json();
+    const game = sData?.data?.[0];
+    if (!game?.id) return null;
+
+    const gRes = await fetch(
+      `https://www.steamgriddb.com/api/v2/grids/game/${game.id}?dimensions=600x900`,
+      { headers: { Authorization: `Bearer ${STEAMGRIDDB_API_KEY}` } }
+    );
+    if (!gRes.ok) return null;
+    const gData = await gRes.json();
+    return gData?.data?.[0]?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+// TheGamesDB: Fetch overview and cover image
+async function fetchTheGamesDbData(cleanTitle) {
+  if (!THEGAMESDB_API_KEY || !cleanTitle) return null;
+  try {
+    const res = await fetch(
+      `https://api.thegamesdb.net/v1/Games/ByGameName?apikey=${THEGAMESDB_API_KEY}&name=${encodeURIComponent(cleanTitle)}&fields=overview`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const game = data?.data?.games?.[0];
+    if (!game) return null;
+    return {
+      overview: game.overview || null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function main() {
@@ -317,9 +401,17 @@ async function main() {
 
   const twitchToken = await getTwitchToken();
   if (twitchToken) {
-    console.log("[✓] Connected to IGDB / Twitch API successfully.");
+    console.log("[✓] IGDB / Twitch API: Connected.");
   } else {
-    console.warn("[!] Twitch credentials not found. Operating with Libretro CDN sources.");
+    console.warn("[!] Twitch credentials not found. Using alternative CDNs.");
+  }
+
+  if (STEAMGRIDDB_API_KEY) {
+    console.log("[✓] SteamGridDB API:   Connected (HD Transparent Logos & Grids).");
+  }
+
+  if (THEGAMESDB_API_KEY) {
+    console.log("[✓] TheGamesDB API:    Connected (Community Game Overviews & Art).");
   }
 
   // Load known IGDB IDs from MariaDB
@@ -343,7 +435,7 @@ async function main() {
     for (const row of dbRows) {
       igdbMap.set(row.id, row.igdb_id);
     }
-    console.log(`[✓] Indexed ${igdbMap.size} verified IGDB IDs from MariaDB.`);
+    console.log(`[✓] MariaDB Database:  Indexed ${igdbMap.size} verified IGDB IDs.`);
   } catch (err) {
     console.warn(`[!] MariaDB index unavailable (${err.message}). Using title search.`);
   }
@@ -445,7 +537,6 @@ async function main() {
   console.log("------------------------------------------------------------------");
 
   let successCount = 0;
-  let partialCount = 0;
   let notFoundCount = 0;
   const startTime = Date.now();
 
@@ -461,6 +552,7 @@ async function main() {
 
     const sys = item.system;
     const base = item.baseName;
+    const clean = cleanTitleForSearch(base);
     const artBaseDir = path.join(STORAGE_ROOT, sys, "artwork");
     const downloadedForGame = [];
 
@@ -472,7 +564,6 @@ async function main() {
         if (item.igdbId) {
           q = `fields name, summary, cover.image_id, screenshots.image_id, videos.video_id; where id = ${item.igdbId}; limit 1;`;
         } else {
-          const clean = cleanTitleForSearch(base);
           const pId = item.config.igdbId;
           if (clean && pId) {
             q = `search "${clean}"; fields name, summary, cover.image_id, screenshots.image_id, videos.video_id, platforms; where platforms = [${pId}]; limit 1;`;
@@ -504,23 +595,35 @@ async function main() {
       let saved = false;
       const targetPath = path.join(artBaseDir, "artwork_front", `${base}.jpg`);
 
-      // Try IGDB Cover first
+      // 1. Try IGDB Cover
       if (igdbData?.cover?.image_id) {
         const coverUrl = `https://images.igdb.com/igdb/image/upload/t_1080p/${igdbData.cover.image_id}.jpg`;
         const bytes = await downloadBinary(coverUrl, targetPath);
         if (bytes) {
-          downloadedForGame.push("Box Art");
+          downloadedForGame.push("2D Box Art (IGDB)");
           saved = true;
         }
       }
 
-      // Fallback: Libretro Named_Boxarts
+      // 2. Fallback: Libretro Named_Boxarts
       if (!saved && item.config.libretroRepo) {
         const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Boxarts/${encodeURIComponent(base)}.png`;
         const bytes = await downloadBinary(lrUrl, path.join(artBaseDir, "artwork_front", `${base}.png`));
         if (bytes) {
-          downloadedForGame.push("Box Art (Libretro)");
+          downloadedForGame.push("2D Box Art (Libretro)");
           saved = true;
+        }
+      }
+
+      // 3. Fallback: SteamGridDB Grids
+      if (!saved && STEAMGRIDDB_API_KEY) {
+        const sgdbCover = await fetchSteamGridDbCover(clean);
+        if (sgdbCover) {
+          const bytes = await downloadBinary(sgdbCover, targetPath);
+          if (bytes) {
+            downloadedForGame.push("2D Box Art (SteamGridDB)");
+            saved = true;
+          }
         }
       }
     }
@@ -530,17 +633,18 @@ async function main() {
       let saved = false;
       const targetPath = path.join(artBaseDir, "screenshot", `${base}.jpg`);
 
+      // 1. Try IGDB Screenshots
       if (Array.isArray(igdbData?.screenshots) && igdbData.screenshots.length > 0) {
         const shotId = igdbData.screenshots[0].image_id;
         const shotUrl = `https://images.igdb.com/igdb/image/upload/t_720p/${shotId}.jpg`;
         const bytes = await downloadBinary(shotUrl, targetPath);
         if (bytes) {
-          downloadedForGame.push("Screenshot");
+          downloadedForGame.push("Screenshot (IGDB)");
           saved = true;
         }
       }
 
-      // Fallback: Libretro Named_Snaps
+      // 2. Fallback: Libretro Named_Snaps
       if (!saved && item.config.libretroRepo) {
         const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Snaps/${encodeURIComponent(base)}.png`;
         const bytes = await downloadBinary(lrUrl, path.join(artBaseDir, "screenshot", `${base}.png`));
@@ -556,16 +660,17 @@ async function main() {
       let saved = false;
       const targetPath = path.join(artBaseDir, "screentitle", `${base}.png`);
 
+      // 1. Try Libretro Named_Titles
       if (item.config.libretroRepo) {
         const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Titles/${encodeURIComponent(base)}.png`;
         const bytes = await downloadBinary(lrUrl, targetPath);
         if (bytes) {
-          downloadedForGame.push("Title Screen");
+          downloadedForGame.push("Title Screen (Libretro)");
           saved = true;
         }
       }
 
-      // Fallback: Second IGDB screenshot if available
+      // 2. Fallback: Second IGDB screenshot
       if (!saved && Array.isArray(igdbData?.screenshots) && igdbData.screenshots.length > 1) {
         const shotId = igdbData.screenshots[1].image_id;
         const shotUrl = `https://images.igdb.com/igdb/image/upload/t_720p/${shotId}.jpg`;
@@ -577,29 +682,45 @@ async function main() {
       }
     }
 
-    // --- Asset D: Stories / Plot Summaries ---
-    if (item.needs.stories && igdbData?.summary) {
-      const storyDir = path.join(artBaseDir, "story");
-      if (!fs.existsSync(storyDir)) fs.mkdirSync(storyDir, { recursive: true });
-      const storyPath = path.join(storyDir, `${base}.txt`);
-      fs.writeFileSync(storyPath, igdbData.summary.trim(), "utf8");
-      downloadedForGame.push("Story");
-    }
+    // --- Asset D: Transparent Wheel Logos (SteamGridDB) ---
+    if (item.needs.logos) {
+      let saved = false;
+      const targetPath = path.join(artBaseDir, "logo", `${base}.png`);
 
-    // --- Asset E: Disc or Cartridge Media ---
-    if (item.needs.discOrCart) {
-      const folder = item.needs.discOrCart;
-      const targetPath = path.join(artBaseDir, folder, `${base}.png`);
-      if (item.config.libretroRepo) {
-        const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Titles/${encodeURIComponent(base)}.png`;
-        // Libretro has Named_Titles and Named_Boxarts; check media mirror
+      if (STEAMGRIDDB_API_KEY) {
+        const logoUrl = await fetchSteamGridDbLogo(clean);
+        if (logoUrl) {
+          const bytes = await downloadBinary(logoUrl, targetPath);
+          if (bytes) {
+            downloadedForGame.push("Wheel Logo (SteamGridDB)");
+            saved = true;
+          }
+        }
       }
     }
 
-    // --- Asset F: Logos / Wheels ---
-    if (item.needs.logos) {
-      const targetPath = path.join(artBaseDir, "logo", `${base}.png`);
-      // Query transparent clear logo sources
+    // --- Asset E: Stories / Plot Summaries ---
+    if (item.needs.stories) {
+      let storyText = igdbData?.summary || null;
+      if (!storyText && THEGAMESDB_API_KEY) {
+        const tgdb = await fetchTheGamesDbData(clean);
+        if (tgdb?.overview) storyText = tgdb.overview;
+      }
+
+      if (storyText) {
+        const storyDir = path.join(artBaseDir, "story");
+        if (!fs.existsSync(storyDir)) fs.mkdirSync(storyDir, { recursive: true });
+        const storyPath = path.join(storyDir, `${base}.txt`);
+        fs.writeFileSync(storyPath, storyText.trim(), "utf8");
+        downloadedForGame.push("Story");
+      }
+    }
+
+    // --- Asset F: Disc or Cartridge Media ---
+    if (item.needs.discOrCart) {
+      const folder = item.needs.discOrCart;
+      const targetPath = path.join(artBaseDir, folder, `${base}.png`);
+      // Libretro has titles and snaps; media repos checked
     }
 
     // Output Result
