@@ -372,7 +372,7 @@ export function EmulatorModal({
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
   const ps2BiosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
   const ps2DiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.chd`)}`;
-  const ps2MemcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
+  const ps2MemcardUrl = `/roms/api/users/me/cards/active/download?system=ps2&_t=${Date.now()}`;
   const ps2RunnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}&memcard=${encodeURIComponent(ps2MemcardUrl)}`;
 
   const gcDiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.rvz`)}`;

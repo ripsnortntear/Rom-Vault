@@ -558,7 +558,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
       if (game.system === "psx" || game.system === "ps1") {
         try {
-          const cardsRes = await fetch("/roms/api/users/me/cards", { credentials: "include" });
+          const cardsRes = await fetch(
+            `/roms/api/users/me/cards?system=${encodeURIComponent(game.system)}&_t=${Date.now()}`,
+            { credentials: "include" }
+          );
           if (cardsRes.ok) {
             const data = await cardsRes.json();
             resolvedCardId = data.activeSlot1Id || (data.cards && data.cards[0]?.id) || "active";
@@ -570,7 +573,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             }
             setActiveCardId(resolvedCardId);
             activeCardIdRef.current = resolvedCardId;
-            loadUrl = `/roms/api/users/me/cards/${encodeURIComponent(resolvedCardId || "active")}/download`;
+            loadUrl = `/roms/api/users/me/cards/${encodeURIComponent(resolvedCardId || "active")}/download?system=${encodeURIComponent(
+              game.system
+            )}&_t=${Date.now()}`;
           }
         } catch (err) {
           console.warn("[MemoryCard] Could not fetch user cards:", err);
@@ -579,12 +584,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         if (!loadUrl) {
           loadUrl = `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(
             game.system
-          )}`;
+          )}&_t=${Date.now()}`;
         }
       } else {
         loadUrl = `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(
           game.system
-        )}`;
+        )}&_t=${Date.now()}`;
       }
 
       // Pre-download cloud memory card save payload before emulator boot
@@ -859,14 +864,17 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             const gm = emu?.gameManager;
             if (gm && typeof gm.getSaveFilePath === "function") {
               const savePath = gm.getSaveFilePath();
-              if (savePath && gm.FS) {
+              if (savePath && gm.FS && cloudBuffer && cloudBuffer.byteLength > 0) {
                 const fs = gm.FS as any;
-                if (!fs.analyzePath(savePath).exists && cloudBuffer) {
-                  console.log("[SaveSync] Writing cloud buffer to active save path:", savePath);
-                  fs.writeFile(savePath, cloudBuffer);
-                  if (typeof gm.loadSaveFiles === "function") {
-                    gm.loadSaveFiles();
+                console.log("[SaveSync] Authoritative database sync: overwriting local save path:", savePath);
+                try {
+                  if (fs.analyzePath(savePath).exists) {
+                    fs.unlink(savePath);
                   }
+                } catch {}
+                fs.writeFile(savePath, cloudBuffer);
+                if (typeof gm.loadSaveFiles === "function") {
+                  gm.loadSaveFiles();
                 }
               }
             }
