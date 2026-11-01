@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Monitor, Info, X, CheckCircle2, ChevronRight } from "lucide-react";
+import { Monitor, Info, X, CheckCircle2, ChevronRight, SlidersHorizontal, Cpu } from "lucide-react";
 
 export function EdgeRecommendationBadge(): React.ReactElement | null {
   const [mounted, setMounted] = useState<boolean>(false);
@@ -101,7 +101,7 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
 
       {/* Popover Card */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 p-4 rounded-2xl bg-zinc-950/95 border border-cyan-500/40 text-zinc-200 shadow-2xl shadow-black/90 ring-1 ring-cyan-500/30 backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-[420px] p-4 rounded-2xl bg-zinc-950/95 border border-cyan-500/40 text-zinc-200 shadow-2xl shadow-black/90 ring-1 ring-cyan-500/30 backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-start justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
@@ -130,6 +130,28 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
             For advanced 3D game consoles like <strong className="text-white">PlayStation 2</strong> (WebGPU / WASM),{" "}
             <strong className="text-cyan-300">Microsoft Edge</strong> provides the most reliable WebAssembly SIMD and WebGPU hardware acceleration on desktop. High-demand disc systems like <strong className="text-white">Nintendo GameCube</strong> and <strong className="text-white">Sega Dreamcast</strong> are optimized for standalone emulators (Dolphin &amp; Flycast).
           </p>
+
+          {/* Browser Configuration & Acceleration Checklist */}
+          <div className="p-3 rounded-xl bg-zinc-900/95 border border-white/10 mb-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span>Recommended Browser Settings (for 60 FPS):</span>
+            </div>
+            <ul className="space-y-1.5 text-[11px] text-zinc-300">
+              <li className="flex items-start gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-white">COOP &amp; COEP</strong> (Cross-Origin Isolation): Enables <code className="px-1 py-0.5 rounded bg-black/60 text-cyan-300 border border-white/10 font-mono text-[10px]">SharedArrayBuffer</code> and multi-threaded WASM. Served automatically by ROM Vault on secure HTTPS.
+                </span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <Monitor className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-white">Hardware Acceleration</strong>: In <code className="px-1 py-0.5 rounded bg-black/60 text-emerald-300 border border-white/10 font-mono text-[10px]">edge://settings/system</code>, ensure <strong className="text-emerald-200">&quot;Use graphics acceleration when available&quot;</strong> is toggled <strong>ON</strong>.
+                </span>
+              </li>
+            </ul>
+          </div>
 
           <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 text-[11px] flex items-center gap-2.5 mb-3">
             {isEdge ? (
