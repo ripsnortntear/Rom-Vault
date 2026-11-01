@@ -24,6 +24,7 @@
 .DS_Store
 *.pem
 audit-report*.txt
+contributions/
 
 # debug
 npm-debug.log*

@@ -155,10 +155,11 @@ USAGE:
   node scripts/download-metadata.mjs [TARGET ASSET FLAGS] [OPTIONS]
 
 AUDIT MODE (Audit ROMs against artwork & generate detailed report):
-  --audit            Audit ROMs against artwork and media libraries
-  --output=<file>    Report output file path (default: audit-report.txt)
-  --missing-only     Only list games with missing media in the detailed breakdown
-  --no-orphans       Skip orphan artwork detection
+  --audit                 Audit ROMs against artwork and media libraries
+  --output=<file>         Report output file path (default: audit-report.txt)
+  --missing-only          Only list games with missing media in the detailed breakdown
+  --no-orphans            Skip orphan artwork detection
+  --export-contributions  Package unique local artwork into contributions/ with direct upload links
 
 TARGET ASSET FLAGS (choose one or more, or use --all):
   --boxart           Download 2D Front Box Art -> artwork/artwork_front/
@@ -230,6 +231,7 @@ if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.length === 0
 }
 
 const isAudit = rawArgs.includes("--audit");
+const exportContributions = rawArgs.includes("--export-contributions") || rawArgs.includes("--contribute");
 let targetSystem = null;
 let limit = null;
 let delayMs = 300;
@@ -763,6 +765,69 @@ async function runAudit() {
     fs.writeFileSync(outputPath, reportText, "utf8");
   } catch (err) {
     console.error(`[-] Failed to write audit report to ${outputPath}:`, err.message);
+  }
+
+  // Package contributions for community upload if requested
+  if (exportContributions) {
+    const contribDir = path.join(process.cwd(), "contributions");
+    if (!fs.existsSync(contribDir)) {
+      fs.mkdirSync(contribDir, { recursive: true });
+    }
+
+    const guideLines = [
+      "# ROM Vault - Community Artwork Contribution Guide",
+      "",
+      `Generated: ${new Date().toISOString()}`,
+      "",
+      "The following retro gaming community databases accept artwork and metadata uploads to help gamers worldwide.",
+      "Since public APIs are read-only (GET requests only), uploads are submitted via web portals and Git PRs:",
+      "",
+      "## 1. SteamGridDB (Transparent Wheel Logos, Grids & Heroes)",
+      "- Portal: https://www.steamgriddb.com/",
+      "- Upload Method: Log into SteamGridDB -> Search for Game -> Click 'Upload' -> Drag & Drop PNG Logo or Grid.",
+      "",
+      "## 2. TheGamesDB (2D Box Covers & Plot Overviews)",
+      "- Portal: https://thegamesdb.net/",
+      "- Upload Method: Log into TheGamesDB -> Search for Game -> Click 'Edit Game' or 'Upload Artwork'.",
+      "",
+      "## 3. Libretro Thumbnails (Authentic Box Art, Title Screens & Snaps)",
+      "- Repository: https://github.com/libretro-thumbnails",
+      "- Upload Method: Fork repository -> Add PNG images to Named_Boxarts, Named_Titles, or Named_Snaps -> Submit Pull Request.",
+      "",
+      "## 4. IGDB / Twitch (Global Game Database)",
+      "- Portal: https://www.igdb.com/games/new",
+      "- Upload Method: Submit missing games or edit existing metadata via Twitch community portal.",
+      "",
+      "---",
+      "## Local Games with Assets Ready for Contribution Review:",
+      "",
+    ];
+
+    for (const res of auditResults) {
+      const candidates = res.gamesAudit.filter((g) => {
+        return Object.values(g.assets).some(Boolean);
+      });
+
+      if (candidates.length > 0) {
+        guideLines.push(`### Platform: ${res.label} (${res.system})`);
+        guideLines.push(`- Total local candidates: ${candidates.length} games`);
+        guideLines.push(`- Direct Submission & Search Links:`);
+        for (const c of candidates.slice(0, 30)) {
+          const cleanTitle = c.baseName.replace(/\s*\([^)]*\)/g, "").trim();
+          guideLines.push(`  - **${c.baseName}**`);
+          guideLines.push(`    * SteamGridDB: https://www.steamgriddb.com/search/autocomplete/${encodeURIComponent(cleanTitle)}`);
+          guideLines.push(`    * TheGamesDB:  https://thegamesdb.net/search.php?name=${encodeURIComponent(cleanTitle)}`);
+        }
+        if (candidates.length > 30) {
+          guideLines.push(`  - *...and ${candidates.length - 30} more games in this system.*`);
+        }
+        guideLines.push("");
+      }
+    }
+
+    const guidePath = path.join(contribDir, "CONTRIBUTION-GUIDE.md");
+    fs.writeFileSync(guidePath, guideLines.join("\n"), "utf8");
+    console.log(`[✓] Community contribution manifest generated: ${guidePath}`);
   }
 
   // Terminal Output Logic
