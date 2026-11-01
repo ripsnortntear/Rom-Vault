@@ -137,7 +137,7 @@ async function main() {
     const etaSeconds = avgSecPerItem * remainingItems;
 
     const gameTitle = game.displayTitle || game.baseName;
-    const url = `${BASE_URL}/api/games/${encodeURIComponent(game.id)}/metadata?title=${encodeURIComponent(gameTitle)}`;
+    const url = `${BASE_URL}/api/games/${game.id}/metadata?title=${encodeURIComponent(gameTitle)}`;
 
     let attempts = 0;
     let resolved = false;

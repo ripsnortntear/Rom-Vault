@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getStorageRoot, DEFAULT_STORAGE_ROOT, LEGACY_STORAGE_ROOT } from "./lib/paths";
+import { getStorageRoot, DEFAULT_STORAGE_ROOT, LEGACY_STORAGE_ROOT, safeDecodeURIComponent } from "./lib/paths";
 import fs from "fs";
 
 describe("Storage Root Resolution & Migration Fallback", () => {
@@ -26,5 +26,12 @@ describe("Storage Root Resolution & Migration Fallback", () => {
     const root = getStorageRoot();
     expect(root).toBeDefined();
     expect([DEFAULT_STORAGE_ROOT, LEGACY_STORAGE_ROOT]).toContain(root);
+  });
+
+  it("safely handles URI decoding without throwing on malformed or special characters", () => {
+    expect(safeDecodeURIComponent("Hello%20World")).toBe("Hello World");
+    expect(safeDecodeURIComponent("100% Star")).toBe("100% Star");
+    expect(safeDecodeURIComponent("100%25%20Star")).toBe("100% Star");
+    expect(safeDecodeURIComponent("")).toBe("");
   });
 });

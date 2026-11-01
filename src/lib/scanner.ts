@@ -7,6 +7,7 @@ import {
   getRomsDirectory,
   getStorageRoot,
   normalizeSystem,
+  safeDecodeURIComponent,
 } from "@/lib/paths";
 import { getSystemMeta } from "@/lib/systems";
 import { getAllCachedMetadataMap } from "@/lib/igdb";
@@ -523,7 +524,7 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
       const metaMap = await getAllCachedMetadataMap();
       if (metaMap.size > 0) {
         for (const game of allGames) {
-          const meta = metaMap.get(game.id) ?? metaMap.get(decodeURIComponent(game.id));
+          const meta = metaMap.get(game.id) ?? metaMap.get(safeDecodeURIComponent(game.id));
           if (meta) {
             if (meta.year) game.year = meta.year;
             if (meta.developer) game.developer = meta.developer;
@@ -578,24 +579,24 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
 
 export function updateCachedGameMetadata(id: string, meta: Partial<GameItem>): void {
   if (!cachedLibrary) return;
-  const decodedId = decodeURIComponent(id);
+  const decodedId = safeDecodeURIComponent(id);
   const game = cachedLibrary.games.find(
-    (g) => g.id === id || decodeURIComponent(g.id) === decodedId
+    (g) => g.id === id || safeDecodeURIComponent(g.id) === decodedId
   );
   if (game) {
     if (meta.year !== undefined) game.year = meta.year;
     if (meta.developer !== undefined) game.developer = meta.developer;
     if (meta.publisher !== undefined) game.publisher = meta.publisher;
     if (meta.genres !== undefined) game.genres = meta.genres;
-    if (meta.story !== undefined && !game.story) game.story = meta.story;
+    if (!game.story && meta.story) game.story = meta.story;
   }
 }
 
 export async function getGameById(id: string): Promise<GameItem | null> {
   const { games } = await scanGameLibrary();
-  const decodedId = decodeURIComponent(id);
+  const decodedId = safeDecodeURIComponent(id);
   const found = games.find(
-    (g) => g.id === id || g.id === decodedId || decodeURIComponent(g.id) === decodedId
+    (g) => g.id === id || g.id === decodedId || safeDecodeURIComponent(g.id) === decodedId
   );
   if (found) return found;
 

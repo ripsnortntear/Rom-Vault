@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveGameMetadata } from "@/lib/igdb";
 import { updateCachedGameMetadata } from "@/lib/scanner";
+import { safeDecodeURIComponent } from "@/lib/paths";
 
 interface RouteContext {
   params: Promise<{
@@ -14,27 +15,37 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const { id: rawId } = await context.params;
-    const id = decodeURIComponent(rawId);
+    const id = safeDecodeURIComponent(rawId);
 
     // Extract system and clean title
     // ID format is: `${system}__${encodeURIComponent(baseName)}`
     const parts = id.split("__");
     const system = parts[0] || "psx";
-    const baseName = parts.length > 1 ? decodeURIComponent(parts.slice(1).join("__")) : "";
+    const baseName = parts.length > 1 ? safeDecodeURIComponent(parts.slice(1).join("__")) : "";
 
     const titleParam = request.nextUrl.searchParams.get("title");
-    const displayTitle = titleParam || baseName;
+    const displayTitle = (titleParam ? safeDecodeURIComponent(titleParam) : "") || baseName;
 
-    const metadata = await resolveGameMetadata(id, system, displayTitle);
+    const metadata = await resolveGameMetadata(rawId, system, displayTitle);
 
     if (metadata && metadata.year) {
-      updateCachedGameMetadata(id, {
+      updateCachedGameMetadata(rawId, {
         year: metadata.year,
         developer: metadata.developer,
         publisher: metadata.publisher,
         genres: metadata.genres,
         story: metadata.summary || undefined,
       });
+      // Also update under decoded ID in case of subtle encoding differences
+      if (id !== rawId) {
+        updateCachedGameMetadata(id, {
+          year: metadata.year,
+          developer: metadata.developer,
+          publisher: metadata.publisher,
+          genres: metadata.genres,
+          story: metadata.summary || undefined,
+        });
+      }
     }
 
     return NextResponse.json({

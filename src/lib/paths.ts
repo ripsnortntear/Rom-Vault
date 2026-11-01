@@ -45,6 +45,18 @@ export function getStorageRoot(): string {
   return DEFAULT_STORAGE_ROOT;
 }
 
+/**
+ * Safely decodes a URI component, falling back to original string if malformed (e.g. contains '%').
+ */
+export function safeDecodeURIComponent(val: string): string {
+  if (!val || typeof val !== "string") return "";
+  try {
+    return decodeURIComponent(val);
+  } catch {
+    return val;
+  }
+}
+
 export function isValidConsoleSystem(value: string | null | undefined): boolean {
   if (!value) return false;
   const norm = normalizeSystem(value);
