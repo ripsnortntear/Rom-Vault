@@ -10,7 +10,8 @@
     "test": "vitest run",
     "scan": "bash scripts/scan.sh",
     "sync-metadata": "node scripts/sync-metadata.mjs",
-    "download-screenshots": "node scripts/download-screenshots.mjs"
+    "download-screenshots": "node scripts/download-screenshots.mjs",
+    "download-boxart": "node scripts/download-boxart.mjs"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
