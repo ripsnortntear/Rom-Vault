@@ -347,7 +347,7 @@ export function GameDetailModal({
                       <div className="flex flex-col gap-0.5">
                         <strong className="text-white">Desktop Required for {game.systemLabel}</strong>
                         <span>
-                          PlayStation 2, Sega Dreamcast, and Nintendo GameCube emulation requires desktop hardware and is not supported on mobile devices. Open ROM Vault on a desktop browser (Microsoft Edge recommended).
+                          PlayStation 2, Sega Dreamcast, Nintendo GameCube, and Sega Saturn emulation requires desktop hardware and is not supported on mobile devices. Open ROM Vault on a desktop browser (Microsoft Edge recommended).
                         </span>
                         <span className="text-zinc-400 text-[11px] mt-1">
                           PS1 (PlayStation) and retro 16-bit / 32-bit consoles remain fully playable on mobile.

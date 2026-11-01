@@ -95,9 +95,9 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     company: "Nintendo",
     badgeColor: "bg-violet-700",
     colorHex: "#6d28d9",
-    ejsCore: null,
-    playable: false,
-    romExtensions: [".rvz", ".iso", ".gcm"],
+    ejsCore: "gamecube",
+    playable: true,
+    romExtensions: [".rvz", ".iso", ".gcm", ".dol"],
   },
   genesis: {
     id: "genesis",
@@ -161,8 +161,8 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     company: "Sega",
     badgeColor: "bg-rose-600",
     colorHex: "#e11d48",
-    ejsCore: null,
-    playable: false,
+    ejsCore: "dreamcast",
+    playable: true,
     romExtensions: [".chd", ".gdi", ".cdi"],
   },
   psx: {
@@ -219,18 +219,18 @@ export function normalizeSystem(system: string | null | undefined): string {
   return lower;
 }
 
-export const ADVANCED_DESKTOP_ONLY_SYSTEMS = ["ps2", "dreamcast", "gamecube"] as const;
+export const ADVANCED_DESKTOP_ONLY_SYSTEMS = ["ps2", "dreamcast", "gamecube", "saturn"] as const;
 export type AdvancedDesktopOnlySystem = (typeof ADVANCED_DESKTOP_ONLY_SYSTEMS)[number];
 
 /**
  * Returns true if the system requires desktop hardware and is not playable on mobile devices.
- * Systems: PS2, Dreamcast, GameCube.
+ * Systems: PS2, Dreamcast, GameCube, Saturn.
  * PSX (PS1) is specifically allowed and playable on mobile.
  */
 export function isDesktopOnlySystem(systemId: string | null | undefined): boolean {
   if (!systemId) return false;
   const norm = normalizeSystem(systemId);
-  return norm === "ps2" || norm === "dreamcast" || norm === "gamecube";
+  return norm === "ps2" || norm === "dreamcast" || norm === "gamecube" || norm === "saturn";
 }
 
 /**

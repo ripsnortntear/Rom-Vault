@@ -11,17 +11,19 @@ describe("Device System Emulation Compatibility", () => {
     expect(ADVANCED_DESKTOP_ONLY_SYSTEMS).toContain("ps2");
     expect(ADVANCED_DESKTOP_ONLY_SYSTEMS).toContain("dreamcast");
     expect(ADVANCED_DESKTOP_ONLY_SYSTEMS).toContain("gamecube");
+    expect(ADVANCED_DESKTOP_ONLY_SYSTEMS).toContain("saturn");
     expect(ADVANCED_DESKTOP_ONLY_SYSTEMS).not.toContain("psx");
   });
 
   describe("isDesktopOnlySystem", () => {
-    it("returns true for PS2, Dreamcast, and GameCube", () => {
+    it("returns true for PS2, Dreamcast, GameCube, and Saturn", () => {
       expect(isDesktopOnlySystem("ps2")).toBe(true);
       expect(isDesktopOnlySystem("playstation2")).toBe(true);
       expect(isDesktopOnlySystem("dreamcast")).toBe(true);
       expect(isDesktopOnlySystem("dc")).toBe(true);
       expect(isDesktopOnlySystem("gamecube")).toBe(true);
       expect(isDesktopOnlySystem("gc")).toBe(true);
+      expect(isDesktopOnlySystem("saturn")).toBe(true);
     });
 
     it("returns false for PSX (PS1) so it remains playable on mobile", () => {
@@ -30,17 +32,19 @@ describe("Device System Emulation Compatibility", () => {
       expect(isDesktopOnlySystem("playstation")).toBe(false);
     });
 
-    it("returns false for classic retro systems", () => {
+    it("returns false for mobile-supported systems (12 systems)", () => {
       expect(isDesktopOnlySystem("nes")).toBe(false);
       expect(isDesktopOnlySystem("snes")).toBe(false);
       expect(isDesktopOnlySystem("n64")).toBe(false);
       expect(isDesktopOnlySystem("gba")).toBe(false);
       expect(isDesktopOnlySystem("gb")).toBe(false);
       expect(isDesktopOnlySystem("gbc")).toBe(false);
+      expect(isDesktopOnlySystem("sgb")).toBe(false);
       expect(isDesktopOnlySystem("genesis")).toBe(false);
-      expect(isDesktopOnlySystem("saturn")).toBe(false);
+      expect(isDesktopOnlySystem("sega32x")).toBe(false);
       expect(isDesktopOnlySystem("sms")).toBe(false);
-      expect(isDesktopOnlySystem("gg")).toBe(false);
+      expect(isDesktopOnlySystem("sgg")).toBe(false);
+      expect(isDesktopOnlySystem("psx")).toBe(false);
     });
 
     it("handles null or empty inputs gracefully", () => {
@@ -51,32 +55,50 @@ describe("Device System Emulation Compatibility", () => {
   });
 
   describe("isSystemPlayableOnDevice", () => {
-    it("blocks PS2, Dreamcast, and GameCube on mobile", () => {
+    it("blocks PS2, Dreamcast, GameCube, and Saturn on mobile", () => {
       expect(isSystemPlayableOnDevice("ps2", true)).toBe(false);
       expect(isSystemPlayableOnDevice("dreamcast", true)).toBe(false);
       expect(isSystemPlayableOnDevice("gamecube", true)).toBe(false);
+      expect(isSystemPlayableOnDevice("saturn", true)).toBe(false);
     });
 
-    it("allows PSX (PS1) to be played on mobile", () => {
-      expect(isSystemPlayableOnDevice("psx", true)).toBe(true);
-      expect(isSystemPlayableOnDevice("ps1", true)).toBe(true);
-    });
-
-    it("allows retro 8-bit, 16-bit, and handheld systems to be played on mobile", () => {
+    it("allows the 12 mobile systems to be played on mobile", () => {
       expect(isSystemPlayableOnDevice("nes", true)).toBe(true);
       expect(isSystemPlayableOnDevice("snes", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("n64", true)).toBe(true);
       expect(isSystemPlayableOnDevice("gba", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("gb", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("gbc", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("sgb", true)).toBe(true);
       expect(isSystemPlayableOnDevice("genesis", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("sega32x", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("sms", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("sgg", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("psx", true)).toBe(true);
     });
 
-    it("distinguishes in-browser systems vs standalone-recommended desktop systems", () => {
-      // In-browser systems with WASM cores
-      expect(isSystemPlayableOnDevice("ps2", false)).toBe(true);
-      expect(isSystemPlayableOnDevice("psx", false)).toBe(true);
-
-      // GameCube and Dreamcast require standalone emulators (Dolphin / Flycast)
-      expect(isSystemPlayableOnDevice("gamecube", false)).toBe(false);
-      expect(isSystemPlayableOnDevice("dreamcast", false)).toBe(false);
+    it("allows all 16 systems to be played in browser on desktop", () => {
+      const all16 = [
+        "nes",
+        "snes",
+        "n64",
+        "gba",
+        "gb",
+        "gbc",
+        "sgb",
+        "gamecube",
+        "genesis",
+        "sega32x",
+        "sms",
+        "sgg",
+        "saturn",
+        "dreamcast",
+        "psx",
+        "ps2",
+      ];
+      for (const sys of all16) {
+        expect(isSystemPlayableOnDevice(sys, false)).toBe(true);
+      }
     });
   });
 

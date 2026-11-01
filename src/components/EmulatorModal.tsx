@@ -340,9 +340,14 @@ export function EmulatorModal({
   const ps2MemcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
   const ps2RunnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}&memcard=${encodeURIComponent(ps2MemcardUrl)}`;
 
+  const gcDiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.rvz`)}`;
+  const gcRunnerUrl = `/roms/gecko/index.html?rom=${encodeURIComponent(gcDiscUrl)}&name=${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.rvz`)}`;
+
   const playerUrl =
     game.system === "ps2"
       ? ps2RunnerUrl
+      : game.system === "gamecube"
+      ? gcRunnerUrl
       : `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName || "")}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
   const downloadUrl = activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
 

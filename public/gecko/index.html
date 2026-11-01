@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0a0c">
+  <title>ROM Vault - GameCube Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+      color: #e4e4e7;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #stage {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #18181b 0%, #09090b 100%);
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain;
+      outline: none;
+    }
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(9, 9, 11, 0.95);
+      z-index: 50;
+      gap: 16px;
+      padding: 24px;
+      text-align: center;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(168, 85, 247, 0.2);
+      border-top-color: #a855f7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fafafa;
+    }
+    .sub-text {
+      font-size: 12px;
+      color: #a1a1aa;
+      max-width: 440px;
+      line-height: 1.5;
+    }
+    .progress-bar-wrap {
+      width: 260px;
+      height: 6px;
+      background: #27272a;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #9333ea, #a855f7);
+      transition: width 0.2s ease;
+    }
+    .error-box {
+      display: none;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      padding: 16px 20px;
+      border-radius: 12px;
+      color: #fca5a5;
+      font-size: 13px;
+      max-width: 500px;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="loading-overlay">
+      <div class="spinner" id="loading-spinner"></div>
+      <div class="status-text" id="status-title">Loading Nintendo GameCube Core...</div>
+      <div class="progress-bar-wrap" id="progress-wrap">
+        <div class="progress-bar" id="progress-fill"></div>
+      </div>
+      <div class="sub-text" id="status-sub">Initializing WebAssembly GameCube environment &amp; shaders</div>
+      <div class="error-box" id="error-msg"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import init, { start_emulator } from './pkg/gecko_web.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const romUrl = urlParams.get('rom');
+    const romName = urlParams.get('name') || 'game.iso';
+
+    const statusTitle = document.getElementById('status-title');
+    const statusSub = document.getElementById('status-sub');
+    const progressFill = document.getElementById('progress-fill');
+    const progressWrap = document.getElementById('progress-wrap');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const errorMsg = document.getElementById('error-msg');
+    const spinner = document.getElementById('loading-spinner');
+
+    function showError(msg) {
+      if (spinner) spinner.style.display = 'none';
+      if (progressWrap) progressWrap.style.display = 'none';
+      statusTitle.textContent = 'GameCube Runner Notice';
+      statusSub.textContent = '';
+      errorMsg.style.display = 'block';
+      errorMsg.innerHTML = msg;
+    }
+
+    async function launch() {
+      try {
+        statusTitle.textContent = 'Initializing GameCube WASM Core...';
+        progressFill.style.width = '25%';
+        await init();
+        progressFill.style.width = '45%';
+
+        if (!romUrl) {
+          showError('No GameCube ROM stream specified.');
+          return;
+        }
+
+        statusTitle.textContent = 'Streaming GameCube ROM...';
+        statusSub.textContent = 'Buffering image headers (' + romName + ')';
+        
+        const res = await fetch(romUrl);
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status + ' streaming ROM: ' + res.statusText);
+        }
+
+        const contentLength = res.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        let loaded = 0;
+
+        const reader = res.body ? res.body.getReader() : null;
+        let romBuffer;
+
+        if (reader && total > 0) {
+          const chunks = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.length;
+            const pct = Math.min(95, 45 + Math.round((loaded / total) * 50));
+            progressFill.style.width = pct + '%';
+            statusSub.textContent = 'Downloaded ' + Math.round(loaded / (1024 * 1024)) + ' MB / ' + Math.round(total / (1024 * 1024)) + ' MB';
+          }
+          romBuffer = new Uint8Array(loaded);
+          let offset = 0;
+          for (const chunk of chunks) {
+            romBuffer.set(chunk, offset);
+            offset += chunk.length;
+          }
+        } else {
+          const ab = await res.arrayBuffer();
+          romBuffer = new Uint8Array(ab);
+        }
+
+        progressFill.style.width = '100%';
+        statusTitle.textContent = 'Booting GameCube...';
+        
+        setTimeout(() => {
+          try {
+            loadingOverlay.style.display = 'none';
+            start_emulator(romBuffer, romName, null);
+          } catch (bootErr) {
+            console.error('GameCube execution error:', bootErr);
+            loadingOverlay.style.display = 'flex';
+            showError('Unable to direct-boot this disc format in browser: ' + (bootErr.message || bootErr) + '<br><br>For compressed RVZ archives, please click <strong>Download Game</strong> to play in Dolphin at 60 FPS.');
+          }
+        }, 150);
+
+      } catch (err) {
+        console.error('Launch failure:', err);
+        showError('GameCube initialization error: ' + (err.message || err));
+      }
+    }
+
+    launch();
+  </script>
+</body>
+</html>

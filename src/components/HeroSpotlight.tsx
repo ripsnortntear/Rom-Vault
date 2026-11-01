@@ -110,7 +110,7 @@ export function HeroSpotlight({
                 type="button"
                 onClick={() => onSelectDetail(game)}
                 className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl font-bold text-sm sm:text-base bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-500/30 transition transform hover:-translate-y-0.5 cursor-pointer"
-                title="PS2, Dreamcast, and GameCube emulation requires a desktop computer"
+                title="PS2, Dreamcast, GameCube, and Saturn emulation requires a desktop computer"
               >
                 <Monitor className="w-5 h-5 text-amber-400" />
                 <span>Desktop Only</span>

@@ -22,6 +22,8 @@ export function MobileDesktopRequired({
       ? "Sega Dreamcast"
       : game.system === "gamecube"
       ? "Nintendo GameCube"
+      : game.system === "saturn"
+      ? "Sega Saturn"
       : game.system.toUpperCase();
 
   const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
@@ -53,8 +55,9 @@ export function MobileDesktopRequired({
 
         <p className="text-xs text-zinc-400 leading-relaxed mb-4">
           <strong className="text-zinc-200">PlayStation 2</strong>,{" "}
-          <strong className="text-zinc-200">Sega Dreamcast</strong>, and{" "}
-          <strong className="text-zinc-200">Nintendo GameCube</strong> emulation requires desktop hardware and is not playable on mobile browsers.
+          <strong className="text-zinc-200">Sega Dreamcast</strong>,{" "}
+          <strong className="text-zinc-200">Nintendo GameCube</strong>, and{" "}
+          <strong className="text-zinc-200">Sega Saturn</strong> emulation requires desktop hardware and is not playable on mobile browsers.
         </p>
 
         <div className="w-full p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-xs text-zinc-300 mb-6 text-left">

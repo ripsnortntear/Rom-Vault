@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
 import { PS2EmulatorView } from "./PS2EmulatorView";
+import { GameCubeEmulatorView } from "./GameCubeEmulatorView";
 import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
 import { MobileDesktopRequired } from "./MobileDesktopRequired";
 import { StandaloneRecommendationView } from "./StandaloneRecommendationView";
@@ -113,8 +114,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     return <PS2EmulatorView game={game} />;
   }
 
+  if (game.system === "gamecube") {
+    return <GameCubeEmulatorView game={game} />;
+  }
+
   const systemMeta = getSystemMeta(game.system);
-  if (!systemMeta.playable || !systemMeta.ejsCore || game.system === "gamecube" || game.system === "dreamcast") {
+  if (!systemMeta.playable || !systemMeta.ejsCore) {
     return <StandaloneRecommendationView game={game} />;
   }
 
