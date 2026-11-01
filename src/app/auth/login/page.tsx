@@ -3,11 +3,13 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Gamepad2, Lock, User, AlertCircle, CheckCircle2, Loader2, ArrowRight } from "lucide-react";
+import { Gamepad2, Lock, User, AlertCircle, CheckCircle2, Loader2, ArrowRight, AlertTriangle, Info } from "lucide-react";
+import { useBrowserEnvironment } from "@/hooks/useBrowserEnvironment";
 
 function LoginForm(): React.ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { mounted, isMobile, state } = useBrowserEnvironment();
 
   const [identifier, setIdentifier] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -82,6 +84,50 @@ function LoginForm(): React.ReactElement {
       {/* Card */}
       <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
         <h1 className="text-xl font-bold text-white mb-6">Sign In</h1>
+
+        {/* Contextual Desktop Browser & Acceleration Warning Banners */}
+        {mounted && !isMobile && (
+          <>
+            {state === "edge_no_coop" && (
+              <div className="mb-6 p-3.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-1">
+                  <strong className="text-white">Microsoft Edge Detected: COOP/COEP Required</strong>
+                  <span>
+                    Only basic systems (NES, SNES, Genesis, GBA) will be playable until COOP/COEP is enabled. Advanced systems (PS2, GameCube, Dreamcast) require Cross-Origin Isolation.
+                  </span>
+                  <div className="mt-1 pt-1 border-t border-amber-500/20 text-[11px] text-amber-300">
+                    <strong>How to enable:</strong> Ensure you are connecting via secure HTTPS, verify <code className="px-1 py-0.5 rounded bg-black/60 text-white font-mono text-[10px]">edge://settings/system</code> has &quot;Use graphics acceleration when available&quot; turned ON, and restart Edge.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {state === "other_with_coop" && (
+              <div className="mb-6 p-3.5 rounded-xl bg-sky-950/70 border border-sky-500/40 text-sky-200 text-xs flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <strong className="text-white">Browser Recommendation</strong>
+                  <span>
+                    You are not currently using Microsoft Edge. While COOP &amp; COEP are enabled, advanced 3D consoles (PS2, GameCube, Dreamcast) work best with Microsoft Edge on desktop for 60 FPS hardware acceleration.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {state === "other_no_coop" && (
+              <div className="mb-6 p-3.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <strong className="text-white">Browser &amp; Acceleration Notice</strong>
+                  <span>
+                    You are not using Microsoft Edge, and <strong className="text-white">COOP/COEP (Cross-Origin Isolation)</strong> is NOT enabled. You need to at least turn COOP/COEP on to run multi-threaded emulators, and for the full 60 FPS experience on advanced consoles, use Microsoft Edge on desktop.
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {successMessage && (
           <div className="mb-6 p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs flex items-start gap-2.5">
