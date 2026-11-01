@@ -57,7 +57,7 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
   return (
     <div
       ref={containerRef}
-      className="relative hidden md:inline-flex items-center"
+      className="relative z-50 hidden md:inline-flex items-center"
     >
       <button
         type="button"
@@ -101,7 +101,7 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
 
       {/* Popover Card */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 p-4 rounded-2xl bg-zinc-950/95 border border-cyan-500/40 text-zinc-200 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 p-4 rounded-2xl bg-zinc-950/95 border border-cyan-500/40 text-zinc-200 shadow-2xl shadow-black/90 ring-1 ring-cyan-500/30 backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-start justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">

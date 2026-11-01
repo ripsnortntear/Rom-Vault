@@ -519,7 +519,7 @@ export function RetroLibraryClient({
 
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col">
-      <header className="border-b border-white/10 bg-zinc-950/90 backdrop-blur-md">
+      <header className="relative z-40 border-b border-white/10 bg-zinc-950/90 backdrop-blur-md">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
           <a
             href="/roms"
