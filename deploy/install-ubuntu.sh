@@ -16,7 +16,7 @@ npm run build
 echo "==> [3/4] Installing systemd service (${SERVICE_FILE}) on port ${PORT}..."
 sudo tee "${SERVICE_FILE}" > /dev/null <<EOF
 [Unit]
-Description=Nintendo Vault Retro Gaming Interface (Next.js on port ${PORT})
+Description=ROM Vault Retro Gaming Interface (Next.js on port ${PORT})
 After=network.target
 
 [Service]
@@ -25,8 +25,7 @@ User=${SUDO_USER:-$USER}
 WorkingDirectory=${APP_DIR}
 Environment=NODE_ENV=production
 Environment=PORT=${PORT}
-Environment=ROMS_DIR=/var/www/html/roms/nintendo/roms
-Environment=ARTWORK_DIR=/var/www/html/roms/nintendo/artwork
+Environment=STORAGE_ROOT=${STORAGE_ROOT:-/mnt/storage/roms}
 ExecStart=$(command -v npm) run start
 Restart=always
 RestartSec=5
@@ -42,7 +41,7 @@ sudo systemctl restart "${SERVICE_NAME}"
 
 echo ""
 echo "=================================================================="
-echo " Nintendo Vault is running on http://127.0.0.1:${PORT}/roms"
+echo " ROM Vault is running on http://127.0.0.1:${PORT}/roms"
 echo " Service status: sudo systemctl status ${SERVICE_NAME}"
 echo " Add deploy/nginx-roms.conf to your Nginx server block, then run:"
 echo "   sudo nginx -t && sudo systemctl reload nginx"

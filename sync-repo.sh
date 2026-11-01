@@ -73,10 +73,13 @@ echo " [Push] Pushing Verified Build to $GIT_REMOTE/$GIT_BRANCH"
 echo "=========================================="
 if git push "$GIT_REMOTE" "$GIT_BRANCH"; then
   echo "[✓] Git push successful!"
-else
-  echo "[!] Standard push failed. Retrying using direct GitLab authentication..."
-  git push "https://cfw34683:glpat-T_GMR6-kaO3ziXMVufc34G86MQp1OjYH.01.0w199u1st@www.oldsmarchaos.com/git/cfw34683/retro-gaming-library.git" "$GIT_BRANCH"
+elif [[ -n "${GIT_PUSH_URL:-}" ]]; then
+  echo "[*] Standard push failed. Retrying using GIT_PUSH_URL from environment..."
+  git push "$GIT_PUSH_URL" "$GIT_BRANCH"
   echo "[✓] Direct authenticated push successful!"
+else
+  echo "[!] Standard push failed. Please verify git credentials or set GIT_PUSH_URL in your environment."
+  exit 1
 fi
 
 echo "=========================================="
