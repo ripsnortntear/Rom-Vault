@@ -79,6 +79,8 @@ Route Handlers (`src/app/api/**/route.ts`): Reserved exclusively for non-UI data
   - PS1 (DuckStation / RetroArch): 131,072 bytes (128 KB) `.mcr`, initialized with `0x00`.
   - PS2 (PCSX2 / TabStationToo): 8,650,752 bytes (8 MB + ECC) `.ps2`, initialized with `0xff`.
 - Graceful Guest Fallbacks: Memory card download (`/api/users/me/cards/[id]/download`) and sync (`/api/users/me/cards/[id]/sync`) endpoints must provide guest fallback binaries rather than returning 401 errors when unauthenticated emulator iframes mount cards.
+- Self-Healing Storage Paths: Database records storing physical memory card file paths (`user_memory_cards.file_path`) must implement self-healing path resolution (`resolveActualCardPath`). If a recorded path on disk does not exist, resolve the asset dynamically under the active user storage directory (`getUserMemoryCardDir`) and automatically update the database record to prevent runtime `ENOENT` card mount failures.
+- Robust Emulator Iframe Save Contracts: All emulator iframes communicating save events via `postMessage` (`VAULT_FORCE_SAVE`) MUST emit a corresponding status event (`saved`, `error`, or `idle`) back to the parent window upon completion or error. The parent container (`EmulatorModal`) must enforce a safety timeout (e.g., 7–8 seconds) to prevent the user interface from hanging indefinitely in a loading state.
 - Background Save Ingestion: Non-blocking target for emulator save sync queues.
 - Session Auth Performance: Validate HMAC-SHA256 signed session cookies with key caching to process rapid byte-range requests with zero auth bottleneck.
 - Secure Boundaries: Mark backend modules (`db.ts`, `auth/*`, `scanner.ts`) with `import "server-only"`. Keep storage mount paths and Twitch API credentials confined to the server layer.
@@ -99,6 +101,8 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Mobile Video Invariants: All preview `<video>` elements (hero spotlights, cards, detail modals) MUST specify `playsInline` and initial `muted={isMuted}` with an overlay toggle button. Never use unmuted autoplay or default `controls` which cause mobile browsers (iOS Safari / Mobile Chrome) to hijack the viewport into native fullscreen.
 - Expansive Desktop Viewports: Do not restrict game detail cards (`GameDetailModal`) or live emulator windows (`EmulatorModal`) to narrow widths (`max-w-5xl` or `max-w-6xl`) on desktop. Viewports must nearly fill the screen (`w-full md:w-[98vw] max-w-[99vw] 2xl:max-w-[1920px]` and `h-[95-97vh]`) to maximize game canvas real estate on widescreen displays.
 - Remote Patterns: Configure `images.remotePatterns` in `next.config.ts` for IGDB / Twitch media CDNs.
+- Media Auditing & Orphan Pruning Safeguards: Automated and manual artwork pruning operations (`prune-orphans`) must safeguard platform-wide default media (`default.png`, `default.jpg`, `default.mp4` across bezels and fanart) and multi-disc parent titles.
+- Audit Report Threshold Invariant: Command-line audit tools must check report payload size—streaming directly to stdout when `<= 5 KB` (5,120 bytes), and writing to file with an executive summary table when `> 5 KB` to avoid flooding terminal buffers.
 
 ## 10. Strict Anti-Patterns ("Do Not")
 - Do not use Pages Router artifacts (`getServerSideProps`, `getStaticProps`, `next/router`, or `pages/` directory).
