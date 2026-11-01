@@ -675,6 +675,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             pcsx_rearmed_neon_enhancement_no_main: "disabled",
             pcsx_rearmed_pad1type: "standard",
             pcsx_rearmed_analog_to_digital: "left_analog",
+            pcsx_rearmed_vibration: "disabled",
+            enable_device_vibration: "false",
           };
 
           window.EJS_defaultOptions = {
@@ -683,6 +685,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "pcsx_rearmed_cdfs_cache": "disabled",
             "pcsx_rearmed_async_cd": "sync",
             "pcsx_rearmed_memcard2": "disabled",
+            "pcsx_rearmed_vibration": "disabled",
+            "enable_device_vibration": "false",
             "input_player1_l_btn": "4",
             "input_player1_r_btn": "5",
             "input_player1_l2_btn": "6",
