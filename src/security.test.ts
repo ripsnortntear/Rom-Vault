@@ -1,5 +1,30 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+
+// Mock database connection hermetically for CI/unit tests
+const { mockDbQuery, mockDbExecute } = vi.hoisted(() => ({
+  mockDbQuery: vi.fn(),
+  mockDbExecute: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({
+  db: {
+    query: mockDbQuery,
+    execute: mockDbExecute,
+  },
+  query: mockDbQuery,
+  execute: mockDbExecute,
+}));
+
+vi.mock("./lib/db", () => ({
+  db: {
+    query: mockDbQuery,
+    execute: mockDbExecute,
+  },
+  query: mockDbQuery,
+  execute: mockDbExecute,
+}));
+
 import { proxy } from "./proxy";
 import {
   isSafeHttpUrl,
@@ -46,7 +71,42 @@ describe("Filesystem Rescan Concurrency Lock (Mutex)", () => {
 });
 
 describe("Stateful Session Revocation", () => {
-  it("rejects mathematically valid HMAC tokens that are not present in auth_tokens", async () => {
+  beforeEach(() => {
+    mockDbQuery.mockReset();
+    mockDbExecute.mockReset();
+  });
+
+  it("Case A: accepts valid HMAC tokens that are present and active in auth_tokens", async () => {
+    const token = await signSessionToken({
+      userId: "test-user-999",
+      username: "active_user",
+      role: "user",
+      sessionId: "session-active-12345",
+    });
+
+    const expiresAt = new Date(Date.now() + 86400000);
+    // Simulate DB query returning active session token record with active account
+    mockDbQuery.mockResolvedValueOnce([
+      [
+        {
+          id: "tok-1",
+          user_id: "test-user-999",
+          expires_at: expiresAt,
+          account_status: "active",
+        },
+      ],
+      [],
+    ]);
+
+    const session = await validateSessionToken(token);
+    expect(session).not.toBeNull();
+    expect(session?.user.userId).toBe("test-user-999");
+    expect(session?.user.username).toBe("active_user");
+    expect(session?.expiresAt).toEqual(expiresAt);
+    expect(mockDbQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("Case B: rejects mathematically valid HMAC tokens that are missing or revoked in auth_tokens", async () => {
     // 1. Sign a token with a random session ID not in the database
     const token = await signSessionToken({
       userId: "test-user-999",
@@ -59,9 +119,43 @@ describe("Stateful Session Revocation", () => {
     const fastCheck = await verifySessionTokenFast(token);
     expect(fastCheck.valid).toBe(true);
 
+    // Simulate empty query result from auth_tokens
+    mockDbQuery.mockResolvedValueOnce([[], []]);
+
     // 3. Stateful database check fails because token is not active in auth_tokens
     const statefulCheck = await validateSessionToken(token);
     expect(statefulCheck).toBeNull();
+    expect(mockDbQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("Case C: rejects valid HMAC tokens when the user account is suspended", async () => {
+    const token = await signSessionToken({
+      userId: "test-user-999",
+      username: "banned_user",
+      role: "user",
+      sessionId: "session-banned-12345",
+    });
+
+    // Stateless HMAC check passes
+    const fastCheck = await verifySessionTokenFast(token);
+    expect(fastCheck.valid).toBe(true);
+
+    // Simulate DB returning token record with account_status === 'suspended'
+    mockDbQuery.mockResolvedValueOnce([
+      [
+        {
+          id: "tok-2",
+          user_id: "test-user-999",
+          expires_at: new Date(Date.now() + 86400000),
+          account_status: "suspended",
+        },
+      ],
+      [],
+    ]);
+
+    const statefulCheck = await validateSessionToken(token);
+    expect(statefulCheck).toBeNull();
+    expect(mockDbQuery).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -338,6 +432,64 @@ describe("Residual Security Hardening (SEC-09 through SEC-12)", () => {
     const res4 = await proxy(req4);
     expect(res4.status).toBe(307);
     expect(res4.headers.get("location")).toContain("/auth/login");
+  });
+
+  it("SEC-01 & SEC-11: Proxy validates authenticated sessions via mocked DB and enforces admin roles", async () => {
+    // 1. Regular user token
+    const userToken = await signSessionToken({
+      userId: "user-42",
+      username: "gamer1",
+      role: "user",
+      sessionId: "session-gamer1",
+    });
+
+    // Mock DB returns active session
+    mockDbQuery.mockResolvedValueOnce([
+      [
+        {
+          id: "tok-user-1",
+          user_id: "user-42",
+          expires_at: new Date(Date.now() + 86400000),
+          account_status: "active",
+        },
+      ],
+      [],
+    ]);
+
+    const reqUserAdmin = new NextRequest("http://localhost/roms/admin/scan", {
+      headers: { cookie: `rom_vault_session=${userToken}` },
+    });
+    const resUserAdmin = await proxy(reqUserAdmin);
+    expect(resUserAdmin.status).toBe(403);
+    const jsonUserAdmin = await resUserAdmin.json();
+    expect(jsonUserAdmin.error).toBe("Forbidden");
+
+    // 2. Admin token
+    const adminToken = await signSessionToken({
+      userId: "admin-1",
+      username: "root_admin",
+      role: "admin",
+      sessionId: "session-admin-1",
+    });
+
+    // Mock DB returns active session for admin
+    mockDbQuery.mockResolvedValueOnce([
+      [
+        {
+          id: "tok-admin-1",
+          user_id: "admin-1",
+          expires_at: new Date(Date.now() + 86400000),
+          account_status: "active",
+        },
+      ],
+      [],
+    ]);
+
+    const reqAdmin = new NextRequest("http://localhost/roms/admin/scan", {
+      headers: { cookie: `rom_vault_session=${adminToken}` },
+    });
+    const resAdmin = await proxy(reqAdmin);
+    expect(resAdmin.status).toBe(200);
   });
 });
 
