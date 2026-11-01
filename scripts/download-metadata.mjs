@@ -151,7 +151,14 @@ function printHelp() {
 
 USAGE:
   npm run download-metadata -- [TARGET ASSET FLAGS] [OPTIONS]
+  npm run download-metadata -- --audit [OPTIONS]
   node scripts/download-metadata.mjs [TARGET ASSET FLAGS] [OPTIONS]
+
+AUDIT MODE (Audit ROMs against artwork & generate detailed report):
+  --audit            Audit ROMs against artwork and media libraries
+  --output=<file>    Report output file path (default: audit-report.txt)
+  --missing-only     Only list games with missing media in the detailed breakdown
+  --no-orphans       Skip orphan artwork detection
 
 TARGET ASSET FLAGS (choose one or more, or use --all):
   --boxart           Download 2D Front Box Art -> artwork/artwork_front/
@@ -166,7 +173,7 @@ TARGET ASSET FLAGS (choose one or more, or use --all):
 
 SYSTEM FILTERING & CONTROLS:
   --system=<sys>     Target single console platform (e.g. ps2, gbc, nes, gamecube)
-  --limit=<number>   Process only the first N missing items (useful for testing)
+  --limit=<number>   Process only the first N items (useful for testing)
   --delay=<ms>       Delay in milliseconds between IGDB queries (default: 300ms)
   --force            Re-download existing assets (overwrites local files)
   --help, -h         Show this manual
@@ -182,6 +189,15 @@ SUPPORTED CONSOLE SYSTEMS:
   gba, gbc, gb, sgb, genesis, sega32x, sms, sgg
 
 EXAMPLES:
+  # Audit PS2 ROMs against artwork (prints to terminal if <= 5KB, otherwise saves file):
+  npm run download-metadata -- --audit --system=ps2
+
+  # Audit entire ROM Vault across all systems:
+  npm run download-metadata -- --audit
+
+  # Audit with custom report output path:
+  npm run download-metadata -- --audit --output=vault-audit.txt
+
   # Download transparent wheel logos for PS2 using SteamGridDB:
   npm run download-metadata -- --logos --system=ps2
 
@@ -213,6 +229,27 @@ if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.length === 0
   process.exit(0);
 }
 
+const isAudit = rawArgs.includes("--audit");
+let targetSystem = null;
+let limit = null;
+let delayMs = 300;
+let forceAll = rawArgs.includes("--force");
+let outputPath = path.join(process.cwd(), "audit-report.txt");
+let missingOnly = rawArgs.includes("--missing-only");
+let checkOrphans = !rawArgs.includes("--no-orphans");
+
+for (const arg of rawArgs) {
+  if (arg.startsWith("--system=")) {
+    targetSystem = arg.split("=")[1].toLowerCase().trim();
+  } else if (arg.startsWith("--limit=")) {
+    limit = parseInt(arg.split("=")[1], 10);
+  } else if (arg.startsWith("--delay=")) {
+    delayMs = Math.max(260, parseInt(arg.split("=")[1], 10));
+  } else if (arg.startsWith("--output=") || arg.startsWith("--file=")) {
+    outputPath = path.resolve(process.cwd(), arg.split("=")[1].trim());
+  }
+}
+
 const targets = {
   boxart: rawArgs.includes("--boxart") || rawArgs.includes("--2d"),
   boxart3d: rawArgs.includes("--boxart-3d") || rawArgs.includes("--3d"),
@@ -228,27 +265,13 @@ if (rawArgs.includes("--all")) {
   Object.keys(targets).forEach((k) => (targets[k] = true));
 }
 
-// Ensure at least one asset type was requested
 const selectedTypes = Object.entries(targets).filter(([, v]) => v).map(([k]) => k);
-if (selectedTypes.length === 0) {
-  console.error("[-] Error: No asset type specified. Please supply e.g. --boxart, --screenshots, --logos, or --all.");
+
+// Validate Arguments
+if (!isAudit && selectedTypes.length === 0) {
+  console.error("[-] Error: No asset type specified. Please supply e.g. --boxart, --screenshots, --logos, --all, or --audit.");
   console.log("[*] Run 'npm run download-metadata -- --help' for instructions.");
   process.exit(1);
-}
-
-let targetSystem = null;
-let limit = null;
-let delayMs = 300;
-let forceAll = rawArgs.includes("--force");
-
-for (const arg of rawArgs) {
-  if (arg.startsWith("--system=")) {
-    targetSystem = arg.split("=")[1].toLowerCase().trim();
-  } else if (arg.startsWith("--limit=")) {
-    limit = parseInt(arg.split("=")[1], 10);
-  } else if (arg.startsWith("--delay=")) {
-    delayMs = Math.max(260, parseInt(arg.split("=")[1], 10));
-  }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -388,7 +411,382 @@ async function fetchTheGamesDbData(cleanTitle) {
   }
 }
 
+// ==============================================================================
+// AUDIT ENGINE: Matches ROMs to Artwork & Generates Detailed Reports
+// ==============================================================================
+async function runAudit() {
+  console.log("==================================================================");
+  console.log("       ROM Vault - Multi-Asset Artwork & Media Audit Engine       ");
+  console.log("==================================================================");
+  console.log(`[*] Target Storage: ${STORAGE_ROOT}`);
+  if (targetSystem) console.log(`[*] Target System:  ${targetSystem}`);
+  console.log(`[*] Report File:    ${outputPath}`);
+  console.log("");
+
+  const allSystems = fs
+    .readdirSync(STORAGE_ROOT, { withFileTypes: true })
+    .filter((ent) => ent.isDirectory() && ent.name !== "saves")
+    .map((ent) => ent.name);
+
+  const systemsToScan = targetSystem
+    ? allSystems.filter((s) => s.toLowerCase() === targetSystem)
+    : allSystems;
+
+  if (systemsToScan.length === 0) {
+    console.error(`[-] No matching system directory found for '${targetSystem}'.`);
+    process.exit(1);
+  }
+
+  const auditResults = [];
+  let totalVaultRoms = 0;
+
+  for (const sys of systemsToScan) {
+    const romsDir = path.join(STORAGE_ROOT, sys, "roms");
+    const artDir = path.join(STORAGE_ROOT, sys, "artwork");
+    const sysConf = PLATFORM_CONFIG[sys.toLowerCase()] || {
+      isDisc: false,
+      label: sys,
+    };
+
+    if (!fs.existsSync(romsDir)) continue;
+
+    const romFiles = fs
+      .readdirSync(romsDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && !e.name.startsWith("."))
+      .map((e) => e.name)
+      .sort((a, b) => a.localeCompare(b));
+
+    if (romFiles.length === 0) continue;
+    totalVaultRoms += romFiles.length;
+
+    const loadArtFolder = (subName) => {
+      const full = path.join(artDir, subName);
+      if (!fs.existsSync(full)) return { files: [], byBase: new Map() };
+      const files = fs
+        .readdirSync(full, { withFileTypes: true })
+        .filter((e) => e.isFile() && !e.name.startsWith("."))
+        .map((e) => e.name);
+
+      const byBase = new Map();
+      for (const f of files) {
+        const extIdx = f.lastIndexOf(".");
+        const b = extIdx > 0 ? f.slice(0, extIdx) : f;
+        byBase.set(b.toLowerCase(), f);
+      }
+      return { files, byBase };
+    };
+
+    const artFolders = {
+      boxart: loadArtFolder("artwork_front"),
+      boxart3d: loadArtFolder("artwork_3d"),
+      screenshots: loadArtFolder("screenshot"),
+      titlescreens: loadArtFolder("screentitle"),
+      logos: loadArtFolder("logo"),
+      discOrCart: loadArtFolder(sysConf.isDisc ? "medium_disc" : "medium_front"),
+      stories: loadArtFolder("story"),
+      videos: loadArtFolder("video"),
+    };
+
+    const matchedFiles = {
+      boxart: new Set(),
+      boxart3d: new Set(),
+      screenshots: new Set(),
+      titlescreens: new Set(),
+      logos: new Set(),
+      discOrCart: new Set(),
+      stories: new Set(),
+      videos: new Set(),
+    };
+
+    const gamesAudit = [];
+    const counts = {
+      total: romFiles.length,
+      boxart: 0,
+      boxart3d: 0,
+      screenshots: 0,
+      titlescreens: 0,
+      logos: 0,
+      discOrCart: 0,
+      stories: 0,
+      videos: 0,
+      complete: 0,
+      zeroMedia: 0,
+    };
+
+    for (const romFile of romFiles) {
+      const extIdx = romFile.lastIndexOf(".");
+      const baseName = extIdx > 0 ? romFile.slice(0, extIdx) : romFile;
+      const lowerBase = baseName.toLowerCase();
+      const discLessLower = lowerBase.replace(/\s*\(disc\s*\d+[^)]*\)/i, "").trim();
+
+      const gameStatus = {
+        romFile,
+        baseName,
+        assets: {},
+        missing: [],
+      };
+
+      for (const [key, folderData] of Object.entries(artFolders)) {
+        let matchFile = folderData.byBase.get(lowerBase);
+        if (!matchFile && discLessLower !== lowerBase) {
+          matchFile = folderData.byBase.get(discLessLower);
+        }
+
+        if (matchFile) {
+          gameStatus.assets[key] = matchFile;
+          counts[key]++;
+          matchedFiles[key].add(matchFile);
+        } else {
+          gameStatus.assets[key] = null;
+          gameStatus.missing.push(key);
+        }
+      }
+
+      const presentCount = Object.values(gameStatus.assets).filter(Boolean).length;
+      if (presentCount === 8) counts.complete++;
+      if (presentCount === 0) counts.zeroMedia++;
+
+      gamesAudit.push(gameStatus);
+    }
+
+    const orphans = {};
+    if (checkOrphans) {
+      for (const [key, folderData] of Object.entries(artFolders)) {
+        const unmatched = folderData.files.filter((f) => !matchedFiles[key].has(f));
+        if (unmatched.length > 0) {
+          orphans[key] = unmatched.sort((a, b) => a.localeCompare(b));
+        }
+      }
+    }
+
+    auditResults.push({
+      system: sys,
+      label: sysConf.label,
+      isDisc: sysConf.isDisc,
+      counts,
+      gamesAudit,
+      orphans,
+    });
+  }
+
+  // Percentage helper
+  const pct = (val, total) => (total > 0 ? ((val / total) * 100).toFixed(1) : "0.0");
+
+  // Summary Table Header
+  const tableHeader = [
+    "----------------------------------------------------------------------------------------------------------------------------------------------------",
+    "System             ROMs    2D Box   3D Box   Screens  Titles    Logos    Medium   Stories  Videos   100% Full  Zero Media",
+    "----------------------------------------------------------------------------------------------------------------------------------------------------",
+  ];
+
+  const tableRows = [];
+  const vaultTotals = {
+    roms: 0,
+    boxart: 0,
+    boxart3d: 0,
+    screenshots: 0,
+    titlescreens: 0,
+    logos: 0,
+    discOrCart: 0,
+    stories: 0,
+    videos: 0,
+    complete: 0,
+    zeroMedia: 0,
+  };
+
+  for (const res of auditResults) {
+    const c = res.counts;
+    vaultTotals.roms += c.total;
+    vaultTotals.boxart += c.boxart;
+    vaultTotals.boxart3d += c.boxart3d;
+    vaultTotals.screenshots += c.screenshots;
+    vaultTotals.titlescreens += c.titlescreens;
+    vaultTotals.logos += c.logos;
+    vaultTotals.discOrCart += c.discOrCart;
+    vaultTotals.stories += c.stories;
+    vaultTotals.videos += c.videos;
+    vaultTotals.complete += c.complete;
+    vaultTotals.zeroMedia += c.zeroMedia;
+
+    tableRows.push(
+      `${res.system.padEnd(16)} ` +
+      `${c.total.toString().padStart(6)} ` +
+      `${(pct(c.boxart, c.total) + "%").padStart(9)} ` +
+      `${(pct(c.boxart3d, c.total) + "%").padStart(8)} ` +
+      `${(pct(c.screenshots, c.total) + "%").padStart(9)} ` +
+      `${(pct(c.titlescreens, c.total) + "%").padStart(8)} ` +
+      `${(pct(c.logos, c.total) + "%").padStart(8)} ` +
+      `${(pct(c.discOrCart, c.total) + "%").padStart(9)} ` +
+      `${(pct(c.stories, c.total) + "%").padStart(9)} ` +
+      `${(pct(c.videos, c.total) + "%").padStart(8)} ` +
+      `${c.complete.toString().padStart(11)} ` +
+      `${c.zeroMedia.toString().padStart(11)}`
+    );
+  }
+
+  const tableTotalRow = [
+    "----------------------------------------------------------------------------------------------------------------------------------------------------",
+    `TOTAL (${auditResults.length} systems) `.padEnd(17) +
+    `${vaultTotals.roms.toString().padStart(6)} ` +
+    `${(pct(vaultTotals.boxart, vaultTotals.roms) + "%").padStart(9)} ` +
+    `${(pct(vaultTotals.boxart3d, vaultTotals.roms) + "%").padStart(8)} ` +
+    `${(pct(vaultTotals.screenshots, vaultTotals.roms) + "%").padStart(9)} ` +
+    `${(pct(vaultTotals.titlescreens, vaultTotals.roms) + "%").padStart(8)} ` +
+    `${(pct(vaultTotals.logos, vaultTotals.roms) + "%").padStart(8)} ` +
+    `${(pct(vaultTotals.discOrCart, vaultTotals.roms) + "%").padStart(9)} ` +
+    `${(pct(vaultTotals.stories, vaultTotals.roms) + "%").padStart(9)} ` +
+    `${(pct(vaultTotals.videos, vaultTotals.roms) + "%").padStart(8)} ` +
+    `${vaultTotals.complete.toString().padStart(11)} ` +
+    `${vaultTotals.zeroMedia.toString().padStart(11)}`,
+    "----------------------------------------------------------------------------------------------------------------------------------------------------",
+  ];
+
+  // Assemble Terminal Summary (compact executive view)
+  const terminalSummaryLines = [
+    "================================================================================",
+    "                    ROM VAULT - ARTWORK & MEDIA AUDIT SUMMARY                   ",
+    "================================================================================",
+    `Generated:       ${new Date().toISOString()}`,
+    `Storage Root:    ${STORAGE_ROOT}`,
+    `Systems Audited: ${auditResults.length} | Total Games: ${vaultTotals.roms}`,
+    "",
+    ...tableHeader,
+    ...tableRows,
+    ...tableTotalRow,
+  ];
+
+  const terminalSummaryText = terminalSummaryLines.join("\n");
+
+  // Assemble Full Exhaustive Report Document
+  const reportLines = [
+    "================================================================================",
+    "                    ROM VAULT - ARTWORK & MEDIA AUDIT REPORT                    ",
+    "================================================================================",
+    `Generated:       ${new Date().toISOString()}`,
+    `Storage Root:    ${STORAGE_ROOT}`,
+    `Systems Audited: ${auditResults.length} | Total Games: ${vaultTotals.roms}`,
+    "",
+    "VAULT-WIDE COVERAGE OVERVIEW:",
+    ...tableHeader,
+    ...tableRows,
+    ...tableTotalRow,
+    "",
+  ];
+
+  const assetLabels = {
+    boxart: "2D Front Box Art",
+    boxart3d: "3D Box Art",
+    screenshots: "In-Game Screenshot",
+    titlescreens: "Title Screen",
+    logos: "Clear Logo / Wheel",
+    discOrCart: "Disc/Cartridge Media",
+    stories: "Plot Overview Story",
+    videos: "Video Preview",
+  };
+
+  for (const res of auditResults) {
+    const c = res.counts;
+    reportLines.push(
+      "================================================================================",
+      `SYSTEM AUDIT: ${res.label} (${res.system})`,
+      "================================================================================",
+      `Total Games / ROMs: ${c.total}`,
+      `Coverage Breakdown:`,
+      `  - 2D Front Box Art:    ${c.boxart.toString().padStart(5)} / ${c.total} (${pct(c.boxart, c.total)}%)`,
+      `  - 3D Box Art:          ${c.boxart3d.toString().padStart(5)} / ${c.total} (${pct(c.boxart3d, c.total)}%)`,
+      `  - In-Game Screenshot:  ${c.screenshots.toString().padStart(5)} / ${c.total} (${pct(c.screenshots, c.total)}%)`,
+      `  - Title Screen:        ${c.titlescreens.toString().padStart(5)} / ${c.total} (${pct(c.titlescreens, c.total)}%)`,
+      `  - Clear Logo (Wheel):  ${c.logos.toString().padStart(5)} / ${c.total} (${pct(c.logos, c.total)}%)`,
+      `  - ${res.isDisc ? "Disc Media:          " : "Cartridge Media:     "}${c.discOrCart.toString().padStart(5)} / ${c.total} (${pct(c.discOrCart, c.total)}%)`,
+      `  - Plot Overview Story: ${c.stories.toString().padStart(5)} / ${c.total} (${pct(c.stories, c.total)}%)`,
+      `  - Video Preview:       ${c.videos.toString().padStart(5)} / ${c.total} (${pct(c.videos, c.total)}%)`,
+      `  - Complete (8/8 types):${c.complete.toString().padStart(5)} / ${c.total} (${pct(c.complete, c.total)}%)`,
+      `  - Zero Media (0 types):${c.zeroMedia.toString().padStart(5)} / ${c.total} (${pct(c.zeroMedia, c.total)}%)`,
+      ""
+    );
+
+    // Missing Items Breakdown
+    const missingByAsset = {};
+    for (const key of Object.keys(assetLabels)) {
+      missingByAsset[key] = [];
+    }
+
+    for (const game of res.gamesAudit) {
+      for (const m of game.missing) {
+        missingByAsset[m].push(game.baseName);
+      }
+    }
+
+    reportLines.push("[-] MISSING MEDIA BREAKDOWN:");
+    for (const [key, label] of Object.entries(assetLabels)) {
+      const list = missingByAsset[key];
+      if (list.length === 0) {
+        reportLines.push(`  [✓] ${label}: All ${c.total} games have assets!`);
+      } else {
+        reportLines.push(`  [!] ${label} (Missing for ${list.length}/${c.total} games):`);
+        for (const title of list) {
+          reportLines.push(`      * ${title}`);
+        }
+      }
+    }
+    reportLines.push("");
+
+    // Orphan Files Breakdown
+    const orphanKeys = Object.keys(res.orphans);
+    if (orphanKeys.length > 0) {
+      let totalOrphans = 0;
+      orphanKeys.forEach((k) => (totalOrphans += res.orphans[k].length));
+      reportLines.push(`[?] ORPHAN ARTWORK FILES (${totalOrphans} files without matching ROM):`);
+      for (const [key, files] of Object.entries(res.orphans)) {
+        reportLines.push(`  - Folder [${key}] (${files.length} orphans):`);
+        for (const f of files) {
+          reportLines.push(`      * ${f}`);
+        }
+      }
+      reportLines.push("");
+    } else {
+      reportLines.push("[✓] No orphan artwork files found.\n");
+    }
+  }
+
+  const reportText = reportLines.join("\n");
+  const reportBuffer = Buffer.from(reportText, "utf8");
+  const reportBytes = reportBuffer.length;
+  const reportKb = (reportBytes / 1024).toFixed(2);
+
+  // Write file to disk
+  try {
+    const outDir = path.dirname(outputPath);
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
+    fs.writeFileSync(outputPath, reportText, "utf8");
+  } catch (err) {
+    console.error(`[-] Failed to write audit report to ${outputPath}:`, err.message);
+  }
+
+  // Terminal Output Logic
+  // User Rule: "if its not over 5kb just print it in the terminal"
+  if (reportBytes <= 5120) {
+    console.log(reportText);
+    console.log(`\n[✓] Audit report saved to ${outputPath} (${reportBytes} bytes).`);
+  } else {
+    console.log(terminalSummaryText);
+    console.log("\n================================================================================");
+    console.log(`[!] Detailed audit report size is ${reportKb} KB (exceeds 5 KB terminal threshold).`);
+    console.log(`[✓] Full exhaustive report saved to: ${outputPath}`);
+    console.log(`[*] Review the full itemized report with:`);
+    console.log(`    cat ${outputPath} | less`);
+    console.log("================================================================================\n");
+  }
+}
+
 async function main() {
+  if (isAudit) {
+    await runAudit();
+    return;
+  }
+
   console.log("==================================================================");
   console.log("       ROM Vault - Multi-Asset Download & Metadata Engine         ");
   console.log("==================================================================");

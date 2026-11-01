@@ -12,7 +12,8 @@
     "sync-metadata": "node scripts/sync-metadata.mjs",
     "download-screenshots": "node scripts/download-screenshots.mjs",
     "download-boxart": "node scripts/download-boxart.mjs",
-    "download-metadata": "node scripts/download-metadata.mjs"
+    "download-metadata": "node scripts/download-metadata.mjs",
+    "audit-metadata": "node scripts/download-metadata.mjs --audit"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
