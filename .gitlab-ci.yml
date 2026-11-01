@@ -18,22 +18,14 @@ variables:
   NEXT_TELEMETRY_DISABLED: '1'
   SESSION_SECRET: ci-dummy-session-secret-build-only-32bytes
   DATABASE_URL: mysql://build:build@localhost:3306/build
-  npm_config_cache: "$CI_PROJECT_DIR/.npm"
-cache:
-  key:
-    files:
-    - package-lock.json
-    prefix: "${CI_COMMIT_REF_SLUG}"
-  paths:
-    - ".next/cache/"
-    - ".npm/"
+
 unit_test:
   stage: test
   before_script:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
   script:
     - echo "[*] Installing dependencies..."
-    - npm ci --include=dev --ignore-scripts --prefer-offline
+    - npm ci --include=dev --ignore-scripts
     - echo "[*] Running unit tests with JUnit report output..."
     - npx vitest run --passWithNoTests --reporter=default --reporter=junit --outputFile=junit.xml
   artifacts:
@@ -49,7 +41,7 @@ build_and_verify:
     fi
   script:
   - echo "[*] Installing dependencies..."
-  - npm ci --include=dev --ignore-scripts --prefer-offline
+  - npm ci --include=dev --ignore-scripts
   - echo "[*] Checking TypeScript types..."
   - npx tsc --noEmit
   - echo "[*] Running Next.js build..."
