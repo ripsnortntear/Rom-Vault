@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
 import path from "path";
-import crypto from "crypto";
 import { getCurrentSession } from "@/lib/auth/session";
 import { syncUserMemoryCard, normalizeCardSystem } from "@/lib/memory-cards";
+import { validateSaveFormatForPlatform } from "@/lib/security";
 
 interface RouteContext {
   params: Promise<{
@@ -11,81 +10,86 @@ interface RouteContext {
   }>;
 }
 
-const SAVES_ROOT = "/mnt/storage/roms/saves";
+const SAVES_BASE_DIR = path.resolve("/mnt/storage/roms/saves");
 
 export async function PUT(req: NextRequest, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const arrayBuffer = await req.arrayBuffer();
+    // 1. Authenticate caller strictly - reject unauthenticated requests immediately
+    const session = await getCurrentSession();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Authentication required to sync memory cards." },
+        { status: 401 }
+      );
+    }
 
+    const { id: rawId } = await context.params;
+    const cardId = decodeURIComponent(rawId).trim();
+
+    // Prevent path traversal on ID parameter
+    if (!cardId || cardId.includes("..") || cardId.includes("/") || cardId.includes("\\") || cardId.includes("\0")) {
+      return NextResponse.json({ error: "Invalid memory card identifier." }, { status: 400 });
+    }
+
+    const arrayBuffer = await req.arrayBuffer();
     if (!arrayBuffer || arrayBuffer.byteLength === 0) {
       return NextResponse.json({ error: "Empty memory card save data." }, { status: 400 });
     }
 
     const buffer = Buffer.from(arrayBuffer);
-    const session = await getCurrentSession();
-    const system = normalizeCardSystem(req.nextUrl.searchParams.get("system"));
+    const rawSystem = req.nextUrl.searchParams.get("system") || "psx";
+    const system = normalizeCardSystem(rawSystem);
 
-    // 1. Authenticated User Flow: Write to user's assigned card
-    if (session?.user?.id) {
-      try {
-        const ifMatch = req.headers.get("if-match")?.replace(/"/g, "") || undefined;
-        const expectedChecksum = req.headers.get("x-expected-checksum") || ifMatch;
+    if (!/^[a-zA-Z0-9_-]+$/.test(system)) {
+      return NextResponse.json({ error: "Invalid system identifier." }, { status: 400 });
+    }
 
-        const updatedCard = await syncUserMemoryCard(
-          session.user.id,
-          id,
-          buffer,
-          system,
-          expectedChecksum
-        );
+    // 2. Validate platform format and bounds
+    const formatError = validateSaveFormatForPlatform(system, buffer);
+    if (formatError) {
+      return NextResponse.json({ error: formatError }, { status: 400 });
+    }
 
-        return NextResponse.json({
-          success: true,
-          type: "user_card",
-          system: updatedCard.system,
-          card: updatedCard,
-          version: updatedCard.version,
-          checksum: updatedCard.checksum,
-          updatedAt: updatedCard.updated_at,
-        });
-      } catch (userCardErr) {
-        console.warn("[CardSync] User card sync failed, writing to fallback:", userCardErr);
+    // 3. Sync memory card scoped strictly to authenticated user
+    const ifMatch = req.headers.get("if-match")?.replace(/"/g, "") || undefined;
+    const expectedChecksum = req.headers.get("x-expected-checksum") || ifMatch;
+
+    const updatedCard = await syncUserMemoryCard(
+      session.user.id,
+      cardId,
+      buffer,
+      system,
+      expectedChecksum
+    );
+
+    // Verify card's destination on disk is strictly contained within SAVES_BASE_DIR
+    if (updatedCard.file_path) {
+      const targetPath = path.resolve(updatedCard.file_path);
+      if (!targetPath.startsWith(SAVES_BASE_DIR + path.sep)) {
+        return NextResponse.json({ error: "Invalid save file destination." }, { status: 400 });
       }
     }
 
-    // 2. Unauthenticated / Iframe Fallback: Write directly to global system save file
-    const gameId = req.nextUrl.searchParams.get("gameId") || (system === "ps2" ? "ps2_memory_card" : "Final Fantasy VII (USA)");
-    const cleanName = decodeURIComponent(gameId)
-      .replace(/[\/\\?%*:|"<>]/g, "_")
-      .trim();
-
-    const saveDir = path.join(SAVES_ROOT, system);
-    fs.mkdirSync(saveDir, { recursive: true });
-
-    const ext = system === "ps2" ? "ps2" : "srm";
-    const targetFile = path.join(saveDir, `${cleanName}.${ext}`);
-    const tmpFile = `${targetFile}.${Date.now()}.tmp`;
-
-    fs.writeFileSync(tmpFile, buffer);
-    fs.renameSync(tmpFile, targetFile);
-
-    try {
-      fs.copyFileSync(targetFile, `${targetFile}.bak`);
-    } catch {}
-
-    const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
-
     return NextResponse.json({
       success: true,
-      type: "fallback_file",
-      file: targetFile,
-      checksum,
+      type: "user_card",
+      system: updatedCard.system,
+      card: updatedCard,
+      version: updatedCard.version,
+      checksum: updatedCard.checksum,
+      updatedAt: updatedCard.updated_at,
     });
   } catch (error: any) {
     console.error("[api/users/me/cards/:id/sync PUT] Error:", error);
+    const msg = error?.message || "";
+    if (msg.includes("not found")) {
+      return NextResponse.json({ error: "Memory card not found." }, { status: 404 });
+    }
+    if (msg.includes("Conflict") || msg.includes("checksum mismatch")) {
+      return NextResponse.json({ error: msg }, { status: 409 });
+    }
     return NextResponse.json(
-      { error: error.message || "Failed to synchronize memory card." },
+      { error: "An unexpected error occurred while synchronizing the memory card." },
       { status: 500 }
     );
   }

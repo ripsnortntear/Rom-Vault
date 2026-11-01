@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("[api/users/me/cards GET] Error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list memory cards." },
+      { error: "An unexpected error occurred while retrieving memory cards." },
       { status: 500 }
     );
   }
@@ -51,10 +51,15 @@ export async function POST(req: NextRequest) {
     );
   } catch (error: any) {
     console.error("[api/users/me/cards POST] Error:", error);
-    const status = error.message?.includes("Maximum limit") ? 409 : 500;
+    if (error?.message?.includes("Maximum limit")) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
-      { error: error.message || "Failed to create virtual memory card." },
-      { status }
+      { error: "An unexpected error occurred while creating the virtual memory card." },
+      { status: 500 }
     );
   }
 }

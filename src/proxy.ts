@@ -58,6 +58,8 @@ export async function proxy(request: NextRequest) {
   };
 
   // 3. Stage 1: Authentication Check (Login Redirect)
+  const isApiRoute = pathname.startsWith("/api/") || pathname.startsWith("/roms/api/");
+
   // Check session cookie across supported parameter names
   const sessionCookie =
     request.cookies.get("session_token") ||
@@ -66,9 +68,9 @@ export async function proxy(request: NextRequest) {
 
   const rawToken = sessionCookie?.value;
 
-  // If cookie is missing or empty -> redirect to login
+  // If cookie is missing or empty -> return 401 for API or redirect to login
   if (!rawToken) {
-    if (pathname.startsWith("/api/")) {
+    if (isApiRoute) {
       return NextResponse.json(
         { error: "Authentication required to access the ROM Vault library." },
         { status: 401 }
@@ -80,9 +82,9 @@ export async function proxy(request: NextRequest) {
   // Statefully validate the session token against MariaDB and verify HMAC signature
   const session = await validateSessionToken(rawToken);
 
-  // If token is invalid, expired, or revoked in database -> clear cookie & redirect
+  // If token is invalid, expired, or revoked in database -> clear cookie & return 401 for API
   if (!session) {
-    if (pathname.startsWith("/api/")) {
+    if (isApiRoute) {
       return NextResponse.json(
         { error: "Invalid, expired, or revoked session token." },
         { status: 401 }

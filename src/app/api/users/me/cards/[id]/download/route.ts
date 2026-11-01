@@ -79,9 +79,13 @@ export async function GET(req: NextRequest, context: RouteContext) {
     });
   } catch (error: any) {
     console.error("[api/users/me/cards/:id/download GET] Error:", error);
+    const msg = error?.message || "";
+    if (msg.includes("not found")) {
+      return NextResponse.json({ error: "Memory card not found." }, { status: 404 });
+    }
     return NextResponse.json(
-      { error: error.message || "Failed to download memory card." },
-      { status: error.message?.includes("not found") ? 404 : 500 }
+      { error: "An unexpected error occurred while downloading the memory card." },
+      { status: 500 }
     );
   }
 }

@@ -76,6 +76,13 @@ export async function GET(
       return NextResponse.json({ error: "Media file not found" }, { status: 404 });
     }
 
+    // Verify confinement strictly within storage root
+    const STORAGE_ROOT = path.resolve("/mnt/storage/roms");
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(STORAGE_ROOT + path.sep)) {
+      return NextResponse.json({ error: "Access denied." }, { status: 403 });
+    }
+
     const stat = fs.statSync(filePath);
     if (!stat.isFile()) {
       return NextResponse.json({ error: "Not a valid file" }, { status: 404 });
@@ -86,39 +93,41 @@ export async function GET(
     const rangeHeader = request.headers.get("range");
     const isDownload = request.nextUrl.searchParams.get("download") === "1";
 
-    const commonHeaders: Record<string, string> = {
-      "Content-Type": mimeType,
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "public, max-age=3600, must-revalidate",
-      "Last-Modified": stat.mtime.toUTCString(),
-    };
+    // Enforce strict authentication and daily quota limits for ROM binaries
+    if (rawCategory.toLowerCase() === "roms") {
+      const session = await getCurrentSession();
+      if (!session?.user) {
+        return NextResponse.json(
+          { error: "Authentication required to access ROM assets." },
+          { status: 401 }
+        );
+      }
 
-    if (isDownload) {
-      if (rawCategory === "roms") {
+      if (session.user.role !== "admin") {
         try {
-          const session = await getCurrentSession();
-          if (session && session.user.role !== "admin") {
-            const profiles = await query<any>(
-              `SELECT download_quota_daily, download_count_today, last_download_reset
-               FROM user_profiles WHERE user_id = ? LIMIT 1`,
-              [session.user.id]
-            );
-            if (profiles.length > 0) {
-              const p = profiles[0];
-              const today = new Date().toISOString().slice(0, 10);
-              const resetDate = p.last_download_reset
-                ? new Date(p.last_download_reset).toISOString().slice(0, 10)
-                : "";
-              const currentCount = resetDate === today ? (p.download_count_today || 0) : 0;
-              const quota = p.download_quota_daily || 50;
+          const profiles = await query<any>(
+            `SELECT download_quota_daily, download_count_today, last_download_reset
+             FROM user_profiles WHERE user_id = ? LIMIT 1`,
+            [session.user.id]
+          );
+          if (profiles.length > 0) {
+            const p = profiles[0];
+            const today = new Date().toISOString().slice(0, 10);
+            const resetDate = p.last_download_reset
+              ? new Date(p.last_download_reset).toISOString().slice(0, 10)
+              : "";
+            const currentCount = resetDate === today ? (p.download_count_today || 0) : 0;
+            const quota = p.download_quota_daily || 50;
 
-              if (currentCount >= quota) {
-                return NextResponse.json(
-                  { error: `Daily download quota exceeded (${quota}/${quota}). Please try again tomorrow.` },
-                  { status: 429 }
-                );
-              }
+            if (currentCount >= quota) {
+              return NextResponse.json(
+                { error: `Daily download quota exceeded (${quota}/${quota}). Please try again tomorrow.` },
+                { status: 429 }
+              );
+            }
 
+            // Increment quota on full download or initial range stream
+            if (isDownload || !rangeHeader || rangeHeader.startsWith("bytes=0-")) {
               await execute(
                 `UPDATE user_profiles 
                  SET download_count_today = ?, last_download_reset = CURDATE()
@@ -131,7 +140,16 @@ export async function GET(
           console.error("[api/media] Error checking download quota:", err);
         }
       }
+    }
 
+    const commonHeaders: Record<string, string> = {
+      "Content-Type": mimeType,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "public, max-age=3600, must-revalidate",
+      "Last-Modified": stat.mtime.toUTCString(),
+    };
+
+    if (isDownload) {
       const safeDownloadName = path.basename(filePath).replace(/"/g, "");
       commonHeaders["Content-Disposition"] = `attachment; filename="${safeDownloadName}"`;
     }

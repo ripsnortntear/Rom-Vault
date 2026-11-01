@@ -37,9 +37,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
   } catch (error: any) {
     console.error("[api/users/me/cards/:id PATCH] Error:", error);
+    const msg = error?.message || "";
+    if (msg.includes("not found")) {
+      return NextResponse.json({ error: "Memory card not found." }, { status: 404 });
+    }
     return NextResponse.json(
-      { error: error.message || "Failed to update memory card." },
-      { status: error.message?.includes("not found") ? 404 : 400 }
+      { error: "An unexpected error occurred while updating the memory card." },
+      { status: 500 }
     );
   }
 }
@@ -60,10 +64,16 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     });
   } catch (error: any) {
     console.error("[api/users/me/cards/:id DELETE] Error:", error);
-    const isOnlyCard = error.message?.includes("only memory card");
+    const msg = error?.message || "";
+    if (msg.includes("only")) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    if (msg.includes("not found")) {
+      return NextResponse.json({ error: "Memory card not found." }, { status: 404 });
+    }
     return NextResponse.json(
-      { error: error.message || "Failed to delete memory card." },
-      { status: isOnlyCard ? 400 : 404 }
+      { error: "An unexpected error occurred while deleting the memory card." },
+      { status: 500 }
     );
   }
 }

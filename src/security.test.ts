@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { NextRequest } from "next/server";
+import { proxy } from "./proxy";
 import {
   isSafeHttpUrl,
   getSafeHttpUrl,
@@ -307,6 +309,38 @@ describe("CORS Origin Validation and Preflight Handling (SEC-08)", () => {
     expect(res.headers.get("Access-Control-Max-Age")).toBe("86400");
   });
 });
+
+describe("Residual Security Hardening (SEC-09 through SEC-12)", () => {
+  it("SEC-11: Proxy enforces 401 JSON on unauthenticated /roms/api/* and /api/* routes", async () => {
+    // 1. Unauthenticated request to /roms/api/users/me/cards/1/sync
+    const req1 = new NextRequest("http://localhost/roms/api/users/me/cards/1/sync");
+    const res1 = await proxy(req1);
+    expect(res1.status).toBe(401);
+    const json1 = await res1.json();
+    expect(json1.error).toContain("Authentication required");
+
+    // 2. Unauthenticated request to /api/users/me/cards/1/sync
+    const req2 = new NextRequest("http://localhost/api/users/me/cards/1/sync");
+    const res2 = await proxy(req2);
+    expect(res2.status).toBe(401);
+    const json2 = await res2.json();
+    expect(json2.error).toContain("Authentication required");
+
+    // 3. Unauthenticated request to /roms/api/media/roms/test.iso
+    const req3 = new NextRequest("http://localhost/roms/api/media/roms/test.iso");
+    const res3 = await proxy(req3);
+    expect(res3.status).toBe(401);
+    const json3 = await res3.json();
+    expect(json3.error).toContain("Authentication required");
+
+    // 4. Non-API unauthenticated request should redirect to login (307)
+    const req4 = new NextRequest("http://localhost/roms/play/snes__Super_Mario");
+    const res4 = await proxy(req4);
+    expect(res4.status).toBe(307);
+    expect(res4.headers.get("location")).toContain("/auth/login");
+  });
+});
+
 
 
 
