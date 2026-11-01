@@ -8,48 +8,52 @@ export default function PlayLayout({ children }: { children: React.ReactNode }) 
           __html: `
             (function() {
               try {
-                // 1. Permanently delete GamepadHapticActuator interface
+                // 1. Neuter GamepadHapticActuator prototype methods before wiping global reference
+                if (window.GamepadHapticActuator && window.GamepadHapticActuator.prototype) {
+                  try {
+                    GamepadHapticActuator.prototype.playEffect = function() { return Promise.resolve("complete"); };
+                    GamepadHapticActuator.prototype.pulse = function() { return Promise.resolve(true); };
+                    GamepadHapticActuator.prototype.reset = function() { return Promise.resolve("complete"); };
+                  } catch(e) {}
+                }
                 window.GamepadHapticActuator = undefined;
 
-                // 2. Override Gamepad prototype getters
+                // 2. Override Gamepad prototype getters once (prevents continuous Object.defineProperty calls)
                 if (window.Gamepad && window.Gamepad.prototype) {
-                  Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
-                    get: function() { return null; },
-                    set: function() {},
-                    configurable: false,
-                    enumerable: false
-                  });
-                  Object.defineProperty(Gamepad.prototype, "hapticActuators", {
-                    get: function() { return []; },
-                    set: function() {},
-                    configurable: false,
-                    enumerable: false
-                  });
+                  try {
+                    Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+                      get: function() { return null; },
+                      set: function() {},
+                      configurable: true,
+                      enumerable: false
+                    });
+                    Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+                      get: function() { return []; },
+                      set: function() {},
+                      configurable: true,
+                      enumerable: false
+                    });
+                  } catch(e) {}
                 }
 
-                // 3. Patch navigator.getGamepads to strip actuators on every pad instance
+                // 3. Throttle navigator.getGamepads to 60 FPS (16ms)
+                // Prevents Windows XInput / Xbox Wireless Adapter USB endpoint buffer saturation
                 if (navigator.getGamepads) {
                   const origGetGamepads = navigator.getGamepads.bind(navigator);
+                  let lastPollTime = 0;
+                  let cachedGamepads = [];
+
                   navigator.getGamepads = function() {
-                    const pads = origGetGamepads();
-                    if (pads) {
-                      for (let i = 0; i < pads.length; i++) {
-                        const pad = pads[i];
-                        if (pad) {
-                          try {
-                            Object.defineProperty(pad, "vibrationActuator", {
-                              get: () => null,
-                              configurable: false
-                            });
-                            Object.defineProperty(pad, "hapticActuators", {
-                              get: () => [],
-                              configurable: false
-                            });
-                          } catch(e) {}
-                        }
+                    const now = performance.now();
+                    if (now - lastPollTime >= 15) {
+                      lastPollTime = now;
+                      try {
+                        cachedGamepads = origGetGamepads();
+                      } catch(e) {
+                        cachedGamepads = [];
                       }
                     }
-                    return pads;
+                    return cachedGamepads;
                   };
                 }
 

@@ -875,7 +875,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
         const script = document.createElement("script");
         script.id = "ejs-loader-script";
-        script.src = "/roms/emulatorjs/data/loader.js";
+        script.src = `/roms/emulatorjs/data/loader.js?v=${Date.now()}`;
         script.async = true;
 
         script.onerror = () => {

@@ -35,54 +35,56 @@ export default function RootLayout({
 (function() {
   if (typeof window === "undefined") return;
   try {
-    // 1. Freeze and wipe GamepadHapticActuator & vibration prototypes
+    // 1. Neuter GamepadHapticActuator prototype methods before wiping global reference
+    if (window.GamepadHapticActuator && window.GamepadHapticActuator.prototype) {
+      try {
+        GamepadHapticActuator.prototype.playEffect = function() { return Promise.resolve("complete"); };
+        GamepadHapticActuator.prototype.pulse = function() { return Promise.resolve(true); };
+        GamepadHapticActuator.prototype.reset = function() { return Promise.resolve("complete"); };
+      } catch(e) {}
+    }
     window.GamepadHapticActuator = undefined;
+
+    // 2. Override Gamepad prototype getters once (prevents continuous Object.defineProperty calls)
     if (window.Gamepad && window.Gamepad.prototype) {
-      Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
-        get: function() { return null; },
-        set: function() {},
-        configurable: false,
-        enumerable: false
-      });
-      Object.defineProperty(Gamepad.prototype, "hapticActuators", {
-        get: function() { return []; },
-        set: function() {},
-        configurable: false,
-        enumerable: false
-      });
+      try {
+        Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+          get: function() { return null; },
+          set: function() {},
+          configurable: true,
+          enumerable: false
+        });
+        Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+          get: function() { return []; },
+          set: function() {},
+          configurable: true,
+          enumerable: false
+        });
+      } catch(e) {}
     }
 
-    // 2. Intercept navigator.getGamepads to sanitize returned pad instances
+    // 3. Throttle navigator.getGamepads to 60 FPS (16ms)
+    // Prevents Windows XInput / Xbox Wireless Adapter USB endpoint buffer saturation
     if (typeof navigator !== "undefined" && navigator.getGamepads) {
       const origGetGamepads = navigator.getGamepads.bind(navigator);
+      let lastPollTime = 0;
+      let cachedGamepads = [];
+
       navigator.getGamepads = function() {
-        const pads = origGetGamepads();
-        if (pads) {
-          for (let i = 0; i < pads.length; i++) {
-            const pad = pads[i];
-            if (pad) {
-              try {
-                Object.defineProperty(pad, "vibrationActuator", {
-                  get: () => null,
-                  set: () => {},
-                  configurable: false,
-                  enumerable: false
-                });
-                Object.defineProperty(pad, "hapticActuators", {
-                  get: () => [],
-                  set: () => {},
-                  configurable: false,
-                  enumerable: false
-                });
-              } catch(e) {}
-            }
+        const now = performance.now();
+        if (now - lastPollTime >= 15) {
+          lastPollTime = now;
+          try {
+            cachedGamepads = origGetGamepads();
+          } catch(e) {
+            cachedGamepads = [];
           }
         }
-        return pads;
+        return cachedGamepads;
       };
     }
 
-    // 3. Kill WebHID and WebUSB device enumeration that resets XInput controllers
+    // 4. Block WebHID and WebUSB device enumeration that resets XInput controllers
     if (typeof navigator !== "undefined") {
       if (navigator.hid) {
         navigator.hid.getDevices = () => Promise.resolve([]);
