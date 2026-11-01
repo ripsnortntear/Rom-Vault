@@ -366,19 +366,9 @@ export function resolveActualCardPath(card: UserMemoryCard): string {
 
   // Check under current active storage root for this user
   const fileName = path.basename(card.file_path || "");
+  const defaultFileName = fileName || `${card.system}_card_slot${card.slot_index}_${card.id}.${normalizeCardSystem(card.system) === "ps2" ? "ps2" : "mcr"}`;
   const userDir = getUserMemoryCardDir(card.user_id);
-  if (fileName) {
-    const candidate = path.join(userDir, fileName);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  // Fallback path in active user directory
-  return path.join(
-    userDir,
-    fileName || `${card.system}_card_slot${card.slot_index}_${card.id}.${normalizeCardSystem(card.system) === "ps2" ? "ps2" : "mcr"}`
-  );
+  return path.resolve(userDir, defaultFileName);
 }
 
 /**
