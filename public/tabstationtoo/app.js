@@ -4789,9 +4789,19 @@
 	}
 
 	async function syncCloudCard(c, bytes) {
-		if (!c || !bytes) return;
+		if (!c || !bytes) {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'Missing memory card data' }, '*');
+			}
+			return;
+		}
 		const syncUrl = c.cloudSyncUrl || (c.id === 'cloud_ps2_slot1' ? '/roms/api/users/me/cards/active/sync?system=ps2' : null);
-		if (!syncUrl) return;
+		if (!syncUrl) {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No cloud sync endpoint configured' }, '*');
+			}
+			return;
+		}
 
 		try {
 			if (window.parent && window.parent !== window) {
@@ -4812,9 +4822,15 @@
 				}
 			} else {
 				pageLog(`Cloud memory card sync failed: HTTP ${res.status}`, 'warn');
+				if (window.parent && window.parent !== window) {
+					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: `HTTP ${res.status}` }, '*');
+				}
 			}
 		} catch (err) {
 			pageLog(`Cloud memory card sync error: ${errorText(err)}`, 'warn');
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: errorText(err) }, '*');
+			}
 		}
 	}
 
@@ -4825,6 +4841,14 @@
 				const bytes = cards.fsReady ? readCardFile(id) : cards.boot[0];
 				if (bytes) {
 					syncCloudCard(cards.list.get(id) || { id, name: 'Cloud Virtual Memory Card (Slot 1)' }, bytes);
+				} else {
+					if (window.parent && window.parent !== window) {
+						window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No memory card file available in slot 1' }, '*');
+					}
+				}
+			} else {
+				if (window.parent && window.parent !== window) {
+					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No memory card attached to slot 1' }, '*');
 				}
 			}
 		}

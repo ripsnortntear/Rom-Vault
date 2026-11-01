@@ -13,6 +13,7 @@ import {
   Info,
   Save,
   CheckCircle2,
+  AlertCircle,
   Loader2,
   Disc3,
   Menu,
@@ -91,8 +92,9 @@ export function EmulatorModal({
   const hideBarsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHoveringBarRef = useRef<boolean>(false);
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "loaded">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "loaded" | "error">("idle");
   const [mountedCardName, setMountedCardName] = useState<string>("");
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Dismissable state reset pattern (replaces useEffect setState)
   const [dismissedGameId, setDismissedGameId] = useState<string | null>(null);
@@ -259,6 +261,14 @@ export function EmulatorModal({
 
   const handleForceSave = () => {
     setSaveStatus("saving");
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    // Safety fallback: if emulator iframe doesn't respond within 7 seconds, release saving state
+    saveTimeoutRef.current = setTimeout(() => {
+      setSaveStatus((current) => (current === "saving" ? "idle" : current));
+    }, 7000);
+
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "VAULT_FORCE_SAVE" }, "*");
@@ -272,9 +282,29 @@ export function EmulatorModal({
         setGamepadConnected(Boolean(e.data.connected));
         if (e.data.id) setGamepadId(e.data.id);
       } else if (e.data?.type === "VAULT_SAVE_STATUS") {
-        setSaveStatus(e.data.status);
-        if (e.data?.cardName) {
-          setMountedCardName(e.data.cardName);
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+          saveTimeoutRef.current = null;
+        }
+
+        if (e.data.status === "saved") {
+          setSaveStatus("saved");
+          if (e.data?.cardName) {
+            setMountedCardName(e.data.cardName);
+          }
+          setTimeout(() => {
+            setSaveStatus((current) => (current === "saved" ? "idle" : current));
+          }, 4000);
+        } else if (e.data.status === "error") {
+          setSaveStatus("error");
+          setTimeout(() => {
+            setSaveStatus((current) => (current === "error" ? "idle" : current));
+          }, 4000);
+        } else {
+          setSaveStatus(e.data.status);
+          if (e.data?.cardName) {
+            setMountedCardName(e.data.cardName);
+          }
         }
       } else if (e.data?.type === "VAULT_EXIT_READY") {
         onClose();
@@ -286,7 +316,13 @@ export function EmulatorModal({
     };
 
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
   }, [onClose, resetHideTimer]);
 
   useEffect(() => {
@@ -623,6 +659,12 @@ export function EmulatorModal({
                 <span className="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   <span suppressHydrationWarning>{mountedCardName ? `${mountedCardName} Synced` : "Memory Card Synced"}</span>
+                </span>
+              )}
+              {saveStatus === "error" && (
+                <span className="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold bg-rose-950/80 border border-rose-500/40 text-rose-300">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Save Error</span>
                 </span>
               )}
               {saveStatus === "saving" && (

@@ -357,6 +357,31 @@ export async function deleteUserMemoryCard(userId: string, cardId: string): Prom
 }
 
 /**
+ * Resolves the card's file path on disk, migrating legacy storage paths automatically.
+ */
+export function resolveActualCardPath(card: UserMemoryCard): string {
+  if (card.file_path && fs.existsSync(card.file_path)) {
+    return card.file_path;
+  }
+
+  // Check under current active storage root for this user
+  const fileName = path.basename(card.file_path || "");
+  const userDir = getUserMemoryCardDir(card.user_id);
+  if (fileName) {
+    const candidate = path.join(userDir, fileName);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Fallback path in active user directory
+  return path.join(
+    userDir,
+    fileName || `${card.system}_card_slot${card.slot_index}_${card.id}.${normalizeCardSystem(card.system) === "ps2" ? "ps2" : "mcr"}`
+  );
+}
+
+/**
  * Retrieves a card and its binary data (supports 'active' or 'top' alias for slot 1).
  */
 export async function getUserMemoryCardBinary(
@@ -388,6 +413,12 @@ export async function getUserMemoryCardBinary(
     throw new Error("Memory card not found.");
   }
 
+  const resolvedPath = resolveActualCardPath(card);
+  if (resolvedPath !== card.file_path) {
+    card.file_path = resolvedPath;
+    execute("UPDATE user_memory_cards SET file_path = ? WHERE id = ?", [resolvedPath, card.id]).catch(() => {});
+  }
+
   const expectedSize = normalizeCardSystem(card.system) === "ps2" ? PS2_CARD_SIZE : PS1_CARD_SIZE;
   let buffer: Buffer;
 
@@ -398,6 +429,10 @@ export async function getUserMemoryCardBinary(
     buffer = normalizeCardSystem(card.system) === "ps2"
       ? createFormattedPs2MemoryCard()
       : createFormattedPs1MemoryCard();
+    const dir = path.dirname(card.file_path);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(card.file_path, buffer);
   }
 
@@ -416,6 +451,12 @@ export async function syncUserMemoryCard(
 ): Promise<UserMemoryCard> {
   const system = normalizeCardSystem(systemInput);
   const { card } = await getUserMemoryCardBinary(userId, cardIdOrSlot, system);
+
+  const resolvedPath = resolveActualCardPath(card);
+  if (resolvedPath !== card.file_path) {
+    card.file_path = resolvedPath;
+    execute("UPDATE user_memory_cards SET file_path = ? WHERE id = ?", [resolvedPath, card.id]).catch(() => {});
+  }
 
   // Validate payload size
   if (!newBuffer || newBuffer.byteLength === 0) {

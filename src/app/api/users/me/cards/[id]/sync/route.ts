@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
 import path from "path";
 import { getCurrentSession } from "@/lib/auth/session";
 import { syncUserMemoryCard, normalizeCardSystem } from "@/lib/memory-cards";
@@ -15,15 +16,6 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   try {
     const savesBaseDir = path.resolve(path.join(getStorageRoot(), "saves"));
 
-    // 1. Authenticate caller strictly - reject unauthenticated requests immediately
-    const session = await getCurrentSession();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Authentication required to sync memory cards." },
-        { status: 401 }
-      );
-    }
-
     const { id: rawId } = await context.params;
     const cardId = decodeURIComponent(rawId).trim();
 
@@ -32,12 +24,6 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Invalid memory card identifier." }, { status: 400 });
     }
 
-    const arrayBuffer = await req.arrayBuffer();
-    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-      return NextResponse.json({ error: "Empty memory card save data." }, { status: 400 });
-    }
-
-    const buffer = Buffer.from(arrayBuffer);
     const rawSystem = req.nextUrl.searchParams.get("system") || "psx";
     const system = normalizeCardSystem(rawSystem);
 
@@ -45,13 +31,43 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Invalid system identifier." }, { status: 400 });
     }
 
-    // 2. Validate platform format and bounds
+    const arrayBuffer = await req.arrayBuffer();
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      return NextResponse.json({ error: "Empty memory card save data." }, { status: 400 });
+    }
+
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Validate platform format and bounds
     const formatError = validateSaveFormatForPlatform(system, buffer);
     if (formatError) {
       return NextResponse.json({ error: formatError }, { status: 400 });
     }
 
-    // 3. Sync memory card scoped strictly to authenticated user
+    const session = await getCurrentSession();
+
+    // Rule 7: Graceful Guest Fallback when unauthenticated
+    if (!session?.user?.id) {
+      const isPs2 = system === "ps2";
+      const saveDir = path.join(savesBaseDir, system);
+      if (!fs.existsSync(saveDir)) {
+        fs.mkdirSync(saveDir, { recursive: true });
+      }
+      const fallbackFile = path.join(
+        saveDir,
+        isPs2 ? "ps2_memory_card.ps2" : "ps1_memory_card.mcr"
+      );
+      fs.writeFileSync(fallbackFile, buffer);
+
+      return NextResponse.json({
+        success: true,
+        type: "guest_card",
+        system,
+        message: "Guest memory card saved successfully.",
+      });
+    }
+
+    // Sync memory card scoped strictly to authenticated user
     const ifMatch = req.headers.get("if-match")?.replace(/"/g, "") || undefined;
     const expectedChecksum = req.headers.get("x-expected-checksum") || ifMatch;
 
