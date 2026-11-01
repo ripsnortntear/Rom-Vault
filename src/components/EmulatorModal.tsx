@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useGamepadManager } from "@/hooks/useGamepadManager";
 import {
   X,
   Download,

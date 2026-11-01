@@ -348,40 +348,42 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   }, [flushSaveNow]);
 
   const updatePadMode = useCallback(
-    (connected: boolean) => {
+    (_connected: boolean) => {
       if (game.system !== "psx" && game.system !== "ps1") return;
 
+      // Keep pad1type as "standard" with "left_analog" mapping.
+      // Forcing "dualshock" (device 5) causes the PCSX ReARMed WASM core to transmit
+      // motor handshake packets via the Gamepad Haptic API, which trips low-voltage
+      // cut-offs and crashes the Bluetooth MCU on desktop controllers (Xbox/PS4/PS5/8BitDo).
       if (window.EJS_coreSettings) {
-        window.EJS_coreSettings.pcsx_rearmed_pad1type = connected ? "dualshock" : "standard";
-        window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = connected
-          ? "left_analog"
-          : "disabled";
+        window.EJS_coreSettings.pcsx_rearmed_pad1type = "standard";
+        window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = "left_analog";
       }
 
       if (window.EJS_defaultOptions) {
-        window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = connected ? "1" : "0";
-        window.EJS_defaultOptions["input_libretro_device_p1"] = connected ? "5" : "1";
+        window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = "1";
+        window.EJS_defaultOptions["input_libretro_device_p1"] = "1";
       }
 
       const emu = window.EJS_emulator;
       if (emu) {
         try {
           if (typeof emu.setCoreSetting === "function") {
-            emu.setCoreSetting("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
-            emu.setCoreSetting("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
+            emu.setCoreSetting("pcsx_rearmed_pad1type", "standard");
+            emu.setCoreSetting("pcsx_rearmed_analog_to_digital", "left_analog");
           }
           if (emu.gameManager) {
             const gm = emu.gameManager;
             if (typeof gm.setOption === "function") {
-              gm.setOption("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
-              gm.setOption("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
-              gm.setOption("input_player1_analog_dpad_mode", connected ? "1" : "0");
-              gm.setOption("input_libretro_device_p1", connected ? "5" : "1");
+              gm.setOption("pcsx_rearmed_pad1type", "standard");
+              gm.setOption("pcsx_rearmed_analog_to_digital", "left_analog");
+              gm.setOption("input_player1_analog_dpad_mode", "1");
+              gm.setOption("input_libretro_device_p1", "1");
             }
             if (typeof gm.setVariable === "function") {
-              gm.setVariable("pcsx_rearmed_pad1type", connected ? "dualshock" : "standard");
-              gm.setVariable("pcsx_rearmed_analog_to_digital", connected ? "left_analog" : "disabled");
-              gm.setVariable("input_player1_analog_dpad_mode", connected ? "1" : "0");
+              gm.setVariable("pcsx_rearmed_pad1type", "standard");
+              gm.setVariable("pcsx_rearmed_analog_to_digital", "left_analog");
+              gm.setVariable("input_player1_analog_dpad_mode", "1");
             }
           }
         } catch (e) {

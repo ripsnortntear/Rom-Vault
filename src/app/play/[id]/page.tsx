@@ -89,30 +89,44 @@ export default async function PlayPage({ params }: PlayPageProps) {
           __html: `
             (function() {
               try {
-                // 1. Wipe GamepadHapticActuator
+                // 1. Neuter GamepadHapticActuator prototype methods before wiping global reference
+                if (window.GamepadHapticActuator && window.GamepadHapticActuator.prototype) {
+                  try {
+                    window.GamepadHapticActuator.prototype.playEffect = function() { return Promise.resolve("complete"); };
+                    window.GamepadHapticActuator.prototype.pulse = function() { return Promise.resolve(true); };
+                    window.GamepadHapticActuator.prototype.reset = function() { return Promise.resolve("complete"); };
+                  } catch(e) {}
+                }
+
+                // 2. Wipe GamepadHapticActuator
                 window.GamepadHapticActuator = undefined;
+
                 // Neuter orientation lock crash on iOS Safari
                 if (window.screen && window.screen.orientation) {
                   try { window.screen.orientation.lock = function() { return Promise.resolve(); }; } catch(e) {}
                 }
 
-                // 2. Lock Gamepad prototype getters
+                // 3. Lock Gamepad prototype getters
                 if (window.Gamepad && window.Gamepad.prototype) {
-                  Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
-                    get: function() { return null; },
-                    set: function() {},
-                    configurable: false,
-                    enumerable: false
-                  });
-                  Object.defineProperty(Gamepad.prototype, "hapticActuators", {
-                    get: function() { return []; },
-                    set: function() {},
-                    configurable: false,
-                    enumerable: false
-                  });
+                  try {
+                    Object.defineProperty(Gamepad.prototype, "vibrationActuator", {
+                      get: function() { return null; },
+                      set: function() {},
+                      configurable: false,
+                      enumerable: false
+                    });
+                  } catch(e) {}
+                  try {
+                    Object.defineProperty(Gamepad.prototype, "hapticActuators", {
+                      get: function() { return []; },
+                      set: function() {},
+                      configurable: false,
+                      enumerable: false
+                    });
+                  } catch(e) {}
                 }
 
-                // 3. Patch navigator.getGamepads to sanitize returned pad objects
+                // 4. Patch navigator.getGamepads to sanitize returned pad objects & defuse actuator instances
                 if (navigator.getGamepads) {
                   const origGetGamepads = navigator.getGamepads.bind(navigator);
                   navigator.getGamepads = function() {
@@ -122,14 +136,11 @@ export default async function PlayPage({ params }: PlayPageProps) {
                         const pad = pads[i];
                         if (pad) {
                           try {
-                            Object.defineProperty(pad, "vibrationActuator", {
-                              get: () => null,
-                              configurable: false
-                            });
-                            Object.defineProperty(pad, "hapticActuators", {
-                              get: () => [],
-                              configurable: false
-                            });
+                            if (pad.vibrationActuator) {
+                              pad.vibrationActuator.playEffect = function() { return Promise.resolve("complete"); };
+                              pad.vibrationActuator.pulse = function() { return Promise.resolve(true); };
+                              pad.vibrationActuator.reset = function() { return Promise.resolve("complete"); };
+                            }
                           } catch(e) {}
                         }
                       }
