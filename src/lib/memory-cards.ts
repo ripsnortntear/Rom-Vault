@@ -37,9 +37,9 @@ export function getUserMemoryCardDir(userId: string): string {
     baseDir = STORAGE_ROOT_FALLBACK;
   }
 
-  const userDir = path.join(baseDir, cleanUserId);
-  if (!fs.existsSync(userDir)) {
-    fs.mkdirSync(userDir, { recursive: true });
+  const userDir = path.join(/*turbopackIgnore: true*/ baseDir, cleanUserId);
+  if (!fs.existsSync(/*turbopackIgnore: true*/ userDir)) {
+    fs.mkdirSync(/*turbopackIgnore: true*/ userDir, { recursive: true });
   }
   return userDir;
 }
