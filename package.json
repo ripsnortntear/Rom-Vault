@@ -8,7 +8,8 @@
     "start": "next start -p 39254",
     "lint": "eslint",
     "test": "vitest run",
-    "scan": "bash scripts/scan.sh"
+    "scan": "bash scripts/scan.sh",
+    "sync-metadata": "node scripts/sync-metadata.mjs"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
