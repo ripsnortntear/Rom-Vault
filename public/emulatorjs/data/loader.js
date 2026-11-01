@@ -94,7 +94,19 @@
     config.gameUrl = resolvedGameUrl;
     config.gamePath = window.EJS_gamePath || config.gamePath;
     config.dataPath = scriptPath;
-    config.system = window.EJS_core;
+    let coreSystem = window.EJS_core;
+    if (coreSystem === "gbc" || coreSystem === "sgb") {
+        coreSystem = "gb";
+    } else if (coreSystem === "genesis" || coreSystem === "megadrive") {
+        coreSystem = "segaMD";
+    } else if (coreSystem === "sms") {
+        coreSystem = "segaMS";
+    } else if (coreSystem === "sgg" || coreSystem === "gamegear") {
+        coreSystem = "segaGG";
+    } else if (coreSystem === "saturn") {
+        coreSystem = "segaSaturn";
+    }
+    config.system = coreSystem;
     config.biosUrl = window.EJS_biosUrl;
     config.gameName = window.EJS_gameName;
     config.color = window.EJS_color;

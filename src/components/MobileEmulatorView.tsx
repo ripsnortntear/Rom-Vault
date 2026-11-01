@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save } from "lucide-react";
 import { PS2EmulatorView } from "./PS2EmulatorView";
+import { getSystemMeta } from "@/lib/systems";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -611,8 +612,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         candidateNames.add(`${deepDecode(game.title).trim()}.srm`);
         const candidateNamesArray = Array.from(candidateNames);
 
+        const systemMeta = getSystemMeta(game.system);
         window.EJS_player = "#mobile-emulator-container";
-        window.EJS_core = game.system;
+        window.EJS_core = systemMeta.ejsCore || game.system;
         window.EJS_gameName = game.title;
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
