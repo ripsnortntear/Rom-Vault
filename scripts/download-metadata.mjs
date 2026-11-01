@@ -161,6 +161,13 @@ AUDIT MODE (Audit ROMs against artwork & generate detailed report):
   --no-orphans            Skip orphan artwork detection
   --export-contributions  Package unique local artwork into contributions/ with direct upload links
 
+ORPHAN ARTWORK CLEANUP (Prune leftover artwork for deleted ROMs with [Y/N] prompt):
+  --prune-orphans         Find and interactively delete orphan artwork files
+  --clean-orphans         Alias for --prune-orphans
+  --filter=<title>        Only prune orphan artwork matching title query (e.g. --filter="Crash")
+  --dry-run               Preview orphan files without deleting anything
+  -y, --yes               Skip interactive [Y/N] confirmation prompt
+
 TARGET ASSET FLAGS (choose one or more, or use --all):
   --boxart           Download 2D Front Box Art -> artwork/artwork_front/
   --boxart-3d        Download 3D Box Art       -> artwork/artwork_3d/
@@ -190,32 +197,28 @@ SUPPORTED CONSOLE SYSTEMS:
   gba, gbc, gb, sgb, genesis, sega32x, sms, sgg
 
 EXAMPLES:
+  # Interactively find and delete leftover orphan artwork for PS2 (prompts Y/N):
+  npm run prune-orphans -- --system=ps2
+  # or
+  npm run download-metadata -- --prune-orphans --system=ps2
+
+  # Filter orphan cleanup for a specific deleted title:
+  npm run prune-orphans -- --system=ps2 --filter="Spider-Man"
+
+  # Preview orphan files without deleting (dry run):
+  npm run prune-orphans -- --system=ps2 --dry-run
+
   # Audit PS2 ROMs against artwork (prints to terminal if <= 5KB, otherwise saves file):
   npm run download-metadata -- --audit --system=ps2
 
   # Audit entire ROM Vault across all systems:
   npm run download-metadata -- --audit
 
-  # Audit with custom report output path:
-  npm run download-metadata -- --audit --output=vault-audit.txt
-
   # Download transparent wheel logos for PS2 using SteamGridDB:
   npm run download-metadata -- --logos --system=ps2
 
   # Download 2D box art for PlayStation 2 only:
   npm run download-metadata -- --boxart --system=ps2
-
-  # Download in-game screenshots for Game Boy Color:
-  npm run download-metadata -- --screenshots --system=gbc
-
-  # Download both title screens and box art for GameCube:
-  npm run download-metadata -- --titlescreens --boxart --system=gamecube
-
-  # Test 2D box art on 5 games:
-  npm run download-metadata -- --boxart --system=ps2 --limit=5
-
-  # Download all missing media types across the entire vault:
-  npm run download-metadata -- --all
 
   # Run in the background (disconnect-safe via nohup):
   nohup npm run download-metadata -- --logos --system=ps2 > /tmp/logos.log 2>&1 &
@@ -231,8 +234,13 @@ if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.length === 0
 }
 
 const isAudit = rawArgs.includes("--audit");
+const isPrune = rawArgs.includes("--prune-orphans") || rawArgs.includes("--clean-orphans");
+const dryRun = rawArgs.includes("--dry-run");
+const autoYes = rawArgs.includes("-y") || rawArgs.includes("--yes");
 const exportContributions = rawArgs.includes("--export-contributions") || rawArgs.includes("--contribute");
+
 let targetSystem = null;
+let filterQuery = null;
 let limit = null;
 let delayMs = 300;
 let forceAll = rawArgs.includes("--force");
@@ -243,6 +251,8 @@ let checkOrphans = !rawArgs.includes("--no-orphans");
 for (const arg of rawArgs) {
   if (arg.startsWith("--system=")) {
     targetSystem = arg.split("=")[1].toLowerCase().trim();
+  } else if (arg.startsWith("--filter=")) {
+    filterQuery = arg.split("=")[1].trim();
   } else if (arg.startsWith("--limit=")) {
     limit = parseInt(arg.split("=")[1], 10);
   } else if (arg.startsWith("--delay=")) {
@@ -270,8 +280,8 @@ if (rawArgs.includes("--all")) {
 const selectedTypes = Object.entries(targets).filter(([, v]) => v).map(([k]) => k);
 
 // Validate Arguments
-if (!isAudit && selectedTypes.length === 0) {
-  console.error("[-] Error: No asset type specified. Please supply e.g. --boxart, --screenshots, --logos, --all, or --audit.");
+if (!isAudit && !isPrune && selectedTypes.length === 0) {
+  console.error("[-] Error: No asset type specified. Please supply e.g. --boxart, --screenshots, --logos, --all, --audit, or --prune-orphans.");
   console.log("[*] Run 'npm run download-metadata -- --help' for instructions.");
   process.exit(1);
 }
@@ -846,7 +856,195 @@ async function runAudit() {
   }
 }
 
+// ==============================================================================
+// ORPHAN CLEANUP ENGINE: Interactively Prunes Leftover Artwork for Deleted ROMs
+// ==============================================================================
+async function pruneOrphans() {
+  console.log("==================================================================");
+  console.log("              ROM Vault - Orphan Artwork Cleanup Engine           ");
+  console.log("==================================================================");
+  console.log(`[*] Target Storage: ${STORAGE_ROOT}`);
+  if (targetSystem) console.log(`[*] Target System:  ${targetSystem}`);
+  if (filterQuery) console.log(`[*] Filter Query:   "${filterQuery}"`);
+  if (dryRun) console.log(`[*] Execution Mode: DRY RUN (no files will be deleted)`);
+  console.log("");
+
+  const allSystems = fs
+    .readdirSync(STORAGE_ROOT, { withFileTypes: true })
+    .filter((ent) => ent.isDirectory() && ent.name !== "saves")
+    .map((ent) => ent.name);
+
+  const systemsToScan = targetSystem
+    ? allSystems.filter((s) => s.toLowerCase() === targetSystem)
+    : allSystems;
+
+  if (systemsToScan.length === 0) {
+    console.error(`[-] No matching system directory found for '${targetSystem}'.`);
+    process.exit(1);
+  }
+
+  const orphansToDelete = [];
+  let totalOrphanBytes = 0;
+
+  for (const sys of systemsToScan) {
+    const romsDir = path.join(STORAGE_ROOT, sys, "roms");
+    const artDir = path.join(STORAGE_ROOT, sys, "artwork");
+
+    if (!fs.existsSync(romsDir) || !fs.existsSync(artDir)) continue;
+
+    // Collect all valid ROM base names
+    const romFiles = fs
+      .readdirSync(romsDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && !e.name.startsWith("."))
+      .map((e) => e.name);
+
+    const validBases = new Set();
+    for (const rf of romFiles) {
+      const extIdx = rf.lastIndexOf(".");
+      const base = extIdx > 0 ? rf.slice(0, extIdx) : rf;
+      validBases.add(base.toLowerCase());
+      const discLess = base.replace(/\s*\(disc\s*\d+[^)]*\)/i, "").trim().toLowerCase();
+      validBases.add(discLess);
+    }
+
+    // Inspect all subdirectories in artwork/
+    const artFolders = fs
+      .readdirSync(artDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+
+    for (const folder of artFolders) {
+      const folderPath = path.join(artDir, folder);
+      const files = fs
+        .readdirSync(folderPath, { withFileTypes: true })
+        .filter((e) => e.isFile() && !e.name.startsWith("."));
+
+      for (const f of files) {
+        const extIdx = f.name.lastIndexOf(".");
+        const artBase = extIdx > 0 ? f.name.slice(0, extIdx) : f.name;
+        const lowerArt = artBase.toLowerCase();
+
+        // Safeguard: Protect platform-wide default assets and system files
+        if (["default", "desktop", "folder", "thumbs", ".gitkeep"].includes(lowerArt)) {
+          continue;
+        }
+
+        const discLessArt = lowerArt.replace(/\s*\(disc\s*\d+[^)]*\)/i, "").trim();
+
+        const isMatch = validBases.has(lowerArt) || validBases.has(discLessArt);
+        if (!isMatch) {
+          if (filterQuery && !f.name.toLowerCase().includes(filterQuery.toLowerCase())) {
+            continue;
+          }
+
+          const fullPath = path.join(folderPath, f.name);
+          let size = 0;
+          try {
+            size = fs.statSync(fullPath).size;
+          } catch {}
+
+          orphansToDelete.push({
+            system: sys,
+            folder,
+            fileName: f.name,
+            fullPath,
+            size,
+          });
+          totalOrphanBytes += size;
+        }
+      }
+    }
+  }
+
+  if (orphansToDelete.length === 0) {
+    console.log("[✓] No orphan artwork files found! Library artwork is 100% clean and matched to ROMs.");
+    return;
+  }
+
+  // Group by system and folder for clear summary
+  const byFolder = {};
+  for (const item of orphansToDelete) {
+    const key = `${item.system} / artwork / ${item.folder}`;
+    byFolder[key] = (byFolder[key] || 0) + 1;
+  }
+
+  const mbFreed = (totalOrphanBytes / (1024 * 1024)).toFixed(2);
+  console.log(`[!] Found ${orphansToDelete.length} orphan artwork files (~${mbFreed} MB) with no matching ROM in vault:\n`);
+  for (const [key, count] of Object.entries(byFolder)) {
+    console.log(`    - ${key.padEnd(36)}: ${count} files`);
+  }
+  console.log("");
+
+  // Print first 30 files as samples
+  console.log("Sample orphan files identified for removal:");
+  const sample = orphansToDelete.slice(0, 30);
+  for (const item of sample) {
+    console.log(`  * [${item.system}/${item.folder}] ${item.fileName}`);
+  }
+  if (orphansToDelete.length > 30) {
+    console.log(`  * ... and ${orphansToDelete.length - 30} more orphan files.`);
+  }
+
+  if (dryRun) {
+    console.log(`\n[*] DRY RUN COMPLETE: ${orphansToDelete.length} files would be deleted (~${mbFreed} MB). No changes made.`);
+    return;
+  }
+
+  // Interactive Y/N Confirmation
+  let proceed = autoYes;
+  if (!proceed) {
+    if (!process.stdin.isTTY) {
+      console.error("\n[-] Error: Non-interactive terminal detected. Run directly in terminal or pass --yes (-y) to confirm deletion.");
+      process.exit(1);
+    }
+
+    const readlinePromises = await import("node:readline/promises");
+    const rl = readlinePromises.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    const answer = await rl.question(
+      `\nAre you sure you want to permanently delete these ${orphansToDelete.length} orphan files? [y/N]: `
+    );
+    rl.close();
+
+    const normAns = answer.trim().toLowerCase();
+    proceed = normAns === "y" || normAns === "yes";
+  }
+
+  if (!proceed) {
+    console.log("\n[*] Cleanup aborted by user. No files were deleted.");
+    return;
+  }
+
+  console.log(`\n[+] Deleting ${orphansToDelete.length} orphan artwork files...`);
+  let deletedCount = 0;
+  let deletedBytes = 0;
+  for (const item of orphansToDelete) {
+    try {
+      fs.unlinkSync(item.fullPath);
+      deletedCount++;
+      deletedBytes += item.size;
+    } catch (err) {
+      console.warn(`[!] Failed to delete ${item.fullPath}: ${err.message}`);
+    }
+  }
+
+  const finalMb = (deletedBytes / (1024 * 1024)).toFixed(2);
+  console.log("==================================================================");
+  console.log(`[✓] Cleanup Complete!`);
+  console.log(`    - Files Deleted:     ${deletedCount}`);
+  console.log(`    - Disk Space Freed:  ${finalMb} MB`);
+  console.log("==================================================================");
+}
+
 async function main() {
+  if (isPrune) {
+    await pruneOrphans();
+    return;
+  }
+
   if (isAudit) {
     await runAudit();
     return;

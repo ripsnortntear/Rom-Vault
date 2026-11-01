@@ -13,7 +13,8 @@
     "download-screenshots": "node scripts/download-screenshots.mjs",
     "download-boxart": "node scripts/download-boxart.mjs",
     "download-metadata": "node scripts/download-metadata.mjs",
-    "audit-metadata": "node scripts/download-metadata.mjs --audit"
+    "audit-metadata": "node scripts/download-metadata.mjs --audit",
+    "prune-orphans": "node scripts/download-metadata.mjs --prune-orphans"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
