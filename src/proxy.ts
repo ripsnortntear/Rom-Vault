@@ -60,6 +60,24 @@ export async function proxy(request: NextRequest) {
   // 3. Stage 1: Authentication Check (Login Redirect)
   const isApiRoute = pathname.startsWith("/api/") || pathname.startsWith("/roms/api/");
 
+  // Check for admin bearer secret authorization (CLI / automated maintenance)
+  const authHeader = request.headers.get("authorization");
+  const isBearerAdmin = Boolean(
+    authHeader &&
+      ((process.env.AUTH_SECRET && authHeader === `Bearer ${process.env.AUTH_SECRET}`) ||
+        (process.env.SESSION_SECRET && authHeader === `Bearer ${process.env.SESSION_SECRET}`))
+  );
+
+  if (isBearerAdmin) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-admin-authorized", "true");
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
   // Check session cookie across supported parameter names
   const sessionCookie =
     request.cookies.get("session_token") ||
@@ -120,6 +138,7 @@ export async function proxy(request: NextRequest) {
   requestHeaders.delete("x-user-role");
   requestHeaders.delete("x-user-username");
   requestHeaders.delete("x-session-token");
+  requestHeaders.delete("x-admin-authorized");
 
   if (sessionData.userId) {
     requestHeaders.set("x-user-id", String(sessionData.userId));

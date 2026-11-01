@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { getAdminStorageHealth, getAdminAuditLogs } from "@/lib/community";
 import { getStorageRoot } from "@/lib/paths";
+import { AdminRescanButton } from "@/components/AdminRescanButton";
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return "0 B";
@@ -46,6 +47,7 @@ export default async function AdminOverviewPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <AdminRescanButton />
           <Link
             href="/admin/users"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition"
