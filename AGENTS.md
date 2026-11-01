@@ -114,4 +114,22 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Performance Profiling: Validate via `/_next/mcp` that emulation routes, media streams, and library views emit clean static shells without unexpected blocking SSR waterfalls.
 - Audit Caching Tiers: Clearly annotate which segments are prerendered, cache-component accelerated (`"use cache"`), or streamed via `<Suspense>`.
 
+## 12. Automated Repository Synchronization Invariant
+- Post-Task Execution: Upon completing each logical section, feature, remediation, or refactor, you MUST execute `/var/www/html/roms/sync-repo.sh --rebuild "<descriptive commit message>"`.
+- Pre-Commit Verification: The script automatically verifies the Next.js Turbopack build (`npm run build`), restarts `retro-gaming.service`, stages files, pulls with rebase, and pushes clean builds to `origin/main`.
+- Never Hardcode Credentials in Scripts: Pushes must rely on standard git remote authentication or the `GIT_PUSH_URL` environment variable; never embed personal access tokens in script files.
+
+## 13. Hermetic CI Unit Testing & Database Mocking
+- Zero Live DB Dependency in Unit Tests: Unit and regression test suites (`npm test` / Vitest) must run 100% hermetically without requiring a running MariaDB socket, network connection, or live credentials.
+- Top-Level Hoisted Mocks: Any test importing modules that interact with `@/lib/db` must mock the database using `vi.hoisted` and `vi.mock("@/lib/db", ...)`:
+  - Case A (Active / Valid): Mock `db.query` / `query` to return valid active rows.
+  - Case B (Revoked / Missing): Mock `db.query` / `query` to return empty array `[]`.
+  - Case C (Suspended / Disabled): Mock `db.query` / `query` to simulate account restrictions.
+- Zero Stderr Pollution: Ensure tests do not emit unhandled rejection warnings or connection error logs (`[validateSessionToken] DB verification failed`) in CI.
+
+## 14. Privacy, Generalized Documentation & Placeholders
+- Generalized Links & Domains: All documentation, wikis, `.env.example`, and deployment configuration templates must use standard RFC 2606 generalized domains (e.g., `https://your-domain.example.com`, `https://roms.example.com`) and generic email addresses (`admin@example.com`).
+- Placeholder Callout Required: Any README, setup guide, or wiki file detailing installation steps MUST include a prominent notice informing users that all hostnames, storage paths (`/mnt/storage/roms`), and passwords are generalized templates.
+- Zero Revealing Information: Never commit personal access tokens, specific internal network IPs, real user emails, or production secrets to tracked documentation or repository code.
+
 <!-- END:nextjs-agent-rules -->
