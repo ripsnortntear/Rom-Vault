@@ -11,6 +11,7 @@ import {
   Filter,
 } from "lucide-react";
 import { moderateDeleteCommentAction, moderateDeleteScoreAction } from "@/app/actions/admin";
+import { getSafeHttpUrl } from "@/lib/security";
 import type { GameComment, GameHighScore } from "@/types/community";
 
 interface AdminModerationClientProps {
@@ -165,19 +166,27 @@ export function AdminModerationClient({
                         {score.user.displayName || score.user.username}
                       </td>
                       <td className="py-3 px-4">
-                        {score.proofUrl ? (
-                          <a
-                            href={score.proofUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 underline"
-                          >
-                            <span>Link</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
+                        {(() => {
+                          const safeProofUrl =
+                            score.proofUrl &&
+                            (score.proofUrl.startsWith("http://") || score.proofUrl.startsWith("https://"))
+                              ? score.proofUrl
+                              : undefined;
+
+                          return safeProofUrl ? (
+                            <a
+                              href={safeProofUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 underline"
+                            >
+                              <span>Link</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
                         {new Date(score.createdAt).toLocaleDateString()}

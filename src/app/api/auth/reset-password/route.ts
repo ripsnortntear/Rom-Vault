@@ -5,10 +5,28 @@ import {
   validatePasswordComplexity,
   hashPassword,
 } from "@/lib/auth/crypto";
+import { checkRateLimit, recordRateLimitEvent, getTrustedClientIp } from "@/lib/auth/rate-limit";
 import { revokeAllUserSessions } from "@/lib/auth/session-db";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getTrustedClientIp(req);
+
+    // Rate limiting: max 5 reset submissions per IP per 15 minutes
+    const rateCheck = await checkRateLimit({
+      action: "reset_password",
+      identifier: ip,
+      maxAttempts: 5,
+      windowSeconds: 900,
+    });
+
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Too many password reset attempts. Please try again in ${Math.ceil(rateCheck.retryAfterSeconds / 60)} minutes.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json().catch(() => null);
     if (!body) {
       return NextResponse.json({ error: "Invalid request payload." }, { status: 400 });
@@ -37,6 +55,7 @@ export async function POST(req: NextRequest) {
 
     const tokenRecord = rows[0];
     if (!tokenRecord) {
+      await recordRateLimitEvent("reset_password", ip);
       return NextResponse.json(
         { error: "This password reset link is invalid or has expired. Please request a new one." },
         { status: 400 }

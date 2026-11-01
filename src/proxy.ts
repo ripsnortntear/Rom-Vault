@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionTokenFast, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { validateSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 // Public paths that do not require authentication
 const PUBLIC_PREFIXES = [
@@ -8,7 +8,6 @@ const PUBLIC_PREFIXES = [
   "/scores",
   "/emulatorjs",
   "/tabstationtoo",
-  "/api/roms",
   "/api/bios",
   "/_next",
   "/favicon.ico",
@@ -72,21 +71,21 @@ export async function proxy(request: NextRequest) {
     return buildLoginRedirect(false);
   }
 
-  // Cryptographically validate the session token via fast HMAC verification
-  const verifyResult = await verifySessionTokenFast(rawToken);
+  // Statefully validate the session token against MariaDB and verify HMAC signature
+  const session = await validateSessionToken(rawToken);
 
-  // If signature verification fails (corrupted, tampered, or expired) -> clear cookie & redirect
-  if (!verifyResult.valid) {
+  // If token is invalid, expired, or revoked in database -> clear cookie & redirect
+  if (!session) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
-        { error: "Invalid or expired session token." },
+        { error: "Invalid, expired, or revoked session token." },
         { status: 401 }
       );
     }
     return buildLoginRedirect(true);
   }
 
-  const sessionData = verifyResult.payload;
+  const sessionData = session.user;
 
   // 4. Stage 2: Authorization Check (Role Enforcement)
   // Reaching this point guarantees the user has a cryptographically verified identity
@@ -107,6 +106,13 @@ export async function proxy(request: NextRequest) {
 
   // 5. Stage 3: Downstream Context Pass-Through
   const requestHeaders = new Headers(request.headers);
+
+  // Header hygiene: explicitly strip untrusted client-injected identity headers
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-role");
+  requestHeaders.delete("x-user-username");
+  requestHeaders.delete("x-session-token");
+
   if (sessionData.userId) {
     requestHeaders.set("x-user-id", String(sessionData.userId));
   }

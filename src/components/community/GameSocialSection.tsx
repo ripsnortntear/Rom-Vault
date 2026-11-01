@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { submitGameRating, postGameComment, deleteGameComment } from "@/app/actions/social";
 import { submitHighScoreAction } from "@/app/actions/scores";
+import { getSafeHttpUrl } from "@/lib/security";
 import type { GameSocialStats, GameComment, GameHighScore } from "@/types/community";
 import type { AuthSession } from "@/types/auth";
 
@@ -482,6 +483,12 @@ export function GameLeaderboardSnapshot({ className = "" }: { className?: string
             {stats.topScores.map((score, index) => {
               const medal =
                 index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`;
+              const safeProofUrl =
+                score.proofUrl &&
+                (score.proofUrl.startsWith("http://") || score.proofUrl.startsWith("https://"))
+                  ? score.proofUrl
+                  : undefined;
+
               return (
                 <div key={score.id} className="flex items-center justify-between py-2 text-xs">
                   <div className="flex items-center gap-2 min-w-0">
@@ -491,9 +498,9 @@ export function GameLeaderboardSnapshot({ className = "" }: { className?: string
                     <span className="font-semibold text-white truncate">
                       {score.user.displayName || score.user.username}
                     </span>
-                    {score.proofUrl && (
+                    {safeProofUrl && (
                       <a
-                        href={score.proofUrl}
+                        href={safeProofUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[10px] text-zinc-400 hover:text-white underline flex items-center gap-0.5"

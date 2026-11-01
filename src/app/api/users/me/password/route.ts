@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth/session";
+import { getCurrentSession, clearSessionCookie } from "@/lib/auth/session";
+import { revokeAllUserSessions } from "@/lib/auth/session-db";
+import { checkRateLimit, recordRateLimitEvent, getTrustedClientIp } from "@/lib/auth/rate-limit";
 import { query, execute } from "@/lib/db";
 import {
   verifyPassword,
@@ -12,6 +14,23 @@ export async function POST(req: NextRequest) {
     const session = await getCurrentSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
+    const ip = getTrustedClientIp(req);
+
+    // Rate limiting: max 5 password change attempts per 15 minutes per user/IP
+    const rateCheck = await checkRateLimit({
+      action: "change_password",
+      identifier: `${session.user.id}:${ip}`,
+      maxAttempts: 5,
+      windowSeconds: 900,
+    });
+
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Too many password change attempts. Please try again in ${Math.ceil(rateCheck.retryAfterSeconds / 60)} minutes.` },
+        { status: 429 }
+      );
     }
 
     const body = await req.json().catch(() => null);
@@ -47,6 +66,7 @@ export async function POST(req: NextRequest) {
 
     const isMatch = await verifyPassword(currentPassword, user.password_hash);
     if (!isMatch) {
+      await recordRateLimitEvent("change_password", `${session.user.id}:${ip}`);
       return NextResponse.json({ error: "Current password does not match." }, { status: 400 });
     }
 
@@ -57,9 +77,13 @@ export async function POST(req: NextRequest) {
       [newHash, session.user.id]
     );
 
+    // Invalidate all active sessions across all devices for this user
+    await revokeAllUserSessions(session.user.id);
+    await clearSessionCookie();
+
     return NextResponse.json({
       success: true,
-      message: "Password changed successfully.",
+      message: "Password changed successfully. Please log in with your new password.",
     });
   } catch (error: any) {
     console.error("[api/users/me/password POST] Error:", error);

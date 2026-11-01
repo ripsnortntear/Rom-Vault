@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
 import { query, execute } from "@/lib/db";
+import { isSafeHttpUrl } from "@/lib/security";
 import type { UserProfile } from "@/types/auth";
 
 export async function GET(req: NextRequest) {
@@ -67,7 +68,36 @@ export async function PUT(req: NextRequest) {
     }
 
     if (avatarUrl !== undefined) {
-      const cleanAvatar = avatarUrl ? String(avatarUrl).trim().slice(0, 255) : null;
+      let cleanAvatar: string | null = null;
+      if (avatarUrl) {
+        const raw = String(avatarUrl).trim();
+        if (raw.length > 500) {
+          return NextResponse.json({ error: "Avatar URL exceeds maximum length (500 characters)." }, { status: 400 });
+        }
+        // Reject dangerous schemes immediately
+        if (/^(javascript|data|vbscript|file|blob):/i.test(raw)) {
+          return NextResponse.json({ error: "Dangerous or unsupported URI scheme in avatar URL." }, { status: 400 });
+        }
+
+        // Allow internal relative path (e.g. /avatars/... or /roms/...)
+        if (raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\")) {
+          cleanAvatar = raw.slice(0, 255);
+        } else if (isSafeHttpUrl(raw)) {
+          // Allow external HTTP/HTTPS URL
+          try {
+            const parsed = new URL(raw);
+            if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+              cleanAvatar = parsed.toString().slice(0, 255);
+            } else {
+              return NextResponse.json({ error: "Avatar URL must use http: or https: protocol." }, { status: 400 });
+            }
+          } catch {
+            return NextResponse.json({ error: "Invalid avatar URL format." }, { status: 400 });
+          }
+        } else {
+          return NextResponse.json({ error: "Invalid avatar URL format." }, { status: 400 });
+        }
+      }
       updates.push("avatar_url = ?");
       params.push(cleanAvatar);
     }

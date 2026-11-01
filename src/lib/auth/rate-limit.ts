@@ -1,4 +1,5 @@
 import { query, execute } from "@/lib/db";
+export { getClientIp, getTrustedClientIp } from "@/lib/ip";
 
 interface RateLimitOptions {
   action: string;

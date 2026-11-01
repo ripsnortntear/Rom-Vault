@@ -15,6 +15,7 @@ import {
 import { getHighScoreById } from "@/lib/community";
 import { getGameById } from "@/lib/scanner";
 import { ScoreShareButtons } from "@/components/community/ScoreShareButtons";
+import { getSafeHttpUrl } from "@/lib/security";
 
 interface ScorePageProps {
   params: Promise<{ id: string }>;
@@ -146,9 +147,9 @@ export default async function ScorePage(props: ScorePageProps) {
             </div>
 
             <div className="flex flex-col justify-center sm:items-end">
-              {score.proofUrl ? (
+              {getSafeHttpUrl(score.proofUrl) ? (
                 <a
-                  href={score.proofUrl}
+                  href={getSafeHttpUrl(score.proofUrl)!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-200 bg-white/10 hover:bg-white/20 border border-white/10 transition"

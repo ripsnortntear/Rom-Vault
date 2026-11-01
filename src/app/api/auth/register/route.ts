@@ -9,13 +9,13 @@ import {
   hashToken,
   generateUUID,
 } from "@/lib/auth/crypto";
-import { checkRateLimit, recordRateLimitEvent } from "@/lib/auth/rate-limit";
+import { checkRateLimit, recordRateLimitEvent, getClientIp } from "@/lib/auth/rate-limit";
 import { sendVerificationEmail } from "@/lib/mail/mailer";
 import { ensureDefaultCard } from "@/lib/memory-cards";
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || req.headers.get("x-real-ip") || "127.0.0.1";
+    const ip = getClientIp(req);
 
     // Rate limit registration: max 5 signups per IP per hour
     const rateCheck = await checkRateLimit({

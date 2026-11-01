@@ -1,4 +1,5 @@
 import "server-only";
+import { db } from "@/lib/db";
 
 async function getCookieStore() {
   const { cookies } = await import("next/headers");
@@ -21,6 +22,17 @@ export interface SessionPayload {
   sessionId?: string; // Optional DB session tracking ID
   exp: number; // Epoch timestamp in milliseconds
   iat: number; // Epoch timestamp in milliseconds
+}
+
+export interface SessionRecord {
+  id: string;
+  user_id: string | number;
+  expires_at: Date;
+}
+
+export interface Session {
+  user: SessionPayload;
+  expiresAt: Date;
 }
 
 export type SessionVerifyResult =
@@ -157,38 +169,91 @@ export async function getSessionFromCookie(
 }
 
 /**
- * Zero-DB session validator returning standard AuthSession interface.
+ * Validate session token statefully against MariaDB.
+ * Enforces cryptographic HMAC-SHA256 signature validity AND active, unrevoked presence in auth_tokens.
+ */
+export async function validateSessionToken(token: string): Promise<Session | null> {
+  if (!token || typeof token !== "string") return null;
+
+  const verifyResult = await verifySessionTokenFast(token);
+  if (!verifyResult.valid) return null;
+
+  const parsed = verifyResult.payload;
+  const lookupToken = parsed.sessionId || token;
+
+  try {
+    // Verify against database to enforce explicit logouts & revocations
+    const [rows] = await db.query<any>(
+      `SELECT t.id, t.user_id, t.expires_at, u.account_status 
+       FROM auth_tokens t
+       JOIN users u ON u.id = t.user_id 
+       WHERE (t.token_hash = SHA2(?, 256) OR t.token_hash = SHA2(?, 256)) 
+         AND t.type = 'session' 
+         AND t.expires_at > NOW() 
+       LIMIT 1`,
+      [lookupToken, token]
+    );
+
+    const tokenRecord = Array.isArray(rows) && rows.length > 0 ? (rows[0] as SessionRecord & { account_status?: string }) : null;
+    if (!tokenRecord || tokenRecord.account_status === "suspended") {
+      return null; // Session was deleted, logged out, revoked, or account suspended
+    }
+
+    return {
+      user: parsed,
+      expiresAt: tokenRecord.expires_at,
+    };
+  } catch (err) {
+    console.error("[validateSessionToken] DB verification failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Stateful session validator returning standard AuthSession interface.
  */
 export async function validateSession(rawOrSignedToken: string): Promise<AuthSession | null> {
-  const result = await verifySessionTokenFast(rawOrSignedToken);
-  if (!result.valid) return null;
+  const session = await validateSessionToken(rawOrSignedToken);
+  if (!session) return null;
 
+  const payload = session.user;
   return {
     user: {
-      id: String(result.payload.userId),
-      username: result.payload.username,
-      email: `${result.payload.username}@local.vault`,
-      role: result.payload.role,
+      id: String(payload.userId),
+      username: payload.username,
+      email: `${payload.username}@local.vault`,
+      role: payload.role,
       account_status: "active",
-      displayName: result.payload.username,
+      displayName: payload.username,
       avatarUrl: null,
-      quotaDaily: result.payload.role === "admin" ? null : 50,
+      quotaDaily: payload.role === "admin" ? null : 50,
       quotaUsedToday: 0,
     },
-    expiresAt: new Date(result.payload.exp).toISOString(),
+    expiresAt: session.expiresAt instanceof Date ? session.expiresAt.toISOString() : String(session.expiresAt),
   };
 }
 
 /**
- * Get current session from Next.js cookies (zero DB overhead).
+ * Get current session from Next.js cookies with stateful revocation check against database.
  */
 export async function getCurrentSession(): Promise<AuthSession | null> {
   try {
     const cookieStore = await getCookieStore();
-    const payload = await getSessionFromCookie(cookieStore);
-    if (!payload) {
+    const token =
+      cookieStore.get("session_token")?.value ||
+      cookieStore.get(SESSION_COOKIE_NAME)?.value ||
+      cookieStore.get("rom_vault_session")?.value;
+
+    if (!token) {
       return null;
     }
+
+    const session = await validateSessionToken(token);
+    if (!session) {
+      return null;
+    }
+
+    const payload = session.user;
     return {
       user: {
         id: String(payload.userId),
@@ -201,7 +266,7 @@ export async function getCurrentSession(): Promise<AuthSession | null> {
         quotaDaily: payload.role === "admin" ? null : 50,
         quotaUsedToday: 0,
       },
-      expiresAt: new Date(payload.exp).toISOString(),
+      expiresAt: session.expiresAt instanceof Date ? session.expiresAt.toISOString() : String(session.expiresAt),
     };
   } catch {
     return null;

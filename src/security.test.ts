@@ -1,0 +1,158 @@
+import { describe, it, expect } from "vitest";
+import { isSafeHttpUrl, getSafeHttpUrl } from "./lib/security";
+import { getClientIp, getTrustedClientIp } from "./lib/ip";
+import { submitScoreSchema } from "./app/actions/scores";
+import { signSessionToken, validateSessionToken, verifySessionTokenFast } from "./lib/auth/session";
+import { acquireScanLock, releaseScanLock, isScanActive } from "./lib/scanner";
+
+describe("Filesystem Rescan Concurrency Lock (Mutex)", () => {
+  it("enforces mutual exclusion when rescan is active", () => {
+    // Ensure clean initial state
+    releaseScanLock();
+    expect(isScanActive()).toBe(false);
+
+    // 1. Acquire initial lock
+    const firstAcquire = acquireScanLock();
+    expect(firstAcquire).toBe(true);
+    expect(isScanActive()).toBe(true);
+
+    // 2. Second concurrent acquire fails
+    const secondAcquire = acquireScanLock();
+    expect(secondAcquire).toBe(false);
+
+    // 3. Releasing lock clears the guard
+    releaseScanLock();
+    expect(isScanActive()).toBe(false);
+
+    // 4. Can acquire again after release
+    expect(acquireScanLock()).toBe(true);
+    releaseScanLock();
+  });
+});
+
+describe("Stateful Session Revocation", () => {
+  it("rejects mathematically valid HMAC tokens that are not present in auth_tokens", async () => {
+    // 1. Sign a token with a random session ID not in the database
+    const token = await signSessionToken({
+      userId: "test-user-999",
+      username: "ghost_user",
+      role: "user",
+      sessionId: "random-non-existent-session-token-id-12345",
+    });
+
+    // 2. Stateless HMAC check passes
+    const fastCheck = await verifySessionTokenFast(token);
+    expect(fastCheck.valid).toBe(true);
+
+    // 3. Stateful database check fails because token is not active in auth_tokens
+    const statefulCheck = await validateSessionToken(token);
+    expect(statefulCheck).toBeNull();
+  });
+});
+
+describe("submitScoreSchema validation", () => {
+  it("rejects javascript: XSS payloads in proofUrl", () => {
+    const res = submitScoreSchema.safeParse({
+      gameId: "snes__Super Mario World",
+      system: "snes",
+      score: 100000,
+      proofUrl: "javascript:alert(1)",
+    });
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0]?.message).toBe("Proof URL must be a valid HTTP or HTTPS web address.");
+    }
+  });
+
+  it("accepts valid http/https URLs and empty proofUrl", () => {
+    const resHttp = submitScoreSchema.safeParse({
+      gameId: "snes__Super Mario World",
+      system: "snes",
+      score: 100000,
+      proofUrl: "http://example.com/proof.png",
+    });
+    expect(resHttp.success).toBe(true);
+
+    const resHttps = submitScoreSchema.safeParse({
+      gameId: "snes__Super Mario World",
+      system: "snes",
+      score: 100000,
+      proofUrl: "https://example.com/proof.png",
+    });
+    expect(resHttps.success).toBe(true);
+
+    const resEmpty = submitScoreSchema.safeParse({
+      gameId: "snes__Super Mario World",
+      system: "snes",
+      score: 100000,
+      proofUrl: "",
+    });
+    expect(resEmpty.success).toBe(true);
+  });
+});
+
+describe("Security URL Validation", () => {
+  it("rejects dangerous URI schemes (XSS vectors)", () => {
+    expect(isSafeHttpUrl("javascript:alert(1)")).toBe(false);
+    expect(isSafeHttpUrl("JAVASCRIPT:alert(document.cookie)")).toBe(false);
+    expect(isSafeHttpUrl("data:text/html,<script>alert(1)</script>")).toBe(false);
+    expect(isSafeHttpUrl("vbscript:msgbox(1)")).toBe(false);
+    expect(isSafeHttpUrl("file:///etc/passwd")).toBe(false);
+    expect(isSafeHttpUrl("blob:https://example.com/uuid")).toBe(false);
+    expect(getSafeHttpUrl("javascript:alert(1)")).toBeNull();
+  });
+
+  it("accepts safe http and https protocols", () => {
+    expect(isSafeHttpUrl("https://oldsmarchaos.com/proof.png")).toBe(true);
+    expect(isSafeHttpUrl("http://oldsmarchaos.com/proof.png")).toBe(true);
+    expect(getSafeHttpUrl("https://example.com/screenshot.jpg")).toBe("https://example.com/screenshot.jpg");
+  });
+
+  it("rejects malformed or empty inputs", () => {
+    expect(isSafeHttpUrl("")).toBe(false);
+    expect(isSafeHttpUrl(null)).toBe(false);
+    expect(isSafeHttpUrl(undefined)).toBe(false);
+    expect(isSafeHttpUrl("not-a-url")).toBe(false);
+  });
+});
+
+describe("Client IP Extraction and Anti-Spoofing", () => {
+  it("prioritizes cf-connecting-ip from Cloudflare edge", () => {
+    const req = new Request("http://localhost", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.50",
+        "x-real-ip": "198.51.100.20",
+        "x-forwarded-for": "10.0.0.1, 10.0.0.2",
+      },
+    });
+    expect(getClientIp(req)).toBe("203.0.113.50");
+    expect(getTrustedClientIp(req)).toBe("203.0.113.50");
+  });
+
+  it("uses x-real-ip when behind Nginx without Cloudflare", () => {
+    const req = new Request("http://localhost", {
+      headers: {
+        "x-real-ip": "198.51.100.20",
+        "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+      },
+    });
+    expect(getClientIp(req)).toBe("198.51.100.20");
+    expect(getTrustedClientIp(req)).toBe("198.51.100.20");
+  });
+
+  it("takes rightmost IP from x-forwarded-for to prevent client injection", () => {
+    const req = new Request("http://localhost", {
+      headers: {
+        "x-forwarded-for": "1.1.1.1, 2.2.2.2, 198.51.100.99",
+      },
+    });
+    expect(getClientIp(req)).toBe("198.51.100.99");
+    expect(getTrustedClientIp(req)).toBe("198.51.100.99");
+  });
+
+  it("falls back to 127.0.0.1 when no proxy headers exist", () => {
+    const req = new Request("http://localhost");
+    expect(getClientIp(req)).toBe("127.0.0.1");
+    expect(getTrustedClientIp(req)).toBe("127.0.0.1");
+  });
+});

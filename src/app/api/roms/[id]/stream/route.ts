@@ -314,24 +314,17 @@ async function handleStream(
       return NextResponse.json({ error: "Invalid file target." }, { status: 404, headers: CORS_STREAM_HEADERS });
     }
 
-    // 2. Authentication & Authorization
-    const headerUserId = request.headers.get("x-user-id");
-    const headerRole = request.headers.get("x-user-role");
-
-    let userId = headerUserId;
-    let role = headerRole;
-
-    if (!userId) {
-      const session = await getCurrentSession();
-      if (!session) {
-        return NextResponse.json(
-          { error: "Authentication required to access ROM stream." },
-          { status: 401, headers: CORS_STREAM_HEADERS }
-        );
-      }
-      userId = session.user.id;
-      role = session.user.role;
+    // 2. Authentication & Authorization (Resolve strictly from signed session)
+    const session = await getCurrentSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "Authentication required to access ROM stream." },
+        { status: 401, headers: CORS_STREAM_HEADERS }
+      );
     }
+
+    const userId = session.user.id;
+    const role = session.user.role;
 
     // Check daily download quota for non-admin users
     if (role !== "admin" && userId) {

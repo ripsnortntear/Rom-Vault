@@ -6,10 +6,13 @@ import { clearSessionCookie, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 export async function POST(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+    const token =
+      cookieStore.get(SESSION_COOKIE_NAME)?.value ||
+      cookieStore.get("session_token")?.value ||
+      cookieStore.get("rom_vault_session")?.value;
 
-    if (sessionCookie?.value) {
-      await revokeSession(sessionCookie.value);
+    if (token) {
+      await revokeSession(token);
     }
 
     await clearSessionCookie();

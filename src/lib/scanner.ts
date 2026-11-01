@@ -465,12 +465,36 @@ function scanSystem(system: string): SystemScanResult {
   };
 }
 
+let isScanning = false;
+
+export function isScanActive(): boolean {
+  return isScanning;
+}
+
+export function acquireScanLock(): boolean {
+  if (isScanning) return false;
+  isScanning = true;
+  return true;
+}
+
+export function releaseScanLock(): void {
+  isScanning = false;
+}
+
 export async function scanGameLibrary(forceRefresh = false): Promise<GameLibraryResponse> {
   const systems = discoverSystems();
   const currentSignature = getLibrarySignature(systems);
 
   if (cachedLibrary && !forceRefresh && currentSignature === cachedSignature) {
     return cachedLibrary;
+  }
+
+  if (forceRefresh) {
+    if (!acquireScanLock()) {
+      const err = new Error("A filesystem rescan is already in progress.");
+      err.name = "ScanConflictError";
+      throw err;
+    }
   }
 
   try {
@@ -529,6 +553,9 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
     cachedSignature = currentSignature;
     return cachedLibrary;
   } catch (error) {
+    if ((error as any)?.name === "ScanConflictError") {
+      throw error;
+    }
     console.error("[scanner] Fatal error scanning game library:", error);
     return {
       games: [],
@@ -542,6 +569,10 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
         scannedAt: new Date().toISOString(),
       },
     };
+  } finally {
+    if (forceRefresh) {
+      releaseScanLock();
+    }
   }
 }
 
