@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/emulatorjs",
   "/tabstationtoo",
   "/api/bios",
+  "/api/shoutbox",
   "/_next",
   "/favicon.ico",
 ];
