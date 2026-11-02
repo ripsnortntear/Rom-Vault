@@ -13,7 +13,11 @@ import {
 } from "lucide-react";
 import { useBrowserEnvironment } from "@/hooks/useBrowserEnvironment";
 
-export function EdgeRecommendationBadge(): React.ReactElement | null {
+interface EdgeRecommendationBadgeProps {
+  className?: string;
+}
+
+export function EdgeRecommendationBadge({ className }: EdgeRecommendationBadgeProps = {}): React.ReactElement | null {
   const { mounted, isMobile, state } = useBrowserEnvironment();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -47,7 +51,7 @@ export function EdgeRecommendationBadge(): React.ReactElement | null {
   return (
     <div
       ref={containerRef}
-      className="relative z-50 hidden md:inline-flex items-center"
+      className={`relative z-50 ${className ?? "hidden md:inline-flex items-center"}`}
     >
       <button
         type="button"

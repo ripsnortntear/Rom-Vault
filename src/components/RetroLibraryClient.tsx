@@ -3,7 +3,19 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User, Trophy, ShieldAlert, Users } from "lucide-react";
+import {
+  Gamepad2,
+  Shuffle,
+  Sparkles,
+  HardDrive,
+  Film,
+  User,
+  Trophy,
+  ShieldAlert,
+  Users,
+  MoreHorizontal,
+  ChevronDown,
+} from "lucide-react";
 import type { CoverArtStyle, GameItem, LibraryStats } from "@/types/game";
 import { HeroSpotlight } from "@/components/HeroSpotlight";
 import { Shoutbox } from "@/components/Shoutbox";
@@ -116,6 +128,28 @@ export function RetroLibraryClient({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isMultiplayerModalOpen, setIsMultiplayerModalOpen] = useState<boolean>(false);
   const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMoreMenuOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -428,6 +462,17 @@ export function RetroLibraryClient({
     }
   }, []);
 
+  const handleRandomPick = useCallback((): void => {
+    const pool =
+      selectedSystem === "ALL"
+        ? initialGames
+        : initialGames.filter((g) => g.system === selectedSystem);
+    if (pool.length > 0) {
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      setDetailGame(pick);
+    }
+  }, [initialGames, selectedSystem]);
+
   useEffect(() => {
     const pool = selectedSystem === "ALL"
       ? initialGames
@@ -522,34 +567,35 @@ export function RetroLibraryClient({
 
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col">
-      <header className="relative z-40 border-b border-white/10 bg-zinc-950/90 backdrop-blur-md">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-zinc-950/90 backdrop-blur-md">
+        <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-10 py-3 flex items-center justify-between gap-3 sm:gap-4">
           <a
             href="/roms"
             onClick={handleResetHome}
-            className="flex items-center gap-3 group transition transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+            className="flex items-center gap-3 group transition transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer shrink-0"
             title="ROM Vault Home (Reset all filters)"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/30 group-hover:shadow-red-600/50 group-hover:from-red-500 group-hover:to-red-700 transition">
-              <Gamepad2 className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/30 group-hover:shadow-red-600/50 group-hover:from-red-500 group-hover:to-red-700 transition shrink-0">
+              <Gamepad2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-lg sm:text-xl font-black tracking-tight text-white group-hover:text-red-100 transition">
+                <span className="text-base sm:text-lg lg:text-xl font-black tracking-tight text-white group-hover:text-red-100 transition whitespace-nowrap">
                   ROM <span className="text-red-500 group-hover:text-red-400">VAULT</span>
                 </span>
-                <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded bg-white/10 text-zinc-300 group-hover:bg-white/15 transition">
+                <span className="hidden xl:inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded bg-white/10 text-zinc-300 group-hover:bg-white/15 transition whitespace-nowrap">
                   Multi-Console Retro Library
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 group-hover:text-zinc-300 transition">
+              <p className="text-[11px] sm:text-xs text-zinc-400 group-hover:text-zinc-300 transition truncate hidden sm:block">
                 Archive &amp; Instant Browser Emulation Deck
               </p>
             </div>
           </a>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="hidden md:flex items-center gap-4 px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-zinc-400">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* 1. Large-Screen Vault Statistics (>= 2xl: 1536px) */}
+            <div className="hidden 2xl:flex items-center gap-3.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-zinc-400 shrink-0 select-none">
               <span className="inline-flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-red-400" />
                 <strong className="text-white">{stats.totalGames}</strong> ROMs
@@ -569,74 +615,190 @@ export function RetroLibraryClient({
               </span>
             </div>
 
-            <EdgeRecommendationBadge />
+            {/* 2. Edge / Browser Acceleration Badge (>= xl: 1280px) */}
+            <EdgeRecommendationBadge className="hidden xl:inline-flex items-center shrink-0" />
 
+            {/* 3. Random Game Button (>= md: 768px) */}
             <button
               type="button"
-              onClick={() => {
-                const pool =
-                  selectedSystem === "ALL"
-                    ? initialGames
-                    : initialGames.filter((g) => g.system === selectedSystem);
-                if (pool.length > 0) {
-                  const pick = pool[Math.floor(Math.random() * pool.length)];
-                  setDetailGame(pick);
-                }
-              }}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition cursor-pointer"
+              onClick={handleRandomPick}
+              className="hidden md:inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white border border-white/10 transition cursor-pointer shrink-0"
+              title="Pick a random game from the library"
             >
               <Shuffle className="w-3.5 h-3.5 text-red-400" />
-              <span className="hidden sm:inline">Random Game</span>
+              <span className="hidden lg:inline">Random Game</span>
+              <span className="lg:hidden">Random</span>
             </button>
 
+            {/* 4. 2-Player Multiplayer Rooms Button (Featured) */}
             <button
               type="button"
               onClick={() => setIsMultiplayerModalOpen(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 transition cursor-pointer shadow-sm shadow-emerald-950/50"
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 transition cursor-pointer shadow-sm shadow-emerald-950/50 shrink-0"
               title="Open 2-Player Retro Multiplayer Rooms"
             >
               <Users className="w-3.5 h-3.5 text-emerald-400" />
               <span>2P Rooms</span>
             </button>
 
+            {/* 5. Community Leaderboards (>= lg: 1024px) */}
             <a
               href="/roms/leaderboards"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+              className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer shrink-0"
               title="Community Leaderboards"
             >
               <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Leaderboards</span>
+              <span>Leaderboards</span>
             </a>
 
+            {/* 6. Admin Link (if admin, >= xl: 1280px) */}
             {currentUser?.role === "admin" && (
               <a
                 href="/roms/admin"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 transition cursor-pointer"
+                className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 transition cursor-pointer shrink-0"
                 title="Open Admin Dashboard"
               >
                 <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                <span className="hidden sm:inline">Admin</span>
+                <span>Admin</span>
               </a>
             )}
 
+            {/* 7. Responsive "More" Dropdown Menu (< 2xl: 1536px) */}
+            <div ref={moreMenuRef} className="relative inline-block 2xl:hidden shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-bold border transition cursor-pointer select-none ${
+                  isMoreMenuOpen
+                    ? "bg-white/20 border-white/30 text-white shadow-md shadow-black/40"
+                    : "bg-white/10 hover:bg-white/15 text-zinc-200 border-white/10"
+                }`}
+                title="More vault options and stats"
+                aria-expanded={isMoreMenuOpen}
+              >
+                <MoreHorizontal className="w-4 h-4 text-zinc-300" />
+                <span className="hidden sm:inline">More</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
+                    isMoreMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {isMoreMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-zinc-950/95 border border-white/15 shadow-2xl backdrop-blur-xl p-3 z-50 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
+                  {/* Vault Statistics Card */}
+                  <div className="p-3 rounded-xl bg-zinc-900/80 border border-white/5 space-y-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-red-400" /> Vault Statistics
+                      </span>
+                      <span className="text-zinc-500 font-mono text-[9px]">Live Index</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center pt-0.5">
+                      <div className="p-1.5 rounded-lg bg-zinc-950/70 border border-white/5">
+                        <div className="text-xs font-black text-white">{stats.totalGames}</div>
+                        <div className="text-[10px] text-zinc-400">ROMs</div>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-zinc-950/70 border border-white/5">
+                        <div className="text-xs font-black text-white">{stats.withVideoCount}</div>
+                        <div className="text-[10px] text-zinc-400">Videos</div>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-zinc-950/70 border border-white/5">
+                        <div className="text-xs font-black text-white">
+                          {stats.totalSizeBytes >= 1024 * 1024 * 1024
+                            ? `${(stats.totalSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+                            : `${(stats.totalSizeBytes / (1024 * 1024)).toFixed(0)} MB`}
+                        </div>
+                        <div className="text-[10px] text-zinc-400">Storage</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions inside More Menu */}
+                  <div className="flex flex-col gap-1 pt-0.5">
+                    {/* Random Game (< md) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleRandomPick();
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className="md:hidden w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/10 transition cursor-pointer text-left"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-bold text-xs">Random Game</div>
+                        <div className="text-[10px] text-zinc-400 truncate">
+                          Shuffle &amp; discover a surprise retro title
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Community Leaderboards (< lg) */}
+                    <a
+                      href="/roms/leaderboards"
+                      onClick={() => setIsMoreMenuOpen(false)}
+                      className="lg:hidden w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/10 transition cursor-pointer text-left"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                        <Trophy className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-bold text-xs">Community Leaderboards</div>
+                        <div className="text-[10px] text-zinc-400 truncate">
+                          Hall of fame high scores &amp; records
+                        </div>
+                      </div>
+                    </a>
+
+                    {/* Admin Console (< xl) */}
+                    {currentUser?.role === "admin" && (
+                      <a
+                        href="/roms/admin"
+                        onClick={() => setIsMoreMenuOpen(false)}
+                        className="xl:hidden w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold text-red-300 hover:text-white hover:bg-red-600/20 transition cursor-pointer text-left"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-bold text-xs">Admin Dashboard</div>
+                          <div className="text-[10px] text-zinc-400 truncate">
+                            Catalog scan, audits &amp; moderation
+                          </div>
+                        </div>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Subtle Divider */}
+            <div className="hidden sm:block h-5 w-px bg-white/10 shrink-0 mx-0.5" />
+
+            {/* 8. User Profile / Sign In (Always pinned to the far right) */}
             {currentUser ? (
               <button
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-semibold text-white transition cursor-pointer"
+                className="inline-flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-semibold text-white transition cursor-pointer shrink-0"
                 title="Manage Profile & Security"
               >
-                <div className="w-5 h-5 rounded-full bg-red-600/30 border border-red-500/40 flex items-center justify-center text-[10px] text-red-300 font-bold">
+                <div className="w-5 h-5 rounded-full bg-red-600/30 border border-red-500/40 flex items-center justify-center text-[10px] text-red-300 font-bold shrink-0">
                   {currentUser.displayName ? currentUser.displayName[0].toUpperCase() : currentUser.username[0].toUpperCase()}
                 </div>
-                <span className="hidden sm:inline max-w-[110px] truncate">
+                <span className="hidden sm:inline max-w-[100px] 2xl:max-w-[130px] truncate">
                   {currentUser.displayName || currentUser.username}
                 </span>
               </button>
             ) : (
               <Link
                 href="/auth/login"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30 transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30 transition cursor-pointer shrink-0"
               >
                 <User className="w-3.5 h-3.5" />
                 <span>Sign In</span>
