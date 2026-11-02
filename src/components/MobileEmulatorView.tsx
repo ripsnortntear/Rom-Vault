@@ -407,17 +407,34 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
   useEffect(() => {
     const handleParentMessage = async (e: MessageEvent) => {
-      if (e.data?.type === "VAULT_MP_P2_INPUT") {
+      if (e.data?.type === "VAULT_MP_P1_INPUT" || e.data?.type === "VAULT_MP_P2_INPUT") {
+        const port = e.data.type === "VAULT_MP_P1_INPUT" ? 0 : 1;
         const btnIndex = Number(e.data.buttonIndex);
         const val = Number(e.data.value);
         if (!Number.isNaN(btnIndex) && !Number.isNaN(val)) {
+          const winAny = window as unknown as {
+            __VAULT_LIBRETRO_INPUT_LOG__?: Array<{ port: number; buttonIndex: number; value: number; timestamp: number }>;
+          };
+          if (!winAny.__VAULT_LIBRETRO_INPUT_LOG__) {
+            winAny.__VAULT_LIBRETRO_INPUT_LOG__ = [];
+          }
+          winAny.__VAULT_LIBRETRO_INPUT_LOG__.push({
+            port,
+            buttonIndex: btnIndex,
+            value: val,
+            timestamp: Date.now(),
+          });
+          if (winAny.__VAULT_LIBRETRO_INPUT_LOG__.length > 200) {
+            winAny.__VAULT_LIBRETRO_INPUT_LOG__.shift();
+          }
+
           const emu = window.EJS_emulator;
           const gm = emu?.gameManager;
           try {
             if (gm && typeof gm.simulateInput === "function") {
-              gm.simulateInput(1, btnIndex, val);
+              gm.simulateInput(port, btnIndex, val);
             } else if (gm?.functions && typeof gm.functions.simulateInput === "function") {
-              gm.functions.simulateInput(1, btnIndex, val);
+              gm.functions.simulateInput(port, btnIndex, val);
             }
           } catch {}
         }

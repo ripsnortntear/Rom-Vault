@@ -31,6 +31,12 @@ import type {
   MultiplayerSignal,
 } from "@/types/multiplayer";
 import { KNOWN_SYSTEMS, getSystemMeta } from "@/lib/systems";
+import {
+  selectGamepadForRole,
+  extractLibretroStateFromGamepad,
+  diffGamepadStates,
+  type GamepadLike,
+} from "@/lib/xbox-controller";
 
 interface MultiplayerModalProps {
   isOpen: boolean;
@@ -238,40 +244,49 @@ export function MultiplayerModal({
     }
   }, [isOpen, activeRoom, fetchRoomsList]);
 
-  // Inject Player 2 controller button event into Host's running EmulatorJS iframe
-  const injectPlayer2InputOnHost = useCallback((buttonIndex: number, pressed: boolean) => {
-    setActiveP2Buttons((prev) => ({ ...prev, [buttonIndex]: pressed }));
-    const value = pressed ? 1 : 0;
-
-    const iframeWin = hostIframeRef.current?.contentWindow as any;
-    if (!iframeWin) return;
-
-    try {
-      // Direct same-origin call for zero-latency Port 2 input injection
-      const emu = iframeWin.EJS_emulator;
-      const gm = emu?.gameManager;
-      if (gm && typeof gm.simulateInput === "function") {
-        gm.simulateInput(1, buttonIndex, value);
-        return;
+  // Inject Player 1 (Port 0) or Player 2 (Port 1) controller button event into Host's running EmulatorJS iframe
+  const injectPlayerInputOnHost = useCallback(
+    (port: 0 | 1, buttonIndex: number, pressed: boolean) => {
+      if (port === 1) {
+        setActiveP2Buttons((prev) => ({ ...prev, [buttonIndex]: pressed }));
       }
-      if (gm?.functions && typeof gm.functions.simulateInput === "function") {
-        gm.functions.simulateInput(1, buttonIndex, value);
-        return;
-      }
-    } catch {}
+      const value = pressed ? 1 : 0;
 
-    // Fallback postMessage to MobileEmulatorView inside iframe
-    try {
-      iframeWin.postMessage(
-        {
-          type: "VAULT_MP_P2_INPUT",
-          buttonIndex,
-          value,
-        },
-        "*"
-      );
-    } catch {}
-  }, []);
+      const iframeWin = hostIframeRef.current?.contentWindow as any;
+      if (!iframeWin) return;
+
+      try {
+        // Direct same-origin call for zero-latency Port 0 / Port 1 input injection
+        const emu = iframeWin.EJS_emulator;
+        const gm = emu?.gameManager;
+        if (gm && typeof gm.simulateInput === "function") {
+          gm.simulateInput(port, buttonIndex, value);
+        } else if (gm?.functions && typeof gm.functions.simulateInput === "function") {
+          gm.functions.simulateInput(port, buttonIndex, value);
+        }
+      } catch {}
+
+      // Also notify MobileEmulatorView inside iframe so input telemetry is recorded
+      try {
+        iframeWin.postMessage(
+          {
+            type: port === 0 ? "VAULT_MP_P1_INPUT" : "VAULT_MP_P2_INPUT",
+            buttonIndex,
+            value,
+          },
+          "*"
+        );
+      } catch {}
+    },
+    []
+  );
+
+  const injectPlayer2InputOnHost = useCallback(
+    (buttonIndex: number, pressed: boolean) => {
+      injectPlayerInputOnHost(1, buttonIndex, pressed);
+    },
+    [injectPlayerInputOnHost]
+  );
 
   // Send a signal to the other participant via API
   const postSignal = useCallback(
@@ -564,14 +579,14 @@ export function MultiplayerModal({
     [activeRoom, postSignal]
   );
 
-  // Guest Keyboard & Physical Gamepad listener when session is playing
+  // Dual Physical Bluetooth Xbox Gamepad + Keyboard Listener for Host (Player 1) & Guest (Player 2)
   useEffect(() => {
-    if (!isOpen || !activeRoom || activeRoom.status !== "playing" || myRole !== "guest") {
+    if (!isOpen || !activeRoom || activeRoom.status !== "playing") {
       return;
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Do not hijack keys when typing in the room chat input
+      if (myRole !== "guest") return;
       if (
         document.activeElement &&
         (document.activeElement.tagName === "INPUT" ||
@@ -591,6 +606,7 @@ export function MultiplayerModal({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (myRole !== "guest") return;
       const mapped = P2_KEY_TO_BUTTON[e.code];
       if (mapped) {
         e.preventDefault();
@@ -604,35 +620,28 @@ export function MultiplayerModal({
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
-    // Poll physical USB/Bluetooth gamepad for Player 2
-    const padState: Record<number, boolean> = {};
-    const gamepadMap: Array<{ padBtn: number; libretroIdx: number }> = [
-      { padBtn: 0, libretroIdx: 0 }, // B / Cross
-      { padBtn: 1, libretroIdx: 8 }, // A / Circle
-      { padBtn: 2, libretroIdx: 1 }, // Y / Square
-      { padBtn: 3, libretroIdx: 9 }, // X / Triangle
-      { padBtn: 4, libretroIdx: 10 }, // L1
-      { padBtn: 5, libretroIdx: 11 }, // R1
-      { padBtn: 6, libretroIdx: 12 }, // L2
-      { padBtn: 7, libretroIdx: 13 }, // R2
-      { padBtn: 8, libretroIdx: 2 }, // Select
-      { padBtn: 9, libretroIdx: 3 }, // Start
-      { padBtn: 12, libretroIdx: 4 }, // Up
-      { padBtn: 13, libretroIdx: 5 }, // Down
-      { padBtn: 14, libretroIdx: 6 }, // Left
-      { padBtn: 15, libretroIdx: 7 }, // Right
-    ];
-
+    // Poll physical Bluetooth Xbox controllers via W3C Gamepad API for both Player 1 (Host) and Player 2 (Guest)
+    let prevLibretroState: Record<number, boolean> = {};
     let animId: number;
+
     const pollGamepad = () => {
-      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      const pad = Array.from(pads).find((p) => p && p.connected);
-      if (pad) {
-        for (const m of gamepadMap) {
-          const isPressed = Boolean(pad.buttons[m.padBtn]?.pressed);
-          if (Boolean(padState[m.libretroIdx]) !== isPressed) {
-            padState[m.libretroIdx] = isPressed;
-            sendGuestControllerInput(m.libretroIdx, isPressed);
+      const rawPads =
+        typeof navigator !== "undefined" && navigator.getGamepads
+          ? (navigator.getGamepads() as unknown as ReadonlyArray<GamepadLike | null>)
+          : [];
+      const selectedPad = selectGamepadForRole(rawPads, myRole);
+
+      if (selectedPad) {
+        const nextState = extractLibretroStateFromGamepad(selectedPad);
+        const deltas = diffGamepadStates(prevLibretroState, nextState);
+        if (deltas.length > 0) {
+          prevLibretroState = nextState;
+          for (const evt of deltas) {
+            if (myRole === "host") {
+              injectPlayerInputOnHost(0, evt.buttonIndex, evt.pressed);
+            } else {
+              sendGuestControllerInput(evt.buttonIndex, evt.pressed);
+            }
           }
         }
       }
@@ -646,7 +655,7 @@ export function MultiplayerModal({
       cancelAnimationFrame(animId);
       pressedKeysRef.current.clear();
     };
-  }, [isOpen, activeRoom, myRole, sendGuestControllerInput]);
+  }, [isOpen, activeRoom, myRole, injectPlayerInputOnHost, sendGuestControllerInput]);
 
   // Room Actions
   const handleCreateRoom = async (e: React.FormEvent) => {
