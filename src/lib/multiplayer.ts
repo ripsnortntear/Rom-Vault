@@ -2,13 +2,24 @@ import "server-only";
 
 import { query, execute } from "@/lib/db";
 import { getSystemMeta } from "@/lib/systems";
-import type {
+import {
   MultiplayerRoom,
   RoomChatMessage,
   MultiplayerSignal,
   RoomStatus,
   SignalMessageType,
+  SupportedMultiplayerSystem,
+  SUPPORTED_MULTIPLAYER_SYSTEMS,
+  UNSUPPORTED_MULTIPLAYER_SYSTEMS,
+  isSupportedMultiplayerSystem,
 } from "@/types/multiplayer";
+
+export {
+  SUPPORTED_MULTIPLAYER_SYSTEMS,
+  UNSUPPORTED_MULTIPLAYER_SYSTEMS,
+  isSupportedMultiplayerSystem,
+};
+export type { SupportedMultiplayerSystem };
 
 interface RoomRow {
   id: string;
@@ -318,7 +329,10 @@ export async function createRoom(input: {
   const cleanName = (input.name || `${input.hostDisplayName || input.hostUsername}'s Retro Room`)
     .trim()
     .slice(0, 80);
-  const systemId = (input.systemId || "snes").toLowerCase();
+  const systemId = (input.systemId || "snes").toLowerCase().trim();
+  if (!isSupportedMultiplayerSystem(systemId)) {
+    throw new Error(`Console core '${input.systemId}' is not supported for 2-player multiplayer rooms.`);
+  }
   const sysMeta = getSystemMeta(systemId);
   const emulatorCore = sysMeta.ejsCore || systemId;
   const hostDisplay = (input.hostDisplayName || input.hostUsername || "Player 1").trim().slice(0, 100);
@@ -453,8 +467,13 @@ export async function selectRoomGame(input: {
     throw new Error("Only the room host can select the console emulator and game.");
   }
 
-  const sysMeta = getSystemMeta(input.systemId);
-  const emulatorCore = sysMeta.ejsCore || input.systemId;
+  const systemId = (input.systemId || "snes").toLowerCase().trim();
+  if (!isSupportedMultiplayerSystem(systemId)) {
+    throw new Error(`Console core '${input.systemId}' is not supported for 2-player multiplayer rooms.`);
+  }
+
+  const sysMeta = getSystemMeta(systemId);
+  const emulatorCore = sysMeta.ejsCore || systemId;
 
   // Changing game resets ready status so both players confirm the new selection
   await execute(
@@ -463,7 +482,7 @@ export async function selectRoomGame(input: {
          host_ready = 0, guest_ready = 0, status = 'waiting', host_last_seen = NOW()
      WHERE id = ?`,
     [
-      input.systemId,
+      systemId,
       emulatorCore,
       input.gameId,
       input.gameTitle,

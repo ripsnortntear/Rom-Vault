@@ -33,6 +33,9 @@ import {
   addRoomChatMessage,
   sendMultiplayerSignal,
   pollMultiplayerSignals,
+  SUPPORTED_MULTIPLAYER_SYSTEMS,
+  UNSUPPORTED_MULTIPLAYER_SYSTEMS,
+  isSupportedMultiplayerSystem,
 } from "./lib/multiplayer";
 
 describe("2-Player Retro Multiplayer Room System Unit Tests", () => {
@@ -274,5 +277,63 @@ describe("2-Player Retro Multiplayer Room System Unit Tests", () => {
     });
     expect(signals).toHaveLength(1);
     expect(signals[0]?.type).toBe("p2-input");
+  });
+
+  describe("Multiplayer Console Core Restrictions (Dreamcast & Saturn Exclusion)", () => {
+    it("excludes dreamcast and saturn from SUPPORTED_MULTIPLAYER_SYSTEMS", () => {
+      const supportedIds = SUPPORTED_MULTIPLAYER_SYSTEMS.map((s) => s.id);
+      expect(supportedIds).not.toContain("dreamcast");
+      expect(supportedIds).not.toContain("saturn");
+      expect(UNSUPPORTED_MULTIPLAYER_SYSTEMS).toContain("dreamcast");
+      expect(UNSUPPORTED_MULTIPLAYER_SYSTEMS).toContain("saturn");
+    });
+
+    it("isSupportedMultiplayerSystem returns false for dreamcast and saturn, true for standard retro cores", () => {
+      expect(isSupportedMultiplayerSystem("dreamcast")).toBe(false);
+      expect(isSupportedMultiplayerSystem("saturn")).toBe(false);
+      expect(isSupportedMultiplayerSystem("DREAMCAST")).toBe(false);
+      expect(isSupportedMultiplayerSystem("SATURN")).toBe(false);
+
+      expect(isSupportedMultiplayerSystem("snes")).toBe(true);
+      expect(isSupportedMultiplayerSystem("nes")).toBe(true);
+      expect(isSupportedMultiplayerSystem("genesis")).toBe(true);
+      expect(isSupportedMultiplayerSystem("psx")).toBe(true);
+      expect(isSupportedMultiplayerSystem("n64")).toBe(true);
+      expect(isSupportedMultiplayerSystem("gba")).toBe(true);
+    });
+
+    it("rejects room creation if systemId is dreamcast or saturn", async () => {
+      await expect(
+        createRoom({
+          name: "DC Room",
+          hostId: "host-1",
+          hostUsername: "PlayerOne",
+          systemId: "dreamcast",
+        })
+      ).rejects.toThrow(/not supported for 2-player multiplayer rooms/);
+
+      await expect(
+        createRoom({
+          name: "Saturn Room",
+          hostId: "host-1",
+          hostUsername: "PlayerOne",
+          systemId: "saturn",
+        })
+      ).rejects.toThrow(/not supported for 2-player multiplayer rooms/);
+    });
+
+    it("rejects game selection if systemId is dreamcast or saturn", async () => {
+      mockDbQuery.mockResolvedValueOnce([baseRoomRow]);
+
+      await expect(
+        selectRoomGame({
+          roomId: "RM-TEST",
+          hostId: "host-1",
+          systemId: "dreamcast",
+          gameId: "dreamcast__Sonic Adventure (USA)",
+          gameTitle: "Sonic Adventure (USA)",
+        })
+      ).rejects.toThrow(/not supported for 2-player multiplayer rooms/);
+    });
   });
 });

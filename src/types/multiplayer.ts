@@ -82,3 +82,35 @@ export interface ControllerInputEvent {
   value: number;
   timestamp: number;
 }
+
+export interface SupportedMultiplayerSystem {
+  id: string;
+  label: string;
+  core: string;
+}
+
+/**
+ * Supported initial console emulator cores for 2-player multiplayer rooms.
+ * Dreamcast (flycast) and Sega Saturn (yabause/kronos) are explicitly removed and unsupported for 2P netplay rooms.
+ */
+export const SUPPORTED_MULTIPLAYER_SYSTEMS: ReadonlyArray<SupportedMultiplayerSystem> = [
+  { id: "snes", label: "Super Nintendo (SNES)", core: "snes9x (Libretro)" },
+  { id: "nes", label: "Nintendo Entertainment System (NES)", core: "fceumm (Libretro)" },
+  { id: "genesis", label: "Sega Genesis / Mega Drive", core: "genesis_plus_gx (Libretro)" },
+  { id: "n64", label: "Nintendo 64 (N64)", core: "mupen64plus_next (Libretro)" },
+  { id: "psx", label: "Sony PlayStation (PS1)", core: "pcsx_rearmed (Libretro)" },
+  { id: "gba", label: "Game Boy Advance (GBA)", core: "mgba (Libretro)" },
+  { id: "gbc", label: "Game Boy Color (GBC)", core: "gambatte (Libretro)" },
+  { id: "gb", label: "Game Boy (GB)", core: "gambatte (Libretro)" },
+  { id: "sms", label: "Sega Master System", core: "smsplus (Libretro)" },
+  { id: "sega32x", label: "Sega 32X", core: "picodrive (Libretro)" },
+];
+
+export const UNSUPPORTED_MULTIPLAYER_SYSTEMS = ["dreamcast", "saturn"] as const;
+
+export function isSupportedMultiplayerSystem(systemId: string | null | undefined): boolean {
+  if (!systemId) return false;
+  const norm = systemId.toLowerCase().trim();
+  if (norm === "dreamcast" || norm === "saturn") return false;
+  return SUPPORTED_MULTIPLAYER_SYSTEMS.some((sys) => sys.id === norm);
+}

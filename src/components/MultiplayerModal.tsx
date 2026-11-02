@@ -25,10 +25,12 @@ import {
   VolumeX,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
-import type {
+import {
   MultiplayerRoom,
   RoomChatMessage,
   MultiplayerSignal,
+  SUPPORTED_MULTIPLAYER_SYSTEMS,
+  isSupportedMultiplayerSystem,
 } from "@/types/multiplayer";
 import { KNOWN_SYSTEMS, getSystemMeta } from "@/lib/systems";
 import {
@@ -51,20 +53,7 @@ interface MultiplayerModalProps {
   initialGame?: GameItem | null;
 }
 
-const MULTIPLAYER_SYSTEMS = [
-  { id: "snes", label: "Super Nintendo (SNES)", core: "snes9x (Libretro)" },
-  { id: "nes", label: "Nintendo Entertainment System (NES)", core: "fceumm (Libretro)" },
-  { id: "genesis", label: "Sega Genesis / Mega Drive", core: "genesis_plus_gx (Libretro)" },
-  { id: "n64", label: "Nintendo 64 (N64)", core: "mupen64plus_next (Libretro)" },
-  { id: "psx", label: "Sony PlayStation (PS1)", core: "pcsx_rearmed (Libretro)" },
-  { id: "gba", label: "Game Boy Advance (GBA)", core: "mgba (Libretro)" },
-  { id: "gbc", label: "Game Boy Color (GBC)", core: "gambatte (Libretro)" },
-  { id: "gb", label: "Game Boy (GB)", core: "gambatte (Libretro)" },
-  { id: "sms", label: "Sega Master System", core: "smsplus (Libretro)" },
-  { id: "sega32x", label: "Sega 32X", core: "picodrive (Libretro)" },
-  { id: "saturn", label: "Sega Saturn", core: "yabause (Libretro)" },
-  { id: "dreamcast", label: "Sega Dreamcast", core: "flycast (Libretro)" },
-];
+const MULTIPLAYER_SYSTEMS = SUPPORTED_MULTIPLAYER_SYSTEMS;
 
 /**
  * Standard Libretro Button Map for Player 2 (Port 1):
@@ -145,12 +134,18 @@ export function MultiplayerModal({
   const [isLoadingRooms, setIsLoadingRooms] = useState<boolean>(false);
   const [roomNameInput, setRoomNameInput] = useState<string>("");
   const [joinCodeInput, setJoinCodeInput] = useState<string>("");
-  const [selectedSystemId, setSelectedSystemId] = useState<string>(
-    initialGame?.system || "snes"
-  );
-  const [selectedGameId, setSelectedGameId] = useState<string>(
-    initialGame?.id || ""
-  );
+  const [selectedSystemId, setSelectedSystemId] = useState<string>(() => {
+    if (initialGame && isSupportedMultiplayerSystem(initialGame.system)) {
+      return initialGame.system;
+    }
+    return "snes";
+  });
+  const [selectedGameId, setSelectedGameId] = useState<string>(() => {
+    if (initialGame && isSupportedMultiplayerSystem(initialGame.system)) {
+      return initialGame.id;
+    }
+    return "";
+  });
   const [gameSearchQuery, setGameSearchQuery] = useState<string>("");
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [copiedRoomCode, setCopiedRoomCode] = useState<boolean>(false);
