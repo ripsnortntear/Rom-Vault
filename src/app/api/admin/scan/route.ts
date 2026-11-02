@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
-import { scanGameLibrary, isScanActive } from "@/lib/scanner";
+import { scanGameLibrary, isScanActive, getCachedGameIds } from "@/lib/scanner";
+import { announceGameRelease } from "@/lib/shoutbox";
 import { checkRateLimit, recordRateLimitEvent, getTrustedClientIp } from "@/lib/auth/rate-limit";
 
 async function handleScan(request: NextRequest): Promise<NextResponse> {
@@ -79,9 +80,24 @@ async function handleScan(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    const priorIds = getCachedGameIds();
     const library = await scanGameLibrary(true);
     if (!isCliAdmin) {
       await recordRateLimitEvent("admin_rescan", `${session.user.id}:${clientIp}`);
+    }
+
+    // Auto-announce newly discovered games in the shoutbox (up to 5)
+    if (priorIds.size > 0) {
+      const newlyDiscovered = library.games.filter((g) => !priorIds.has(g.id));
+      for (const newGame of newlyDiscovered.slice(0, 5)) {
+        await announceGameRelease({
+          id: newGame.id,
+          title: newGame.displayTitle,
+          system: newGame.system,
+        }).catch((err) => {
+          console.warn("[admin/scan] Failed to announce game release in shoutbox:", err);
+        });
+      }
     }
 
     return NextResponse.json({

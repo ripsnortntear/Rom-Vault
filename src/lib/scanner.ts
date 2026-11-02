@@ -592,6 +592,11 @@ export function updateCachedGameMetadata(id: string, meta: Partial<GameItem>): v
   }
 }
 
+export function getCachedGameIds(): Set<string> {
+  if (!cachedLibrary) return new Set();
+  return new Set(cachedLibrary.games.map((g) => g.id));
+}
+
 export async function getGameById(id: string): Promise<GameItem | null> {
   const { games } = await scanGameLibrary();
   const decodedId = safeDecodeURIComponent(id);

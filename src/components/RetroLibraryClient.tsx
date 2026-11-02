@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User, Trophy, ShieldAlert } from "lucide-react";
 import type { CoverArtStyle, GameItem, LibraryStats } from "@/types/game";
 import { HeroSpotlight } from "@/components/HeroSpotlight";
+import { Shoutbox } from "@/components/Shoutbox";
 import {
   FilterBar,
   type CollectionFilter,
@@ -634,6 +635,29 @@ export function RetroLibraryClient({
       </header>
 
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-8 py-6">
+        <Shoutbox
+          currentUser={currentUser}
+          allGames={initialGames}
+          onSelectGameById={(gameId) => {
+            const decodedTarget = (() => {
+              try {
+                return decodeURIComponent(gameId);
+              } catch {
+                return gameId;
+              }
+            })();
+            const match = initialGames.find(
+              (g) =>
+                g.id === gameId ||
+                g.id === decodedTarget ||
+                g.displayTitle.toLowerCase() === decodedTarget.toLowerCase()
+            );
+            if (match) {
+              setDetailGame(match);
+            }
+          }}
+        />
+
         {featuredGame && (
           <HeroSpotlight
             game={featuredGame}
