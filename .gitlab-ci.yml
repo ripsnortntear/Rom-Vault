@@ -19,6 +19,8 @@ variables:
   SESSION_SECRET: ci-dummy-session-secret-build-only-32bytes
   DATABASE_URL: mysql://build:build@localhost:3306/build
 
+# Local directory-based build caching for self-hosted GitLab runner
+# Persists .next/cache/ locally across pipeline runs to eliminate Next.js build cache warnings
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
