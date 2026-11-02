@@ -56,6 +56,7 @@ declare global {
     EJS_onGameStart?: () => void;
     EJS_coreSettings?: Record<string, string>;
     EJS_defaultOptions?: Record<string, string>;
+    EJS_defaultControls?: Record<number, Record<number, { value?: string; value2?: string }>>;
     EJS_virtualGamepadSettings?: {
       shoulders?: number;
       buttonLabels?: Record<string, string>;
@@ -68,6 +69,11 @@ declare global {
       saveSaveFiles?: () => void;
       getSaveFile?: () => Uint8Array | ArrayBuffer | null;
       gameManager?: {
+        simulateInput?: (player: number, index: number, value: number) => void;
+        functions?: {
+          simulateInput?: (player: number, index: number, value: number) => void;
+          [key: string]: unknown;
+        };
         setOption?: (key: string, value: string) => void;
         setVariable?: (key: string, value: string) => void;
         saveSaveFiles?: () => void;
@@ -401,6 +407,23 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
   useEffect(() => {
     const handleParentMessage = async (e: MessageEvent) => {
+      if (e.data?.type === "VAULT_MP_P2_INPUT") {
+        const btnIndex = Number(e.data.buttonIndex);
+        const val = Number(e.data.value);
+        if (!Number.isNaN(btnIndex) && !Number.isNaN(val)) {
+          const emu = window.EJS_emulator;
+          const gm = emu?.gameManager;
+          try {
+            if (gm && typeof gm.simulateInput === "function") {
+              gm.simulateInput(1, btnIndex, val);
+            } else if (gm?.functions && typeof gm.functions.simulateInput === "function") {
+              gm.functions.simulateInput(1, btnIndex, val);
+            }
+          } catch {}
+        }
+        return;
+      }
+
       if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
         updatePadMode(true);
       } else if (e.data?.type === "VAULT_FORCE_SAVE") {
@@ -676,6 +699,44 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_audioBufferSize = 2048;
         window.EJS_sampleRate = 44100;
 
+        // Configure dual-controller mappings for Port 0 (Player 1) and Port 1 (Player 2)
+        window.EJS_defaultControls = {
+          0: {
+            0: { value: "x", value2: "BUTTON_2" },
+            1: { value: "s", value2: "BUTTON_4" },
+            2: { value: "v", value2: "SELECT" },
+            3: { value: "enter", value2: "START" },
+            4: { value: "up arrow", value2: "DPAD_UP" },
+            5: { value: "down arrow", value2: "DPAD_DOWN" },
+            6: { value: "left arrow", value2: "DPAD_LEFT" },
+            7: { value: "right arrow", value2: "DPAD_RIGHT" },
+            8: { value: "z", value2: "BUTTON_1" },
+            9: { value: "a", value2: "BUTTON_3" },
+            10: { value: "q", value2: "LEFT_TOP_SHOULDER" },
+            11: { value: "e", value2: "RIGHT_TOP_SHOULDER" },
+            12: { value: "tab", value2: "LEFT_BOTTOM_SHOULDER" },
+            13: { value: "r", value2: "RIGHT_BOTTOM_SHOULDER" },
+          },
+          1: {
+            0: { value: "k", value2: "BUTTON_2" },
+            1: { value: "j", value2: "BUTTON_4" },
+            2: { value: "n", value2: "SELECT" },
+            3: { value: "m", value2: "START" },
+            4: { value: "i", value2: "DPAD_UP" },
+            5: { value: "k", value2: "DPAD_DOWN" },
+            6: { value: "j", value2: "DPAD_LEFT" },
+            7: { value: "l", value2: "DPAD_RIGHT" },
+            8: { value: "u", value2: "BUTTON_1" },
+            9: { value: "o", value2: "BUTTON_3" },
+            10: { value: "7", value2: "LEFT_TOP_SHOULDER" },
+            11: { value: "9", value2: "RIGHT_TOP_SHOULDER" },
+            12: { value: "6", value2: "LEFT_BOTTOM_SHOULDER" },
+            13: { value: "0", value2: "RIGHT_BOTTOM_SHOULDER" },
+          },
+          2: {},
+          3: {},
+        };
+
         if (game.system === "psx" || game.system === "ps1") {
           window.EJS_coreSettings = {
             pcsx_rearmed_cdfs_cache: "disabled",
@@ -684,6 +745,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             pcsx_rearmed_neon_enhancement_enable: "disabled",
             pcsx_rearmed_neon_enhancement_no_main: "disabled",
             pcsx_rearmed_pad1type: "standard",
+            pcsx_rearmed_pad2type: "standard",
             pcsx_rearmed_analog_to_digital: "left_analog",
             pcsx_rearmed_vibration: "disabled",
             enable_device_vibration: "false",
@@ -705,6 +767,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_player1_r3_btn": "11",
             "input_player1_analog_dpad_mode": "1",
             "input_libretro_device_p1": "1",
+            "input_libretro_device_p2": "1",
           };
         }
 
@@ -852,12 +915,18 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_onStart = () => {
           setBootState("running");
           applyAnalogMapping();
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: "VAULT_EMU_STARTED" }, "*");
+          }
         };
         window.EJS_onGameStart = () => {
           setBootState("running");
           applyAnalogMapping();
           setTimeout(applyAnalogMapping, 500);
           setTimeout(applyAnalogMapping, 1500);
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: "VAULT_EMU_STARTED" }, "*");
+          }
 
           try {
             const emu = window.EJS_emulator;
@@ -909,6 +978,18 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to boot emulator.");
     }
   };
+
+  const hasAutoStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && bootState === "idle" && !hasAutoStartedRef.current) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("autostart") === "1") {
+        hasAutoStartedRef.current = true;
+        handleStartGame();
+      }
+    }
+  });
 
   const handleDiscSelect = (idx: number) => {
     if (idx === selectedDiscIndex) return;

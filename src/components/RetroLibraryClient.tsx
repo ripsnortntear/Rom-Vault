@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User, Trophy, ShieldAlert } from "lucide-react";
+import { Gamepad2, Shuffle, Sparkles, HardDrive, Film, User, Trophy, ShieldAlert, Users } from "lucide-react";
 import type { CoverArtStyle, GameItem, LibraryStats } from "@/types/game";
 import { HeroSpotlight } from "@/components/HeroSpotlight";
 import { Shoutbox } from "@/components/Shoutbox";
@@ -17,6 +17,7 @@ import { GameDetailModal } from "@/components/GameDetailModal";
 import { EmulatorModal } from "@/components/EmulatorModal";
 import { EmulatorErrorBoundary } from "@/components/EmulatorErrorBoundary";
 import { UserProfileModal } from "@/components/UserProfileModal";
+import { MultiplayerModal } from "@/components/MultiplayerModal";
 import { EdgeRecommendationBadge } from "@/components/EdgeRecommendationBadge";
 import { isDesktopOnlySystem } from "@/lib/systems";
 
@@ -113,6 +114,7 @@ export function RetroLibraryClient({
 
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isMultiplayerModalOpen, setIsMultiplayerModalOpen] = useState<boolean>(false);
   const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
 
   useEffect(() => {
@@ -587,6 +589,16 @@ export function RetroLibraryClient({
               <span className="hidden sm:inline">Random Game</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => setIsMultiplayerModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 transition cursor-pointer shadow-sm shadow-emerald-950/50"
+              title="Open 2-Player Retro Multiplayer Rooms"
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              <span>2P Rooms</span>
+            </button>
+
             <a
               href="/roms/leaderboards"
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer"
@@ -786,6 +798,14 @@ export function RetroLibraryClient({
           }}
         />
       )}
+
+      <MultiplayerModal
+        isOpen={isMultiplayerModalOpen}
+        onClose={() => setIsMultiplayerModalOpen(false)}
+        currentUser={currentUser}
+        allGames={initialGames}
+        initialGame={detailGame || featuredGame}
+      />
     </div>
   );
 }

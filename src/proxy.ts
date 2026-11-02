@@ -11,6 +11,7 @@ const PUBLIC_PREFIXES = [
   "/tabstationtoo",
   "/api/bios",
   "/api/shoutbox",
+  "/api/multiplayer",
   "/_next",
   "/favicon.ico",
 ];
