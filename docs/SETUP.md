@@ -12,7 +12,7 @@
 - **Node.js**: v20.x LTS or higher (Node 22 / Node 26 supported)
 - **Database**: MariaDB 10.6+ or MySQL 8.0+
 - **Reverse Proxy**: Nginx 1.18+ or Apache 2.4+
-- **Storage**: Fast SSD or NVMe mount point for ROMs and multi-layer artwork (e.g., `/mnt/storage/roms/`)
+- **Storage**: Fast SSD or NVMe mount point for ROMs and multi-layer artwork (e.g., `/path/to/roms/`)
 
 ---
 
@@ -37,7 +37,7 @@ EXIT;
 Run the schema migrations in sequence from the project root:
 
 ```bash
-cd /var/www/html/roms
+cd /path/to/rom-vault
 
 # 1. Base authentication, tokens, user accounts, and community schema
 mysql -u rom_vault_user -p rom_vault < migrations/001_init_auth.sql
@@ -50,10 +50,10 @@ mysql -u rom_vault_user -p rom_vault < migrations/002_user_memory_cards.sql
 
 ## 3. Storage & Directory Layout
 
-Organize your game library under the configured storage root (default: `/mnt/storage/roms`):
+Organize your game library under the configured storage root (default: `/path/to/roms`):
 
 ```text
-/mnt/storage/roms/
+/path/to/roms/
 ├── psx/
 │   ├── artwork/
 │   │   ├── artwork_3d/      # 3D box renders (.png, .webp)
@@ -78,8 +78,8 @@ Organize your game library under the configured storage root (default: `/mnt/sto
 Ensure the web application service user (`www-data` or your execution user) has read permissions for the ROMs/artwork directories and read/write permissions for `saves/`:
 
 ```bash
-sudo chown -R www-data:www-data /mnt/storage/roms/saves
-sudo chmod -R 775 /mnt/storage/roms/saves
+sudo chown -R www-data:www-data /path/to/roms/saves
+sudo chmod -R 775 /path/to/roms/saves
 ```
 
 ---
@@ -101,8 +101,8 @@ NODE_ENV=production
 PORT=39254
 
 # Storage Paths
-STORAGE_ROOT=/mnt/storage/roms
-SAVES_DIR=/mnt/storage/roms/saves
+STORAGE_ROOT=/path/to/roms
+SAVES_DIR=/path/to/roms/saves
 
 # MariaDB Connection
 DB_HOST=127.0.0.1

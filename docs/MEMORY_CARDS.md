@@ -30,7 +30,7 @@ ROM Vault features an in-browser cloud save synchronization system designed to p
 - **Core**: EmulatorJS cores
 - **Format**: `.srm` (Battery-backed SRAM)
 - **Size**: Dynamic capacity (typically 8 KB, 32 KB, 64 KB, 128 KB, or 512 KB)
-- **Storage Location**: Scoped to user ID or fallback storage under `/mnt/storage/roms/saves/{system}/{cleanName}.srm`
+- **Storage Location**: Scoped to user ID or fallback storage under `/path/to/roms/saves/{system}/{cleanName}.srm`
 
 ---
 

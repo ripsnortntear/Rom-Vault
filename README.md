@@ -62,10 +62,10 @@ High-performance retro gaming preservation portal and in-browser multi-console e
 └── sync-repo.sh                    # Automated build verification & sync script
 ```
 
-### ROM Storage Pool Layout (e.g. `/mnt/storage/roms/`)
+### ROM Storage Pool Layout (e.g. `/path/to/roms/`)
 
 ```text
-/mnt/storage/roms/
+/path/to/roms/
 ├── psx/
 │   ├── artwork/
 │   │   ├── artwork_3d/             # 3D box renders (.png, .webp)

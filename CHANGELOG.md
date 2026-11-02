@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-11-02
 
 ### Added
-- **Internal Nginx Cache Routing for GitLab Runner**: Configured self-hosted GitLab CI/CD runner to route cache archiving and extraction requests through the internal Nginx reverse proxy endpoint (`www.oldsmarchaos.com`) via WebDAV (`/runner-cache/`) with local host persistence at `/var/cache/gitlab-runner/`, eliminating external cloud dependencies and Cloudflare 100MB body limits.
+- **Internal Nginx Cache Routing for GitLab Runner**: Configured self-hosted GitLab CI/CD runner to route cache archiving and extraction requests through the internal Nginx reverse proxy endpoint (`your-domain.example.com`) via WebDAV (`/runner-cache/`) with local host persistence at `/var/cache/gitlab-runner/`, eliminating external cloud dependencies and upstream proxy body limits.
 - **Local Domain Loopback Resolution**: Added internal DNS resolution entry in `/etc/hosts` for direct loopback routing (`127.0.0.1`) with full Let's Encrypt TLS certificate verification.
 - **Synchronous 2-Player Retro Multiplayer Rooms**: Real-time room creation, custom join codes, interactive lobby, player chat, dual-ready status tracking, and unified libretro session launching for synchronized browser gameplay (`9e8d39a`).
 - **Multiplayer Dual-Controller & E2E Testing**: Dual physical Xbox Bluetooth controller mapping utilities and comprehensive automated integration test suite verifying end-to-end room lifecycle, bidirectional messaging, and input handling (`ed8637b`).
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chat Enter Key Scrolling**: Eliminated default textarea behavior that caused page-level vertical scroll jumping when submitting messages via the Enter key (`66ac737`).
 
 ### Security
-- **Local Cache Storage Restriction**: Enforced strict Nginx IP restrictions (`allow 127.0.0.1; allow ::1; allow 192.168.0.0/16; deny all;`) on internal runner cache endpoints.
+- **Local Cache Storage Restriction**: Enforced strict Nginx IP restrictions (`allow 127.0.0.1; allow ::1; allow 10.0.0.0/8; allow 192.168.0.0/16; deny all;`) on internal runner cache endpoints.
 
 ---
 
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Community Contribution Exporter**: Added export utilities and documentation guidelines for community-contributed artwork and metadata assets (`3ed6284`).
 - **Bulk Metadata Sync Engine**: Rate-limited IGDB catalog synchronization tool for bulk archive enrichment (`760d4f5`).
 - **Manual Library Rescan**: Added authenticated manual library rescan via UI button and CLI (`npm run scan`) (`c9d98ef`).
-- **Storage Pool Migration**: Migrated primary game storage pool to `/mnt/storage/oldsmarchaos.com/roms/` with backward-compatible directory fallback (`fb6cdce`).
+- **Storage Pool Migration**: Migrated primary game storage pool to `/path/to/roms` with backward-compatible directory fallback (`fb6cdce`).
 - **Edge Browser Recommendation**: Added conditional COOP/COEP detection and Edge browser guidance banner with hardware acceleration tips (`dca2ab4`, `7d4228a`).
 - **Manual Mobile Save Card Trigger**: Direct save action button in the standalone mobile/tablet emulator header for cloud card synchronization (`c929bb8`).
 
