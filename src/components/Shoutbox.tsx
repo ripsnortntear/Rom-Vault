@@ -67,8 +67,17 @@ export function Shoutbox({
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
+  }, []);
 
   // Fetch recent shouts
   const fetchShouts = useCallback(async (silent = false) => {
@@ -100,25 +109,27 @@ export function Shoutbox({
     if (isCollapsed) return;
 
     // Scroll to bottom when opening
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom(false);
 
     const interval = setInterval(() => {
       fetchShouts(true);
     }, 7000);
 
     return () => clearInterval(interval);
-  }, [isCollapsed, fetchShouts]);
+  }, [isCollapsed, fetchShouts, scrollToBottom]);
 
   // Auto-scroll when new shouts arrive while open
   useEffect(() => {
     if (!isCollapsed && shouts.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollToBottom(true);
     }
-  }, [shouts.length, isCollapsed]);
+  }, [shouts.length, isCollapsed, scrollToBottom]);
 
   // Handle send message
   const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
     const trimmed = messageInput.trim();
     if (!trimmed || isSending) return;
 
@@ -152,8 +163,8 @@ export function Shoutbox({
           setShouts((prev) => [...prev, data.shout]);
         }
         setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 50);
+          scrollToBottom(true);
+        }, 30);
       }
     } catch (err) {
       setErrorMessage("Network error while posting shout.");
@@ -263,7 +274,10 @@ export function Shoutbox({
           </div>
 
           {/* Messages Scroll Area */}
-          <div className="h-64 sm:h-72 overflow-y-auto pr-2 space-y-2.5 custom-scrollbar">
+          <div
+            ref={scrollContainerRef}
+            className="h-64 sm:h-72 overflow-y-auto pr-2 space-y-2.5 custom-scrollbar"
+          >
             {isLoading && shouts.length === 0 ? (
               <div className="flex items-center justify-center h-full text-zinc-500 text-xs">
                 <RefreshCw className="w-4 h-4 animate-spin mr-2 text-zinc-400" />
@@ -390,7 +404,6 @@ export function Shoutbox({
                 );
               })
             )}
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Error Message */}
@@ -444,6 +457,13 @@ export function Shoutbox({
                 type="text"
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSendMessage(e);
+                  }
+                }}
                 maxLength={280}
                 placeholder={
                   currentUser
