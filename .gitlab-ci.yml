@@ -19,8 +19,14 @@ variables:
   SESSION_SECRET: ci-dummy-session-secret-build-only-32bytes
   DATABASE_URL: mysql://build:build@localhost:3306/build
 
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .next/cache/
+
 unit_test:
   stage: test
+  cache: []
   before_script:
     - export PATH="/usr/local/bin:/usr/bin:$PATH"
   script:
@@ -54,6 +60,7 @@ build_and_verify:
     - ".next/cache/**"
 deploy_production:
   stage: deploy
+  cache: []
   dependencies:
   - build_and_verify
   only:
