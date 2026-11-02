@@ -126,15 +126,21 @@ export function Shoutbox({
   }, [shouts.length, isCollapsed, scrollToBottom]);
 
   // Handle send message
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent | React.SyntheticEvent) => {
     if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
     }
     const trimmed = messageInput.trim();
     if (!trimmed || isSending) return;
 
+    // Immediately clear input and lock focus so user can continue typing seamlessly
+    setMessageInput("");
     setIsSending(true);
     setErrorMessage(null);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
 
     try {
       const payload: { message: string; guestName?: string } = {
@@ -157,8 +163,8 @@ export function Shoutbox({
       const data = await res.json();
       if (!res.ok || !data.success) {
         setErrorMessage(data.error || "Failed to post message.");
+        setMessageInput((prev) => (prev ? prev : trimmed));
       } else {
-        setMessageInput("");
         if (data.shout) {
           setShouts((prev) => [...prev, data.shout]);
         }
@@ -168,8 +174,12 @@ export function Shoutbox({
       }
     } catch (err) {
       setErrorMessage("Network error while posting shout.");
+      setMessageInput((prev) => (prev ? prev : trimmed));
     } finally {
       setIsSending(false);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     }
   };
 
@@ -235,6 +245,9 @@ export function Shoutbox({
               setIsCollapsed((prev) => !prev);
               if (isCollapsed) {
                 fetchShouts(true);
+                setTimeout(() => {
+                  inputRef.current?.focus();
+                }, 100);
               }
             }}
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-semibold text-zinc-200 hover:text-white transition-all shadow-sm cursor-pointer"
@@ -470,7 +483,7 @@ export function Shoutbox({
                     ? "Type a shout and press Enter..."
                     : "Type a shout as guest..."
                 }
-                disabled={isSending}
+                autoComplete="off"
                 className="w-full px-3 py-2 pr-16 rounded-xl bg-zinc-900/90 border border-white/10 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 transition"
               />
               <span className="absolute right-2.5 text-[10px] text-zinc-500 select-none">
