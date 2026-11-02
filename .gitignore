@@ -25,6 +25,7 @@
 *.pem
 audit-report*.txt
 contributions/
+.metadata_cache.json*
 
 # debug
 npm-debug.log*

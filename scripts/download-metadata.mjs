@@ -181,10 +181,17 @@ TARGET ASSET FLAGS (choose one or more, or use --all):
 
 SYSTEM FILTERING & CONTROLS:
   --system=<sys>     Target single console platform (e.g. ps2, gbc, nes, gamecube)
+  --filter=<query>   Filter games by title substring (e.g. --filter="Arc the Lad")
   --limit=<number>   Process only the first N items (useful for testing)
   --delay=<ms>       Delay in milliseconds between IGDB queries (default: 300ms)
   --force            Re-download existing assets (overwrites local files)
   --help, -h         Show this manual
+
+CACHE CONTROLS (Negative result caching):
+  --no-cache         Bypass the "no new assets" cache and re-scan all games
+  --clear-cache      Clear the cached "no new assets" records
+  NOTE: When running with --all, games where "No new assets found" across all
+        providers are automatically cached to skip redundant queries in future runs.
 
 INTEGRATED APIS & DATA SOURCES:
   1. IGDB (Twitch API): HD 2D box covers, 720p screenshots, release dates, plot summaries
@@ -226,6 +233,93 @@ EXAMPLES:
 `);
 }
 
+// ==============================================================================
+// Persistent Cache for "No New Assets Found" (Negative Result Cache)
+// Records games that yielded zero new assets across all providers during --all
+// ==============================================================================
+class MetadataCache {
+  constructor(primaryPath, fallbackPath) {
+    this.primaryPath = primaryPath;
+    this.fallbackPath = fallbackPath;
+    this.activePath = primaryPath;
+    this.data = { version: 1, exhausted: {} };
+    this.dirty = false;
+    this.load();
+  }
+
+  load() {
+    for (const p of [this.primaryPath, this.fallbackPath]) {
+      if (p && fs.existsSync(p)) {
+        try {
+          const raw = fs.readFileSync(p, "utf8");
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.exhausted === "object") {
+            this.data = parsed;
+            this.activePath = p;
+            return;
+          }
+        } catch {}
+      }
+    }
+  }
+
+  save() {
+    if (!this.dirty) return;
+    const targets = [this.primaryPath, this.fallbackPath].filter(Boolean);
+    for (const target of targets) {
+      try {
+        const dir = path.dirname(target);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const tmp = `${target}.${Date.now()}.tmp`;
+        fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2), "utf8");
+        fs.renameSync(tmp, target);
+        this.activePath = target;
+        this.dirty = false;
+        return;
+      } catch (e) {
+        // try fallback target if primary is read-only
+      }
+    }
+  }
+
+  _key(system, baseName) {
+    return `${system.toLowerCase()}::${baseName}`;
+  }
+
+  isExhausted(system, baseName) {
+    return Boolean(this.data.exhausted[this._key(system, baseName)]);
+  }
+
+  markExhausted(system, baseName) {
+    const key = this._key(system, baseName);
+    if (!this.data.exhausted[key]) {
+      this.data.exhausted[key] = {
+        date: new Date().toISOString(),
+        timestamp: Date.now(),
+      };
+      this.dirty = true;
+    }
+  }
+
+  removeExhausted(system, baseName) {
+    const key = this._key(system, baseName);
+    if (this.data.exhausted[key]) {
+      delete this.data.exhausted[key];
+      this.dirty = true;
+    }
+  }
+
+  clear() {
+    this.data = { version: 1, exhausted: {} };
+    this.dirty = true;
+    this.save();
+  }
+
+  count() {
+    return Object.keys(this.data.exhausted).length;
+  }
+}
+
 // Parse Command Line Arguments
 const rawArgs = process.argv.slice(2);
 if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.length === 0) {
@@ -238,6 +332,27 @@ const isPrune = rawArgs.includes("--prune-orphans") || rawArgs.includes("--clean
 const dryRun = rawArgs.includes("--dry-run");
 const autoYes = rawArgs.includes("-y") || rawArgs.includes("--yes");
 const exportContributions = rawArgs.includes("--export-contributions") || rawArgs.includes("--contribute");
+const noCache = rawArgs.includes("--no-cache");
+const clearCache = rawArgs.includes("--clear-cache");
+const isAllTargets = rawArgs.includes("--all");
+
+const CACHE_FILE = path.join(STORAGE_ROOT, ".metadata_cache.json");
+const FALLBACK_CACHE_FILE = path.join(ROOT_DIR, ".metadata_cache.json");
+const metadataCache = new MetadataCache(CACHE_FILE, FALLBACK_CACHE_FILE);
+
+if (clearCache) {
+  metadataCache.clear();
+  console.log("[✓] Negative metadata cache cleared.");
+  const hasOtherActions = isAudit || isPrune || isAllTargets || rawArgs.some((a) =>
+    ["--boxart", "--2d", "--boxart-3d", "--3d", "--screenshots", "--screenshot",
+     "--titlescreens", "--titlescreen", "--disc", "--cart", "--cartridge",
+     "--medium", "--logos", "--logo", "--wheel", "--stories", "--story",
+     "--videos", "--video"].includes(a)
+  );
+  if (!hasOtherActions) {
+    process.exit(0);
+  }
+}
 
 let targetSystem = null;
 let filterQuery = null;
@@ -251,7 +366,7 @@ let checkOrphans = !rawArgs.includes("--no-orphans");
 for (const arg of rawArgs) {
   if (arg.startsWith("--system=")) {
     targetSystem = arg.split("=")[1].toLowerCase().trim();
-  } else if (arg.startsWith("--filter=")) {
+  } else if (arg.startsWith("--filter=") || arg.startsWith("--query=")) {
     filterQuery = arg.split("=")[1].trim();
   } else if (arg.startsWith("--limit=")) {
     limit = parseInt(arg.split("=")[1], 10);
@@ -1056,6 +1171,7 @@ async function main() {
   console.log(`[*] Target Storage: ${STORAGE_ROOT}`);
   console.log(`[*] Active Targets: ${selectedTypes.join(", ")}`);
   if (targetSystem) console.log(`[*] Target System:  ${targetSystem}`);
+  if (filterQuery)  console.log(`[*] Filter Query:   "${filterQuery}"`);
   if (limit) console.log(`[*] Batch Limit:    ${limit}`);
   if (forceAll) console.log(`[*] Force Mode:     Re-downloading existing assets`);
   console.log("");
@@ -1119,6 +1235,7 @@ async function main() {
   // Build items queue
   console.log("[*] Scanning ROM library for missing assets...");
   let queue = [];
+  let cachedSkippedCount = 0;
 
   for (const sys of systemsToScan) {
     const romsDir = path.join(STORAGE_ROOT, sys, "roms");
@@ -1136,6 +1253,15 @@ async function main() {
     for (const file of files) {
       const extIdx = file.name.lastIndexOf(".");
       const baseName = extIdx > 0 ? file.name.slice(0, extIdx) : file.name;
+
+      if (filterQuery && !baseName.toLowerCase().includes(filterQuery.toLowerCase())) {
+        continue;
+      }
+
+      if (!forceAll && !noCache && metadataCache.isExhausted(sys, baseName)) {
+        cachedSkippedCount++;
+        continue;
+      }
 
       const artDir = path.join(STORAGE_ROOT, sys, "artwork");
       const needs = {};
@@ -1183,13 +1309,17 @@ async function main() {
     }
   }
 
+  if (cachedSkippedCount > 0) {
+    console.log(`[*] Skipped ${cachedSkippedCount} games verified with no new assets (cached from prior --all runs; use --force or --no-cache to re-scan)`);
+  }
+
   if (limit && limit > 0) {
     queue = queue.slice(0, limit);
   }
 
   console.log(`[*] Total games needing requested assets: ${queue.length}`);
   if (queue.length === 0) {
-    console.log("[✓] All target games already have requested assets present!");
+    console.log("[✓] All target games already have requested assets present or cached as unavailable!");
     process.exit(0);
   }
 
@@ -1200,6 +1330,12 @@ async function main() {
   let successCount = 0;
   let notFoundCount = 0;
   const startTime = Date.now();
+
+  process.on("SIGINT", () => {
+    console.log("\n[!] Process interrupted. Saving cache...");
+    metadataCache.save();
+    process.exit(0);
+  });
 
   for (let i = 0; i < queue.length; i++) {
     const item = queue[i];
@@ -1390,15 +1526,25 @@ async function main() {
       console.log(
         `[${itemNum}/${queue.length}] (${pct}%) [${sys.toUpperCase()}] ${base} -> ${downloadedForGame.join(" + ")} | ETA: ${formatTime(etaSeconds)}`
       );
+      metadataCache.removeExhausted(sys, base);
     } else {
       notFoundCount++;
       console.log(
         `[${itemNum}/${queue.length}] (${pct}%) [${sys.toUpperCase()}] ${base} -> No new assets found | ETA: ${formatTime(etaSeconds)}`
       );
+      if (isAllTargets) {
+        metadataCache.markExhausted(sys, base);
+      }
+    }
+
+    if (itemNum % 10 === 0) {
+      metadataCache.save();
     }
 
     await sleep(delayMs);
   }
+
+  metadataCache.save();
 
   const totalTimeSeconds = ((Date.now() - startTime) / 1000).toFixed(0);
   console.log("==================================================================");
