@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Client SaveSyncService & EmulatorContainer**: Implemented `SaveSyncService` utility and unified `EmulatorContainer` wrapper managing pre-flight cloud pulls, virtual file system injection, debounced periodic cloud auto-saving (60s), and graceful exit flushes.
 - **PlayStation Memory Card Preservation**: Preserved existing dedicated PS1 128 KB `.mcr` (`/api/users/me/cards/...`) and PS2 8.65 MB `.ps2` memory card infrastructures completely untouched and fully functional.
 
+### Fixed
+- **Hydration Re-Randomization Flicker (Double Reload)**: Gated the `selectedSystem` effect in `RetroLibraryClient.tsx` using `prevSystemRef` so initial mount preserves the server-rendered featured game, eliminating visual thrashing, double re-renders, and duplicate media requests on page load or F5 refresh.
+
 ---
 
 ## [0.1.0] - 2026-11-02

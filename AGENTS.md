@@ -139,4 +139,8 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Placeholder Callout Required: Any README, setup guide, or wiki file detailing installation steps MUST include a prominent notice informing users that all hostnames, storage paths (`/mnt/storage/roms`), and passwords are generalized templates.
 - Zero Revealing Information: Never commit personal access tokens, specific internal network IPs, real user emails, or production secrets to tracked documentation or repository code.
 
+## 15. Proactive Remediation & Autonomous Execution Invariant
+- Always Apply Fixes Proactively: When a defect, anti-pattern, race condition, or user-reported inefficiency is diagnosed, always implement the complete, end-to-end fix directly. Do not stop midway to ask if the user wants the fix applied.
+- Complete Verification Before Responding: Only return to the user after all code changes, unit tests, static analysis, Next.js Turbopack builds, service restarts, and repository synchronization (`sync-repo.sh --rebuild`) have fully completed and verified.
+
 <!-- END:nextjs-agent-rules -->

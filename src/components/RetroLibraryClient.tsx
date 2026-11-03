@@ -117,9 +117,16 @@ export function RetroLibraryClient({
 
   const [featuredGame, setFeaturedGame] = useState<GameItem | null>(() => {
     if (!initialGames || initialGames.length === 0) return null;
-    const randomIndex = Math.floor(Math.random() * initialGames.length);
-    return initialGames[randomIndex] ?? null;
+    const pool =
+      initialSystem === "ALL"
+        ? initialGames
+        : initialGames.filter((g) => g.system === initialSystem);
+    const candidates = pool.length > 0 ? pool : initialGames;
+    const randomIndex = Math.floor(Math.random() * candidates.length);
+    return candidates[randomIndex] ?? null;
   });
+
+  const prevSystemRef = useRef<SystemFilter>(selectedSystem);
 
   const [detailGame, setDetailGame] = useState<GameItem | null>(null);
   const [playingGame, setPlayingGame] = useState<GameItem | null>(null);
@@ -474,6 +481,12 @@ export function RetroLibraryClient({
   }, [initialGames, selectedSystem]);
 
   useEffect(() => {
+    // Skip on initial mount to preserve the server-rendered featured game and eliminate double-load flicker
+    if (prevSystemRef.current === selectedSystem) {
+      return;
+    }
+    prevSystemRef.current = selectedSystem;
+
     const pool = selectedSystem === "ALL"
       ? initialGames
       : initialGames.filter((g) => g.system === selectedSystem);
