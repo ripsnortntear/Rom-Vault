@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Activity,
   LogOut,
+  Terminal,
 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/guards";
 
@@ -90,6 +91,14 @@ export default async function AdminLayout({
           >
             <Trophy className="w-4 h-4 text-amber-400" />
             <span>Scores &amp; Moderation</span>
+          </Link>
+
+          <Link
+            href="/admin/scripts"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-zinc-300 hover:text-white transition"
+          >
+            <Terminal className="w-4 h-4 text-rose-400" />
+            <span>Scripts &amp; Automation</span>
           </Link>
 
           <Link

@@ -15,6 +15,7 @@ import {
   Server,
   Database,
   Clock,
+  Terminal,
 } from "lucide-react";
 import { getAdminStorageHealth, getAdminAuditLogs } from "@/lib/community";
 import { getStorageRoot } from "@/lib/paths";
@@ -47,6 +48,13 @@ export default async function AdminOverviewPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/admin/scripts"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition"
+          >
+            <Terminal className="w-4 h-4 text-rose-400" />
+            <span>Scripts &amp; Automation</span>
+          </Link>
           <AdminRescanButton />
           <Link
             href="/admin/users"
