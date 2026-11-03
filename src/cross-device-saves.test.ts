@@ -51,7 +51,12 @@ import {
   uint8ArrayToBase64,
   base64ToUint8Array,
   resolveSaveEndpoint,
+  isValidPs1MemoryCard,
+  isBlankPs1MemoryCard,
+  computeSaveChecksum,
+  filterCandidateSaveFiles,
 } from "@/lib/sync-service";
+import { createFormattedPs1MemoryCard } from "@/lib/memory-cards";
 
 describe("Universal Cross-Device Save Synchronization & Database Authority Suite", () => {
   beforeEach(() => {
@@ -363,6 +368,54 @@ describe("Universal Cross-Device Save Synchronization & Database Authority Suite
       const queued = SaveSyncService.triggerBeaconExit("user-123", "snes__ChronoTrigger", "emulatorjs", sample);
 
       expect(queued).toBe(false);
+    });
+  });
+
+  describe("PS1 Memory Card Validation & Per-Game IDBFS Isolation", () => {
+    it("validates 128 KB PS1 memory card magic header and rejects cross-system 2 KB saves", () => {
+      const formattedCard = new Uint8Array(createFormattedPs1MemoryCard());
+      expect(isValidPs1MemoryCard(formattedCard)).toBe(true);
+      expect(isBlankPs1MemoryCard(formattedCard)).toBe(true);
+
+      // 2 KB SNES save must never be accepted as a valid or non-blank PS1 memory card
+      const snesSave = new Uint8Array(2048);
+      snesSave[0] = 0x4d;
+      snesSave[1] = 0x43;
+      expect(isValidPs1MemoryCard(snesSave)).toBe(false);
+      expect(isBlankPs1MemoryCard(snesSave)).toBe(false);
+    });
+
+    it("detects non-blank PS1 saves across all 15 directory frames (including slots 4..15)", () => {
+      const card = new Uint8Array(createFormattedPs1MemoryCard());
+      expect(isBlankPs1MemoryCard(card)).toBe(true);
+
+      // Write an active block allocation state (0x51) into slot 7 (frame 7 at offset 7 * 128)
+      card[7 * 128] = 0x51;
+      expect(isValidPs1MemoryCard(card)).toBe(true);
+      expect(isBlankPs1MemoryCard(card)).toBe(false);
+    });
+
+    it("computes byte-accurate checksums sensitive to changes at any byte offset", () => {
+      const cardA = new Uint8Array(createFormattedPs1MemoryCard());
+      const cardB = new Uint8Array(cardA);
+      // Modify byte at non-32-aligned offset (e.g. offset 131 inside directory frame 1)
+      cardB[131] = 0x51;
+      expect(computeSaveChecksum(cardA)).not.toBe(computeSaveChecksum(cardB));
+    });
+
+    it("filters /data/saves files strictly to current game candidates to prevent cross-game contamination", () => {
+      const existingInIdbfs = [
+        "Super Mario World (USA).srm",
+        "After Burner (World).srm",
+        "Final Fantasy VII (USA) (Disc 1).srm",
+      ];
+      const ff7Candidates = [
+        "Final Fantasy VII (USA) (Disc 1).srm",
+        "Final Fantasy VII (USA).srm",
+      ];
+      const filtered = filterCandidateSaveFiles(existingInIdbfs, ff7Candidates);
+      expect(filtered).toEqual(["Final Fantasy VII (USA) (Disc 1).srm"]);
+      expect(filtered).not.toContain("Super Mario World (USA).srm");
     });
   });
 });

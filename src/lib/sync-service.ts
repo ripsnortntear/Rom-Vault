@@ -10,6 +10,68 @@ export interface CloudSaveResult {
   fileSize?: number;
 }
 
+export const PS1_MEMORY_CARD_SIZE = 131072;
+
+/**
+ * Validates that a buffer is an authentic 128 KB (131,072-byte) PS1 Memory Card image
+ * starting with the Sony "MC" (0x4D, 0x43) magic header.
+ */
+export function isValidPs1MemoryCard(
+  buf: Uint8Array | ArrayBuffer | null | undefined
+): boolean {
+  if (!buf) return false;
+  const uint8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (uint8.byteLength !== PS1_MEMORY_CARD_SIZE) return false;
+  return uint8[0] === 0x4d && uint8[1] === 0x43;
+}
+
+/**
+ * Checks whether a valid 128 KB PS1 Memory Card has all 15 directory frames
+ * (frames 1..15 at offsets 128..1920) marked as unallocated (0xA0).
+ * Returns false if the buffer is not a valid PS1 card or if any slot contains save data.
+ */
+export function isBlankPs1MemoryCard(
+  buf: Uint8Array | ArrayBuffer | null | undefined
+): boolean {
+  if (!buf || !isValidPs1MemoryCard(buf)) return false;
+  const uint8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  for (let frame = 1; frame <= 15; frame++) {
+    if (uint8[frame * 128] !== 0xa0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Computes a full-byte FNV-1a checksum + length fingerprint across every byte of a save buffer.
+ */
+export function computeSaveChecksum(buf: Uint8Array | ArrayBuffer): string {
+  const uint8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let hash = 2166136261;
+  for (let i = 0; i < uint8.length; i++) {
+    hash ^= uint8[i];
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16) + "_" + uint8.byteLength;
+}
+
+/**
+ * Filters a list of filenames from shared Emscripten /data/saves IDBFS so only
+ * files matching the current game's candidate names are read or written, preventing
+ * cross-game save contamination across systems.
+ */
+export function filterCandidateSaveFiles(
+  existingFiles: string[],
+  candidateNames: Iterable<string>
+): string[] {
+  const allowed = new Set<string>();
+  for (const name of candidateNames) {
+    if (name) allowed.add(name);
+  }
+  return existingFiles.filter((fn) => allowed.has(fn));
+}
+
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== "undefined") {
     return Buffer.from(bytes).toString("base64");

@@ -288,6 +288,78 @@ export function EmulatorModal({
     }
   }, [resetHideTimer]);
 
+  const triggerBlobDownload = useCallback((blob: Blob, filename: string) => {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+  }, []);
+
+  const handleExportCard = useCallback(async () => {
+    if (!game) return;
+    const exportUrl =
+      game.system === "psx"
+        ? `${BASE_PATH}/api/users/me/cards/active/download?system=psx&download=1&_t=${Date.now()}`
+        : game.system === "ps2"
+        ? `${BASE_PATH}/api/users/me/cards/active/download?system=ps2&download=1&_t=${Date.now()}`
+        : `${BASE_PATH}/api/saves/${encodeURIComponent(game.id)}?system=${encodeURIComponent(game.system)}&download=1&_t=${Date.now()}`;
+
+    const defaultExt = game.system === "psx" ? "mcr" : game.system === "ps2" ? "ps2" : "srm";
+    const safeTitle = (game.baseName || game.displayTitle || "MemoryCard").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const defaultFilename =
+      game.system === "psx" || game.system === "ps2"
+        ? `Primary_Memory_Card_Slot1.${defaultExt}`
+        : `${safeTitle}.${defaultExt}`;
+
+    // Ask the live emulator iframe to flush & return its in-memory save buffer first
+    if (iframeRef.current?.contentWindow && game.system !== "ps2") {
+      try {
+        const liveBytes = await new Promise<Uint8Array | null>((resolve) => {
+          const timer = setTimeout(() => {
+            window.removeEventListener("message", onExportMsg);
+            resolve(null);
+          }, 2500);
+          const onExportMsg = (e: MessageEvent) => {
+            if (e.data?.type === "VAULT_EXPORT_CARD_DATA") {
+              clearTimeout(timer);
+              window.removeEventListener("message", onExportMsg);
+              if (Array.isArray(e.data.buffer) && e.data.buffer.length > 0) {
+                resolve(new Uint8Array(e.data.buffer));
+              } else {
+                resolve(null);
+              }
+            }
+          };
+          window.addEventListener("message", onExportMsg);
+          iframeRef.current?.contentWindow?.postMessage({ type: "VAULT_EXPORT_CARD" }, "*");
+        });
+
+        if (liveBytes && liveBytes.byteLength > 0) {
+          triggerBlobDownload(new Blob([liveBytes as unknown as BlobPart]), defaultFilename);
+          return;
+        }
+      } catch {}
+    }
+
+    // Fallback: download from API via fetch() + Blob URL so the browser never fires beforeunload
+    try {
+      const res = await fetch(exportUrl, { credentials: "include" });
+      if (!res.ok) return;
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match?.[1] || defaultFilename;
+      const blob = await res.blob();
+      triggerBlobDownload(blob, filename);
+    } catch (err) {
+      console.warn("[EmulatorModal] Export card failed:", err);
+    }
+  }, [game, triggerBlobDownload]);
+
   const handleForceSave = () => {
     setSaveStatus("saving");
     if (saveTimeoutRef.current) {
@@ -329,6 +401,11 @@ export function EmulatorModal({
           setTimeout(() => {
             setSaveStatus((current) => (current === "error" ? "idle" : current));
           }, 4000);
+        } else if (e.data.status === "saving") {
+          setSaveStatus("saving");
+          saveTimeoutRef.current = setTimeout(() => {
+            setSaveStatus((current) => (current === "saving" ? "idle" : current));
+          }, 8000);
         } else {
           setSaveStatus(e.data.status);
           if (e.data?.cardName) {
@@ -747,15 +824,10 @@ export function EmulatorModal({
                 <span>Save Card</span>
               </button>
 
-              <a
-                href={
-                  game.system === "psx"
-                    ? `${BASE_PATH}/api/users/me/cards/active/download?system=psx&download=1`
-                    : game.system === "ps2"
-                    ? `${BASE_PATH}/api/users/me/cards/active/download?system=ps2&download=1`
-                    : `${BASE_PATH}/api/saves/${encodeURIComponent(game.id)}?system=${encodeURIComponent(game.system)}&download=1`
-                }
-                className="hidden md:inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 text-zinc-200 transition"
+              <button
+                type="button"
+                onClick={handleExportCard}
+                className="hidden md:inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 text-zinc-200 transition cursor-pointer active:scale-95 touch-manipulation"
                 title={
                   game.system === "psx"
                     ? "Export User PS1 Virtual Memory Card (.MCR / DuckStation)"
@@ -766,7 +838,7 @@ export function EmulatorModal({
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Export Card</span>
-              </a>
+              </button>
 
               <button
                 type="button"
@@ -790,6 +862,8 @@ export function EmulatorModal({
               <a
                 href={downloadUrl}
                 download={activeRomFileName}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="hidden lg:inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 text-zinc-200 transition"
                 title={`Download ${activeRomFileName}`}
               >

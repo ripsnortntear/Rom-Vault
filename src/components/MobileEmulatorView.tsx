@@ -7,7 +7,13 @@ import { GameCubeEmulatorView } from "./GameCubeEmulatorView";
 import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
 import { MobileDesktopRequired } from "./MobileDesktopRequired";
 import { StandaloneRecommendationView } from "./StandaloneRecommendationView";
-import { SaveSyncService } from "@/lib/sync-service";
+import {
+  SaveSyncService,
+  isValidPs1MemoryCard,
+  isBlankPs1MemoryCard,
+  computeSaveChecksum,
+  filterCandidateSaveFiles,
+} from "@/lib/sync-service";
 import {
   SHADER_PRESETS,
   DEFAULT_SHADER_PRESET,
@@ -193,21 +199,33 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       if (!buffer || (buffer as ArrayBuffer).byteLength === 0) return;
       if (isSavingRef.current && !force) return;
 
+      const isPs1 = game.system === "psx" || game.system === "ps1";
       const uint8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-      // Fast FNV-1a checksum to avoid redundant network transfers
-      let hash = 2166136261;
-      for (let i = 0; i < uint8.length; i += 32) {
-        hash ^= uint8[i];
-        hash = Math.imul(hash, 16777619);
+      // Guardrail: PS1 virtual memory cards must be valid 128 KB (131,072-byte) Sony "MC" images
+      if (isPs1 && !isValidPs1MemoryCard(uint8)) {
+        console.warn(
+          "[SaveSync] Ignoring invalid PS1 memory card buffer (expected 131072 bytes with MC header, got):",
+          uint8.byteLength
+        );
+        return;
       }
-      const checksumStr = (hash >>> 0).toString(16) + "_" + uint8.byteLength;
+
+      // Full-byte FNV-1a checksum to avoid redundant network transfers and catch any slot change
+      const checksumStr = computeSaveChecksum(uint8);
 
       if (!force && lastSyncedChecksumRef.current === checksumStr) {
         return;
       }
 
+      // Do not automatically upload an untouched blank PS1 card on initial boot
+      if (isPs1 && !force && isBlankPs1MemoryCard(uint8) && lastSyncedChecksumRef.current === null) {
+        lastSyncedChecksumRef.current = checksumStr;
+        return;
+      }
+
       const cardId = activeCardIdRef.current || "active";
+      let saveSucceeded = false;
 
       try {
         isSavingRef.current = true;
@@ -216,10 +234,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saving" }, "*");
         }
 
-        const blob = new Blob([buffer as any]);
+        const blob = new Blob([uint8 as unknown as BlobPart]);
 
-        // 1. Authenticated User / PS1 Virtual Memory Card sync
-        if (game.system === "psx" || game.system === "ps1") {
+        // 1. Authenticated User / PS1 Virtual Memory Card sync (strictly isolated to /api/users/me/cards)
+        if (isPs1) {
           const res = await fetch(
             `/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync?system=${encodeURIComponent(
               game.system
@@ -234,17 +252,23 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           );
           if (res.ok) {
             lastSyncedChecksumRef.current = checksumStr;
+            saveSucceeded = true;
             setJustSaved(true);
             setTimeout(() => setJustSaved(false), 3000);
             console.log("[SaveSync] Cloud Memory Card synchronized to slot:", cardId);
             if (typeof window !== "undefined" && window.parent && window.parent !== window) {
               window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saved" }, "*");
             }
-            return;
+          } else {
+            console.warn("[SaveSync] PS1 Memory Card sync returned non-OK status:", res.status);
+            if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
+            }
           }
+          return;
         }
 
-        // 2. Global Game Save Sync
+        // 2. Non-PlayStation Global Game Save Sync
         const fallbackRes = await fetch(
           `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`,
           {
@@ -256,25 +280,35 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           }
         );
 
-        // Also push to authoritative user_game_saves
+        // Also push to authoritative user_game_saves for non-PlayStation platforms
         SaveSyncService.uploadCloudSave(cleanGameId, uint8, "savestate", 0).catch((err) => {
           console.warn("[SaveSync] Authoritative user_game_saves upload warning:", err);
         });
 
         if (fallbackRes.ok) {
           lastSyncedChecksumRef.current = checksumStr;
+          saveSucceeded = true;
           setJustSaved(true);
           setTimeout(() => setJustSaved(false), 3000);
           console.log("[SaveSync] Save written to global repository:", cleanGameId);
           if (typeof window !== "undefined" && window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saved" }, "*");
           }
+        } else if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
         }
       } catch (err) {
         console.warn("[SaveSync] Failed to push save:", err);
+        if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
+        }
       } finally {
         isSavingRef.current = false;
         setIsSaving(false);
+        if (!saveSucceeded && typeof window !== "undefined" && window.parent && window.parent !== window) {
+          // Ensure parent modal is never left stuck on "saving"
+          window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
+        }
       }
     },
     [cleanGameId, game.system]
@@ -318,9 +352,11 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const activeDisc =
     game.discs && game.discs[selectedDiscIndex] ? game.discs[selectedDiscIndex] : null;
 
-  const flushSaveNow = useCallback(async () => {
+  const flushSaveNow = useCallback(async (): Promise<Uint8Array | null> => {
     const emu = window.EJS_emulator;
-    if (!emu) return;
+    if (!emu) return null;
+
+    const isPs1 = game.system === "psx" || game.system === "ps1";
 
     try {
       if (typeof emu.gameManager?.saveSaveFiles === "function") {
@@ -330,6 +366,13 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       }
 
       const gm = emu.gameManager as Record<string, unknown> | undefined;
+      const fs = gm?.FS as { syncfs?: (populate: boolean, cb: () => void) => void } | undefined;
+      if (fs && typeof fs.syncfs === "function") {
+        try {
+          fs.syncfs(false, () => {});
+        } catch {}
+      }
+
       const rawBuffer =
         typeof emu.getSaveFile === "function"
           ? emu.getSaveFile()
@@ -339,18 +382,25 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
       if (rawBuffer && (rawBuffer as ArrayBuffer).byteLength > 0) {
         const uint8 = rawBuffer instanceof Uint8Array ? rawBuffer : new Uint8Array(rawBuffer);
-        SaveSyncService.triggerBeaconExit(
-          "current",
-          cleanGameId,
-          game.system === "tabstationtoo" ? "tabstationtoo" : "emulatorjs",
-          uint8
-        );
-        await pushSaveToServer(rawBuffer, true);
+        if (isPs1 && !isValidPs1MemoryCard(uint8)) {
+          return null;
+        }
+        if (!isPs1) {
+          SaveSyncService.triggerBeaconExit(
+            "current",
+            cleanGameId,
+            game.system === "tabstationtoo" ? "tabstationtoo" : "emulatorjs",
+            uint8
+          );
+        }
+        await pushSaveToServer(uint8, true);
+        return uint8;
       }
     } catch (err) {
       console.warn("[SaveSync] flushSaveNow error:", err);
     }
-  }, [pushSaveToServer]);
+    return null;
+  }, [cleanGameId, game.system, pushSaveToServer]);
 
   const stopEmulator = useCallback(async () => {
     await flushSaveNow();
@@ -386,15 +436,21 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     const handlePageHide = () => {
       flushSaveNow();
     };
+    // Intercept beforeunload in capture phase so attachment downloads or canceled navigations
+    // do not trigger EmulatorJS's destructive beforeunload -> exit -> restart() -> Module.abort() handler
+    const handleBeforeUnloadCapture = (e: BeforeUnloadEvent) => {
+      flushSaveNow();
+      e.stopImmediatePropagation();
+    };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("beforeunload", handlePageHide);
+    window.addEventListener("beforeunload", handleBeforeUnloadCapture, true);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("beforeunload", handlePageHide);
+      window.removeEventListener("beforeunload", handleBeforeUnloadCapture, true);
     };
   }, [flushSaveNow]);
 
@@ -500,6 +556,17 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         updatePadMode(true);
       } else if (e.data?.type === "VAULT_FORCE_SAVE") {
         await flushSaveNow();
+      } else if (e.data?.type === "VAULT_EXPORT_CARD") {
+        const latestBytes = await flushSaveNow();
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: "VAULT_EXPORT_CARD_DATA",
+              buffer: latestBytes ? Array.from(latestBytes) : null,
+            },
+            "*"
+          );
+        }
       } else if (e.data?.type === "VAULT_SAVE_AND_EXIT") {
         await flushSaveNow();
         if (window.parent) {
@@ -511,6 +578,25 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     window.addEventListener("message", handleParentMessage);
     return () => window.removeEventListener("message", handleParentMessage);
   }, [bootState, updatePadMode, flushSaveNow]);
+
+  // Periodically flush in-memory SRAM / PS1 Memory Card changes to IDBFS & Cloud
+  useEffect(() => {
+    if (bootState !== "running") return;
+
+    const intervalId = setInterval(() => {
+      if (isSavingRef.current) return;
+      const emu = window.EJS_emulator;
+      const gm = emu?.gameManager;
+      if (!gm) return;
+      try {
+        if (typeof gm.saveSaveFiles === "function") {
+          gm.saveSaveFiles();
+        }
+      } catch {}
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [bootState]);
 
   useEffect(() => {
     if (bootState !== "running") return;
@@ -688,8 +774,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       }
 
       // Pre-download cloud memory card / save state payload before emulator boot
+      const isPs1 = game.system === "psx" || game.system === "ps1";
       let cloudBuffer: Uint8Array | null = null;
-      if (game.system !== "psx" && game.system !== "ps1") {
+      if (!isPs1) {
         try {
           const cloudSave = await SaveSyncService.fetchCloudSave(cleanGameId, "savestate", 0);
           if (cloudSave?.bytes && cloudSave.bytes.byteLength > 0) {
@@ -707,14 +794,24 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           if (dlRes.ok) {
             const ab = await dlRes.arrayBuffer();
             if (ab && ab.byteLength > 0) {
-              cloudBuffer = new Uint8Array(ab);
-              console.log("[SaveSync] Downloaded cloud save data, bytes:", ab.byteLength);
+              const downloaded = new Uint8Array(ab);
+              if (!isPs1 || isValidPs1MemoryCard(downloaded)) {
+                cloudBuffer = downloaded;
+                console.log("[SaveSync] Downloaded cloud save data, bytes:", ab.byteLength);
+              } else {
+                console.warn("[SaveSync] Ignoring invalid downloaded PS1 card buffer of size:", ab.byteLength);
+              }
             }
           }
         } catch (e) {
           console.warn("[SaveSync] Could not fetch cloud save:", e);
         }
       }
+
+      if (cloudBuffer && cloudBuffer.byteLength > 0) {
+        lastSyncedChecksumRef.current = computeSaveChecksum(cloudBuffer);
+      }
+      let resolvedBootSaveBuffer: Uint8Array | null = cloudBuffer;
 
       if (typeof window !== "undefined") {
         const screenAny = (screen as unknown as { orientation?: { lock?: unknown } })?.orientation;
@@ -755,7 +852,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_player = "#mobile-emulator-container";
         window.EJS_core = systemMeta.ejsCore || game.system;
         window.EJS_gameName = game.title;
-        if (game.system === "psx" || game.system === "ps1") {
+        if (isPs1) {
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
         } else if (game.system === "dreamcast") {
           window.EJS_biosUrl = "/roms/api/bios/dc_boot.bin?system=dreamcast";
@@ -821,7 +918,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           3: {},
         };
 
-        if (game.system === "psx" || game.system === "ps1") {
+        if (isPs1) {
           window.EJS_coreSettings = {
             pcsx_rearmed_cdfs_cache: "disabled",
             pcsx_rearmed_async_cd: "sync",
@@ -838,7 +935,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           };
 
           window.EJS_defaultOptions = {
-            "save-save-interval": "10",
+            "save-save-interval": "30",
             "autosave": "1",
             "pcsx_rearmed_cdfs_cache": "disabled",
             "pcsx_rearmed_async_cd": "sync",
@@ -861,11 +958,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         } else {
           window.EJS_defaultOptions = {
             ...(window.EJS_defaultOptions || {}),
+            "save-save-interval": "30",
             shader: currentShader,
           };
         }
 
-        // Bridge: When Emscripten mounts /data/saves IDBFS, inject cloud memory card
+        // Bridge: When Emscripten mounts /data/saves IDBFS, inject cloud memory card scoped strictly to this game
         window.EJS_onSaveDatabaseLoaded = (fs: any) => {
           try {
             if (!fs || typeof fs.readdir !== "function") return;
@@ -874,59 +972,64 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
               .readdir("/data/saves")
               .filter((f: string) => f !== "." && f !== "..");
 
+            // Strictly scope local file inspection to candidate filenames for the current game
+            const matchingFiles = filterCandidateSaveFiles(existingFiles, candidateNamesArray);
+
             let localSaveFound: Uint8Array | null = null;
             let isLocalNonBlank = false;
 
-            for (const fn of existingFiles) {
-              if (fn.endsWith(".srm") || fn.endsWith(".sav") || fn.endsWith(".mcr")) {
-                try {
-                  const data = fs.readFile("/data/saves/" + fn);
-                  if (data && data.byteLength > 0) {
-                    const isPs1Blank =
-                      data.byteLength === 131072 &&
-                      data[128] === 0xa0 &&
-                      data[256] === 0xa0 &&
-                      data[384] === 0xa0;
-                    if (!isPs1Blank) {
+            for (const fn of matchingFiles) {
+              try {
+                const data = fs.readFile("/data/saves/" + fn);
+                if (data && data.byteLength > 0) {
+                  const uint8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+                  if (isPs1) {
+                    if (!isValidPs1MemoryCard(uint8)) {
+                      // Purge corrupted/cross-game residue (e.g. 2KB SNES .srm) from PS1 candidate path
+                      console.warn("[SaveSync] Purging corrupted non-128KB PS1 save file in IDBFS:", fn, uint8.byteLength);
+                      try {
+                        fs.unlink("/data/saves/" + fn);
+                      } catch {}
+                      continue;
+                    }
+                    if (!isBlankPs1MemoryCard(uint8)) {
                       isLocalNonBlank = true;
-                      localSaveFound = data;
+                      localSaveFound = uint8;
                       break;
                     }
+                  } else {
+                    isLocalNonBlank = true;
+                    localSaveFound = uint8;
+                    break;
                   }
-                } catch {}
-              }
+                }
+              } catch {}
             }
 
-            const isCloudNonBlank =
-              cloudBuffer &&
-              cloudBuffer.byteLength > 0 &&
-              !(
-                cloudBuffer.byteLength === 131072 &&
-                cloudBuffer[128] === 0xa0 &&
-                cloudBuffer[256] === 0xa0 &&
-                cloudBuffer[384] === 0xa0
-              );
+            const isCloudNonBlank = isPs1
+              ? Boolean(cloudBuffer && isValidPs1MemoryCard(cloudBuffer) && !isBlankPs1MemoryCard(cloudBuffer))
+              : Boolean(cloudBuffer && cloudBuffer.byteLength > 0);
 
             let targetBuffer: Uint8Array | null = null;
 
-            if (isCloudNonBlank) {
+            if (isCloudNonBlank && cloudBuffer) {
               targetBuffer = cloudBuffer;
+              lastSyncedChecksumRef.current = computeSaveChecksum(cloudBuffer);
               console.log("[SaveSync] Injected cloud memory card into emulator.");
             } else if (isLocalNonBlank && localSaveFound) {
               targetBuffer = localSaveFound;
               console.log("[SaveSync] Found non-blank local save; rescuing to MariaDB cloud card.");
               pushSaveToServer(localSaveFound, true);
-            } else if (cloudBuffer) {
+            } else if (cloudBuffer && (!isPs1 || isValidPs1MemoryCard(cloudBuffer))) {
               targetBuffer = cloudBuffer;
+              lastSyncedChecksumRef.current = computeSaveChecksum(cloudBuffer);
             }
 
-            if (targetBuffer) {
-              const namesToWrite = new Set<string>([
-                ...candidateNamesArray,
-                ...existingFiles,
-              ]);
+            resolvedBootSaveBuffer = targetBuffer;
 
-              for (const name of namesToWrite) {
+            if (targetBuffer) {
+              // Write ONLY to candidateNamesArray for the active game — never overwrite other games in existingFiles!
+              for (const name of candidateNamesArray) {
                 try {
                   fs.writeFile("/data/saves/" + name, targetBuffer);
                 } catch {}
@@ -962,6 +1065,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
                 ? saveData
                 : (saveData.data || saveData.save);
             if (raw) {
+              const gm = window.EJS_emulator?.gameManager as Record<string, any> | undefined;
+              if (gm?.FS && typeof gm.FS.syncfs === "function") {
+                try {
+                  gm.FS.syncfs(false, () => {});
+                } catch {}
+              }
               pushSaveToServer(raw);
             }
           }
@@ -1037,17 +1146,43 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             const gm = emu?.gameManager;
             if (gm && typeof gm.getSaveFilePath === "function") {
               const savePath = gm.getSaveFilePath();
-              if (savePath && gm.FS && cloudBuffer && cloudBuffer.byteLength > 0) {
-                const fs = gm.FS as any;
-                console.log("[SaveSync] Authoritative database sync: overwriting local save path:", savePath);
-                try {
-                  if (fs.analyzePath(savePath).exists) {
-                    fs.unlink(savePath);
+              const fs = gm.FS as any;
+              if (savePath && fs) {
+                let authoritativeBuffer = resolvedBootSaveBuffer || cloudBuffer;
+
+                // Protect against overwriting a valid non-blank local PS1 save at savePath with a blank cloud card
+                if (isPs1 && (!authoritativeBuffer || isBlankPs1MemoryCard(authoritativeBuffer))) {
+                  try {
+                    if (fs.analyzePath(savePath).exists) {
+                      const existingAtPath = fs.readFile(savePath);
+                      const uint8AtPath =
+                        existingAtPath instanceof Uint8Array
+                          ? existingAtPath
+                          : new Uint8Array(existingAtPath);
+                      if (isValidPs1MemoryCard(uint8AtPath) && !isBlankPs1MemoryCard(uint8AtPath)) {
+                        authoritativeBuffer = uint8AtPath;
+                        resolvedBootSaveBuffer = uint8AtPath;
+                        pushSaveToServer(uint8AtPath, true);
+                      }
+                    }
+                  } catch {}
+                }
+
+                if (
+                  authoritativeBuffer &&
+                  authoritativeBuffer.byteLength > 0 &&
+                  (!isPs1 || isValidPs1MemoryCard(authoritativeBuffer))
+                ) {
+                  console.log("[SaveSync] Authoritative save sync: mounting save path:", savePath);
+                  try {
+                    if (fs.analyzePath(savePath).exists) {
+                      fs.unlink(savePath);
+                    }
+                  } catch {}
+                  fs.writeFile(savePath, authoritativeBuffer);
+                  if (typeof gm.loadSaveFiles === "function") {
+                    gm.loadSaveFiles();
                   }
-                } catch {}
-                fs.writeFile(savePath, cloudBuffer);
-                if (typeof gm.loadSaveFiles === "function") {
-                  gm.loadSaveFiles();
                 }
               }
             }
