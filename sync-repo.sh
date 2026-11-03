@@ -87,6 +87,11 @@ else
   exit 1
 fi
 
+if git remote | grep -q "^github$"; then
+  echo "[+] Mirroring to GitHub (github/$GIT_BRANCH)..."
+  git push github "$GIT_BRANCH" --tags || echo "[!] GitHub mirror push warning"
+fi
+
 echo "=========================================="
 echo " [Done] Verified sync complete."
 echo "=========================================="
