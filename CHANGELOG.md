@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Hero Spotlight Media Fallback Chain**: Updated `HeroSpotlight` to implement a multi-tier fallback progression: if no gameplay preview video is available or if video playback fails, it falls back to in-game screenshot (`screenshot`), then title screen (`screenTitle`), and finally to alternative screenshot/fanart/boxart (`artworkFront`/`artwork3d`) with automatic runtime `onError` recovery.
 - **Universal Cross-Device Save Synchronization & Database Authority**: Implemented a unified cloud save synchronization system where game save states (`.state`) and native saved games (`.srm`, `.sav`) across all non-PlayStation retro platforms seamlessly follow the user between mobile and desktop devices.
 - **Authoritative Database Source of Truth**: Central MariaDB table `user_game_saves` serves as the absolute, definitive "final word" on session start, pulling authoritative save states from MariaDB before WebAssembly emulator initialization to overwrite stale local browser cache or IndexedDB records.
 - **Universal Save Endpoints & Emergency Beacon Persistence**: Deployed `/api/saves` for Base64 and binary octet-stream fetch/upsert operations with SHA-256 integrity verification, alongside `/api/saves/beacon` for background `navigator.sendBeacon` emergency save persistence when users close tabs or navigate away abruptly.

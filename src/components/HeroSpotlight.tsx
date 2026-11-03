@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Play,
   Info,
@@ -30,11 +30,54 @@ export function HeroSpotlight({
   onShuffle,
 }: HeroSpotlightProps): React.ReactElement {
   const [isMuted, setIsMuted] = useState<boolean>(true);
+  const [videoError, setVideoError] = useState<boolean>(false);
+  const [screenshotError, setScreenshotError] = useState<boolean>(false);
+  const [titleScreenError, setTitleScreenError] = useState<boolean>(false);
+  const [finalFallbackError, setFinalFallbackError] = useState<boolean>(false);
+
+  // Reset errors whenever featured game changes
+  useEffect(() => {
+    setVideoError(false);
+    setScreenshotError(false);
+    setTitleScreenError(false);
+    setFinalFallbackError(false);
+  }, [game.id]);
+
+  // Fallback progression:
+  // 1. Video (game.media.video)
+  const canShowVideo = Boolean(game.media.video && !videoError);
+
+  // 2. Fall back to Screenshot (game.media.screenshot)
+  const canShowScreenshot = Boolean(
+    !canShowVideo && game.media.screenshot && !screenshotError
+  );
+
+  // 3. Fall back to Title Screen (game.media.screenTitle)
+  const canShowTitleScreen = Boolean(
+    !canShowVideo && !canShowScreenshot && game.media.screenTitle && !titleScreenError
+  );
+
+  // 4. Fall back to Screenshot / Fanart / Box Art
+  const finalFallbackImage =
+    game.media.screenshot ??
+    game.media.fanart ??
+    game.media.artworkFront ??
+    game.media.artwork3d ??
+    null;
+
+  const canShowFinalFallback = Boolean(
+    !canShowVideo &&
+      !canShowScreenshot &&
+      !canShowTitleScreen &&
+      finalFallbackImage &&
+      !finalFallbackError
+  );
 
   const backdropImage =
-    game.media.screenshot ??
-    game.media.artworkFront ??
-    game.media.screenTitle ??
+    (!screenshotError && game.media.screenshot) ||
+    (!titleScreenError && game.media.screenTitle) ||
+    game.media.fanart ||
+    game.media.artworkFront ||
     null;
 
   return (
@@ -158,16 +201,17 @@ export function HeroSpotlight({
 
         <div className="lg:col-span-5 flex items-center justify-center">
           <div className="relative w-full max-w-md aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black shadow-2xl group">
-            {game.media.video ? (
+            {canShowVideo ? (
               <>
                 <video
                   key={game.media.video}
-                  src={game.media.video}
-                  poster={game.media.screenTitle ?? game.media.screenshot ?? undefined}
+                  src={game.media.video!}
+                  poster={game.media.screenshot ?? game.media.screenTitle ?? undefined}
                   autoPlay
                   loop
                   muted={isMuted}
                   playsInline
+                  onError={() => setVideoError(true)}
                   className="w-full h-full object-contain bg-black"
                 />
                 <button
@@ -183,13 +227,38 @@ export function HeroSpotlight({
                   )}
                 </button>
               </>
-            ) : game.media.screenTitle ? (
+            ) : canShowScreenshot ? (
               <img
-                src={game.media.screenTitle}
-                alt={game.displayTitle}
+                src={game.media.screenshot!}
+                alt={`${game.displayTitle} Screenshot`}
+                onError={() => setScreenshotError(true)}
                 className="w-full h-full object-contain"
               />
-            ) : null}
+            ) : canShowTitleScreen ? (
+              <img
+                src={game.media.screenTitle!}
+                alt={`${game.displayTitle} Title Screen`}
+                onError={() => setTitleScreenError(true)}
+                className="w-full h-full object-contain"
+              />
+            ) : canShowFinalFallback ? (
+              <img
+                src={finalFallbackImage!}
+                alt={`${game.displayTitle} Preview`}
+                onError={() => setFinalFallbackError(true)}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900/50 text-zinc-500 p-6 text-center">
+                <Sparkles className="w-8 h-8 mb-2 opacity-40 text-purple-400" />
+                <span className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                  {game.systemLabel}
+                </span>
+                <span className="text-sm font-bold text-zinc-300 mt-1 line-clamp-1">
+                  {game.displayTitle}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
