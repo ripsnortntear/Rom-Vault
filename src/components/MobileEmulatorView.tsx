@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save, Check } from "lucide-react";
+import { ArrowLeft, Maximize2, Disc3, Play, AlertCircle, Save, Check, Tv } from "lucide-react";
 import { PS2EmulatorView } from "./PS2EmulatorView";
 import { GameCubeEmulatorView } from "./GameCubeEmulatorView";
 import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
 import { MobileDesktopRequired } from "./MobileDesktopRequired";
 import { StandaloneRecommendationView } from "./StandaloneRecommendationView";
 import { SaveSyncService } from "@/lib/sync-service";
+import {
+  SHADER_PRESETS,
+  DEFAULT_SHADER_PRESET,
+  getShaderPresetById,
+  getNextShaderPreset,
+} from "@/lib/shaders";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -69,6 +75,7 @@ declare global {
       setCoreSetting?: (key: string, value: string) => void;
       saveSaveFiles?: () => void;
       getSaveFile?: () => Uint8Array | ArrayBuffer | null;
+      enableShader?: (shader: string) => void;
       gameManager?: {
         simulateInput?: (player: number, index: number, value: number) => void;
         functions?: {
@@ -153,6 +160,26 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [justSaved, setJustSaved] = useState<boolean>(false);
+  const [currentShader, setCurrentShader] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return localStorage.getItem("rom_vault_shader_preset") || DEFAULT_SHADER_PRESET;
+      } catch {}
+    }
+    return DEFAULT_SHADER_PRESET;
+  });
+
+  const handleCycleShader = useCallback(() => {
+    const next = getNextShaderPreset(currentShader);
+    setCurrentShader(next.id);
+    try {
+      localStorage.setItem("rom_vault_shader_preset", next.id);
+    } catch {}
+    const emu = window.EJS_emulator;
+    if (emu && typeof emu.enableShader === "function") {
+      emu.enableShader(next.id);
+    }
+  }, [currentShader]);
 
   const cleanGameId = deepDecode(game.id).trim();
   const activeCardIdRef = useRef<string | null>(null);
@@ -450,6 +477,21 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
               gm.functions.simulateInput(port, btnIndex, val);
             }
           } catch {}
+        }
+        return;
+      }
+
+      if (e.data?.type === "VAULT_SET_SHADER") {
+        const shader = e.data.shader;
+        if (typeof shader === "string") {
+          setCurrentShader(shader);
+          try {
+            localStorage.setItem("rom_vault_shader_preset", shader);
+          } catch {}
+          const emu = window.EJS_emulator;
+          if (emu && typeof emu.enableShader === "function") {
+            emu.enableShader(shader);
+          }
         }
         return;
       }
@@ -791,6 +833,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             pcsx_rearmed_analog_to_digital: "left_analog",
             pcsx_rearmed_vibration: "disabled",
             enable_device_vibration: "false",
+            pcsx_rearmed_rgb32_output: "enabled",
+            pcsx_rearmed_dithering: "enabled",
           };
 
           window.EJS_defaultOptions = {
@@ -801,6 +845,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "pcsx_rearmed_memcard2": "disabled",
             "pcsx_rearmed_vibration": "disabled",
             "enable_device_vibration": "false",
+            "pcsx_rearmed_rgb32_output": "enabled",
+            "pcsx_rearmed_dithering": "enabled",
+            "shader": currentShader,
             "input_player1_l_btn": "4",
             "input_player1_r_btn": "5",
             "input_player1_l2_btn": "6",
@@ -810,6 +857,11 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             "input_player1_analog_dpad_mode": "1",
             "input_libretro_device_p1": "1",
             "input_libretro_device_p2": "1",
+          };
+        } else {
+          window.EJS_defaultOptions = {
+            ...(window.EJS_defaultOptions || {}),
+            shader: currentShader,
           };
         }
 
@@ -966,6 +1018,16 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           applyAnalogMapping();
           setTimeout(applyAnalogMapping, 500);
           setTimeout(applyAnalogMapping, 1500);
+          try {
+            const activePreset =
+              (typeof window !== "undefined"
+                ? localStorage.getItem("rom_vault_shader_preset")
+                : null) || currentShader;
+            const emu = window.EJS_emulator;
+            if (emu && typeof emu.enableShader === "function") {
+              emu.enableShader(activePreset);
+            }
+          } catch {}
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_EMU_STARTED" }, "*");
           }
@@ -1133,6 +1195,18 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
                     <span>{isSaving ? "Saving..." : "Save Card"}</span>
                   </>
                 )}
+              </button>
+            )}
+
+            {bootState === "running" && (
+              <button
+                type="button"
+                onClick={handleCycleShader}
+                className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md bg-purple-950/70 hover:bg-purple-900 border border-purple-500/30 text-purple-200 backdrop-blur transition cursor-pointer"
+                title={`Visual Filter: ${getShaderPresetById(currentShader).name} (Click to switch)`}
+              >
+                <Tv className="w-3.5 h-3.5 text-purple-400" />
+                <span className="hidden sm:inline">{getShaderPresetById(currentShader).name}</span>
               </button>
             )}
 

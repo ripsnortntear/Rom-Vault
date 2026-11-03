@@ -17,8 +17,15 @@ import {
   Disc3,
   Menu,
   ExternalLink,
+  Tv,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
+import {
+  SHADER_PRESETS,
+  DEFAULT_SHADER_PRESET,
+  getShaderPresetById,
+  getNextShaderPreset,
+} from "@/lib/shaders";
 
 const BASE_PATH = "/roms";
 
@@ -115,6 +122,29 @@ export function EmulatorModal({
     if (!game?.id) return;
     setDiscSelection({ gameId: game.id, index });
   }, [game]);
+
+  const [currentShader, setCurrentShader] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return localStorage.getItem("rom_vault_shader_preset") || DEFAULT_SHADER_PRESET;
+      } catch {}
+    }
+    return DEFAULT_SHADER_PRESET;
+  });
+
+  const handleCycleShader = useCallback(() => {
+    const next = getNextShaderPreset(currentShader);
+    setCurrentShader(next.id);
+    try {
+      localStorage.setItem("rom_vault_shader_preset", next.id);
+    } catch {}
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(
+        { type: "VAULT_SET_SHADER", shader: next.id },
+        "*"
+      );
+    }
+  }, [currentShader]);
 
   const [gamepadConnected, setGamepadConnected] = useState<boolean>(false);
   const [gamepadId, setGamepadId] = useState<string | null>(null);
@@ -304,6 +334,15 @@ export function EmulatorModal({
           if (e.data?.cardName) {
             setMountedCardName(e.data.cardName);
           }
+        }
+      } else if (e.data?.type === "VAULT_EMU_STARTED") {
+        if (iframeRef.current?.contentWindow) {
+          try {
+            iframeRef.current.contentWindow.postMessage(
+              { type: "VAULT_SET_SHADER", shader: currentShader },
+              "*"
+            );
+          } catch {}
         }
       } else if (e.data?.type === "VAULT_EXIT_READY") {
         onClose();
@@ -690,6 +729,16 @@ export function EmulatorModal({
 
               <button
                 type="button"
+                onClick={handleCycleShader}
+                className="hidden sm:inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-medium bg-purple-950/60 hover:bg-purple-900 border border-purple-500/40 text-purple-200 transition cursor-pointer active:scale-95 touch-manipulation"
+                title={`Filter Preset: ${getShaderPresetById(currentShader).description} (Click to switch)`}
+              >
+                <Tv className="w-3.5 h-3.5 text-purple-400" />
+                <span>{getShaderPresetById(currentShader).name}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleForceSave}
                 className="hidden sm:inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-medium bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-200 transition cursor-pointer active:scale-95 touch-manipulation"
                 title="Force Save Memory Card to Server Cloud"
@@ -933,6 +982,16 @@ export function EmulatorModal({
               src={playerUrl}
               className="w-full h-full border-0"
               allow="autoplay; fullscreen; gamepad; cross-origin-isolated"
+              onLoad={() => {
+                if (iframeRef.current?.contentWindow) {
+                  try {
+                    iframeRef.current.contentWindow.postMessage(
+                      { type: "VAULT_SET_SHADER", shader: currentShader },
+                      "*"
+                    );
+                  } catch {}
+                }
+              }}
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center max-w-xl">
