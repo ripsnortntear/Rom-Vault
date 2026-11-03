@@ -4029,6 +4029,26 @@
 	const MEMCARD_STATUS_BUSY = 1; // pcsx2web_memcard_status() flags
 	const CARD_PICKER_TYPES = [{ description: 'PS2 memory card', accept: { 'application/octet-stream': ['.ps2'] } }];
 
+	const quickCardHash = (bytes) => {
+		if (!bytes || !bytes.length) return '';
+		let hash = 0x811c9dc5;
+		const len = bytes.length;
+		for (let i = 0; i < len; i += 32) {
+			hash = Math.imul(hash ^ bytes[i], 0x01000193);
+		}
+		return ((hash ^ len) >>> 0).toString(16);
+	};
+
+	const cloudSyncState = {
+		inFlight: false,
+		timer: null,
+		pending: null,
+		lastSyncedHash: new Map(),
+		lastSyncAt: 0,
+		MIN_AUTO_SYNC_INTERVAL_MS: 10000,
+		DEBOUNCE_QUIET_MS: 3500,
+	};
+
 	const CARD_COPY = {
 		slot: (n) => `Card ${n}`,
 		empty: (n) => `Card ${n} · empty`,
@@ -4415,6 +4435,7 @@
 							cards.list.set(cardId, cloudCard);
 							cards.slots[0] = cardId;
 							cards.boot[0] = new Uint8Array(ab);
+							cloudSyncState.lastSyncedHash.set(cardId, quickCardHash(cards.boot[0]));
 							pageLog(`Attached ${cardName} to Slot 1.`);
 							if (window.parent && window.parent !== window) {
 								window.parent.postMessage({
@@ -4531,6 +4552,11 @@
 
 	function onBeforeUnloadWithCard(e) {
 		persistMemoryCards(true);
+		// When embedded inside an iframe (e.g. ROM Vault modal/player), never display the native
+		// browser data loss confirmation dialog. The parent frame manages save state and modal lifecycle.
+		if (window.self !== window.top) {
+			return;
+		}
 		e.preventDefault();
 		e.returnValue = ''; // browsers before preventDefault() was honoured here
 	}
@@ -4541,6 +4567,9 @@
 		if (on === memcards.guarded)
 			return;
 		memcards.guarded = on;
+		// Do not attach beforeunload listener when embedded inside an iframe
+		if (window.self !== window.top)
+			return;
 		if (on)
 			window.addEventListener('beforeunload', onBeforeUnloadWithCard);
 		else
@@ -4788,13 +4817,7 @@
 			persistMemoryCards();
 	}
 
-	async function syncCloudCard(c, bytes) {
-		if (!c || !bytes) {
-			if (window.parent && window.parent !== window) {
-				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'Missing memory card data' }, '*');
-			}
-			return;
-		}
+	async function doCloudSync(c, bytes, force = false) {
 		const syncUrl = c.cloudSyncUrl || (c.id === 'cloud_ps2_slot1' ? '/roms/api/users/me/cards/active/sync?system=ps2' : null);
 		if (!syncUrl) {
 			if (window.parent && window.parent !== window) {
@@ -4802,6 +4825,9 @@
 			}
 			return;
 		}
+
+		const cardHash = quickCardHash(bytes);
+		cloudSyncState.inFlight = true;
 
 		try {
 			if (window.parent && window.parent !== window) {
@@ -4816,6 +4842,8 @@
 				body: new Blob([bytes]),
 			});
 			if (res.ok) {
+				cloudSyncState.lastSyncedHash.set(c.id, cardHash);
+				cloudSyncState.lastSyncAt = performance.now();
 				pageLog(`Cloud virtual memory card synced to ROM Vault: ${c.name}`);
 				if (window.parent && window.parent !== window) {
 					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saved', cardName: c.name }, '*');
@@ -4831,7 +4859,69 @@
 			if (window.parent && window.parent !== window) {
 				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: errorText(err) }, '*');
 			}
+		} finally {
+			cloudSyncState.inFlight = false;
+			if (cloudSyncState.pending) {
+				const next = cloudSyncState.pending;
+				cloudSyncState.pending = null;
+				syncCloudCard(next.c, next.bytes, next.force);
+			}
 		}
+	}
+
+	function syncCloudCard(c, bytes, force = false) {
+		if (!c || !bytes) {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'Missing memory card data' }, '*');
+			}
+			return;
+		}
+
+		const cardHash = quickCardHash(bytes);
+		const lastHash = cloudSyncState.lastSyncedHash.get(c.id);
+
+		// If card content has not changed since the last successful sync, skip redundant upload
+		if (lastHash && cardHash === lastHash) {
+			if (force && window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saved', cardName: c.name }, '*');
+			}
+			return;
+		}
+
+		if (force) {
+			if (cloudSyncState.timer) {
+				clearTimeout(cloudSyncState.timer);
+				cloudSyncState.timer = null;
+			}
+			if (cloudSyncState.inFlight) {
+				cloudSyncState.pending = { c, bytes, force: true };
+				return;
+			}
+			doCloudSync(c, bytes, true);
+			return;
+		}
+
+		// Background debounced auto-sync
+		if (cloudSyncState.timer) {
+			clearTimeout(cloudSyncState.timer);
+			cloudSyncState.timer = null;
+		}
+
+		const now = performance.now();
+		const elapsedSinceLast = now - cloudSyncState.lastSyncAt;
+		let delay = cloudSyncState.DEBOUNCE_QUIET_MS;
+		if (elapsedSinceLast < cloudSyncState.MIN_AUTO_SYNC_INTERVAL_MS) {
+			delay = Math.max(delay, cloudSyncState.MIN_AUTO_SYNC_INTERVAL_MS - elapsedSinceLast);
+		}
+
+		cloudSyncState.timer = setTimeout(() => {
+			cloudSyncState.timer = null;
+			if (cloudSyncState.inFlight) {
+				cloudSyncState.pending = { c, bytes, force: false };
+				return;
+			}
+			doCloudSync(c, bytes, false);
+		}, delay);
 	}
 
 	window.addEventListener('message', (e) => {
@@ -4840,7 +4930,7 @@
 			if (id) {
 				const bytes = cards.fsReady ? readCardFile(id) : cards.boot[0];
 				if (bytes) {
-					syncCloudCard(cards.list.get(id) || { id, name: 'Cloud Virtual Memory Card (Slot 1)' }, bytes);
+					syncCloudCard(cards.list.get(id) || { id, name: 'Cloud Virtual Memory Card (Slot 1)' }, bytes, true);
 				} else {
 					if (window.parent && window.parent !== window) {
 						window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No memory card file available in slot 1' }, '*');
@@ -4850,6 +4940,13 @@
 				if (window.parent && window.parent !== window) {
 					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No memory card attached to slot 1' }, '*');
 				}
+			}
+		} else if (e.data?.type === 'VAULT_SAVE_AND_EXIT') {
+			try {
+				persistMemoryCards(true);
+			} catch {}
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage({ type: 'VAULT_EXIT_READY' }, '*');
 			}
 		}
 	});
@@ -4883,7 +4980,7 @@
 		}
 		for (const { c, bytes } of copies) {
 			if (c && (c.isCloud || c.cloudSyncUrl || c.id === 'cloud_ps2_slot1')) {
-				syncCloudCard(c, bytes);
+				syncCloudCard(c, bytes, leaving);
 			}
 		}
 		memcards.syncing = true;

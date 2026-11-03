@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   X,
   Download,
@@ -369,22 +369,31 @@ export function EmulatorModal({
   const activeRomUrl = activeDisc ? activeDisc.romUrl : game.media.rom;
   const activeDiscNum = activeDisc ? activeDisc.discNumber : 1;
 
-  const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
-  const ps2BiosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
-  const ps2DiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.chd`)}`;
-  const ps2MemcardUrl = `/roms/api/users/me/cards/active/download?system=ps2&_t=${Date.now()}`;
-  const ps2RunnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}&memcard=${encodeURIComponent(ps2MemcardUrl)}`;
+  const safeGameId = useMemo(
+    () => (game.id.includes("%") ? game.id : encodeURIComponent(game.id)),
+    [game.id]
+  );
 
-  const gcDiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.rvz`)}`;
-  const gcRunnerUrl = `/roms/gecko/index.html?rom=${encodeURIComponent(gcDiscUrl)}&name=${encodeURIComponent(activeRomFileName || `${game.displayTitle || game.baseName}.rvz`)}`;
+  const playerUrl = useMemo(() => {
+    const defaultRomName = game.displayTitle || game.baseName;
+    if (game.system === "ps2") {
+      const ps2BiosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
+      const ps2DiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${defaultRomName}.chd`)}`;
+      const ps2MemcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
+      return `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(ps2BiosUrl)}&disc=${encodeURIComponent(ps2DiscUrl)}&memcard=${encodeURIComponent(ps2MemcardUrl)}`;
+    }
 
-  const playerUrl =
-    game.system === "ps2"
-      ? ps2RunnerUrl
-      : game.system === "gamecube"
-      ? gcRunnerUrl
-      : `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName || "")}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
-  const downloadUrl = activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
+    if (game.system === "gamecube") {
+      const gcDiscUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeRomFileName || `${defaultRomName}.rvz`)}`;
+      return `/roms/gecko/index.html?rom=${encodeURIComponent(gcDiscUrl)}&name=${encodeURIComponent(activeRomFileName || `${defaultRomName}.rvz`)}`;
+    }
+
+    return `${BASE_PATH}/play/${safeGameId}?file=${encodeURIComponent(activeRomFileName || "")}&system=${encodeURIComponent(game.system)}&disc=${activeDiscNum}`;
+  }, [game.system, safeGameId, activeRomFileName, game.displayTitle, game.baseName, activeDiscNum]);
+
+  const downloadUrl = useMemo(() => {
+    return activeRomUrl ? `${activeRomUrl}${activeRomUrl.includes("?") ? "&" : "?"}download=1` : "#";
+  }, [activeRomUrl]);
 
   const renderControls = () => {
     switch (game.system) {

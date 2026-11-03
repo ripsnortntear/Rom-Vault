@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { MobileDesktopRequired } from "@/components/MobileDesktopRequired";
 
@@ -48,18 +48,26 @@ export function PS2EmulatorView({ game }: PS2EmulatorViewProps) {
     };
   }, []);
 
-  const safeGameId = game.id.includes("%") ? game.id : encodeURIComponent(game.id);
-  const activeFileName =
-    game.discs && game.discs.length > 0
-      ? game.discs[0].fileName
-      : (game.romFileName || `${game.title}.chd`);
-  const biosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
-  const discUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeFileName)}`;
-  const memcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
+  const safeGameId = useMemo(
+    () => (game.id.includes("%") ? game.id : encodeURIComponent(game.id)),
+    [game.id]
+  );
+  const activeFileName = useMemo(
+    () =>
+      game.discs && game.discs.length > 0
+        ? game.discs[0].fileName
+        : (game.romFileName || `${game.title}.chd`),
+    [game.discs, game.romFileName, game.title]
+  );
 
-  const runnerUrl = `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(
-    biosUrl
-  )}&disc=${encodeURIComponent(discUrl)}&memcard=${encodeURIComponent(memcardUrl)}`;
+  const runnerUrl = useMemo(() => {
+    const biosUrl = "/roms/api/bios/scph39001.bin?system=ps2";
+    const discUrl = `/roms/api/roms/${safeGameId}/stream/${encodeURIComponent(activeFileName)}`;
+    const memcardUrl = "/roms/api/users/me/cards/active/download?system=ps2";
+    return `/roms/tabstationtoo/index.html?bios=${encodeURIComponent(
+      biosUrl
+    )}&disc=${encodeURIComponent(discUrl)}&memcard=${encodeURIComponent(memcardUrl)}`;
+  }, [safeGameId, activeFileName]);
 
   const handleBackToLibrary = () => {
     window.location.assign("/roms");
