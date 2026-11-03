@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Universal Cross-Device Save Synchronization & Database Authority**: Implemented a unified cloud save synchronization system where game save states (`.state`) and native saved games (`.srm`, `.sav`) across all non-PlayStation retro platforms seamlessly follow the user between mobile and desktop devices.
+- **Authoritative Database Source of Truth**: Central MariaDB table `user_game_saves` serves as the absolute, definitive "final word" on session start, pulling authoritative save states from MariaDB before WebAssembly emulator initialization to overwrite stale local browser cache or IndexedDB records.
+- **Universal Save Endpoints & Emergency Beacon Persistence**: Deployed `/api/saves` for Base64 and binary octet-stream fetch/upsert operations with SHA-256 integrity verification, alongside `/api/saves/beacon` for background `navigator.sendBeacon` emergency save persistence when users close tabs or navigate away abruptly.
+- **Client SaveSyncService & EmulatorContainer**: Implemented `SaveSyncService` utility and unified `EmulatorContainer` wrapper managing pre-flight cloud pulls, virtual file system injection, debounced periodic cloud auto-saving (60s), and graceful exit flushes.
+- **PlayStation Memory Card Preservation**: Preserved existing dedicated PS1 128 KB `.mcr` (`/api/users/me/cards/...`) and PS2 8.65 MB `.ps2` memory card infrastructures completely untouched and fully functional.
+
 ---
 
 ## [0.1.0] - 2026-11-02

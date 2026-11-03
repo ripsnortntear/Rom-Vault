@@ -7,6 +7,7 @@ import { GameCubeEmulatorView } from "./GameCubeEmulatorView";
 import { getSystemMeta, isDesktopOnlySystem } from "@/lib/systems";
 import { MobileDesktopRequired } from "./MobileDesktopRequired";
 import { StandaloneRecommendationView } from "./StandaloneRecommendationView";
+import { SaveSyncService } from "@/lib/sync-service";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -228,6 +229,11 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           }
         );
 
+        // Also push to authoritative user_game_saves
+        SaveSyncService.uploadCloudSave(cleanGameId, uint8, "savestate", 0).catch((err) => {
+          console.warn("[SaveSync] Authoritative user_game_saves upload warning:", err);
+        });
+
         if (fallbackRes.ok) {
           lastSyncedChecksumRef.current = checksumStr;
           setJustSaved(true);
@@ -305,6 +311,13 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           : (gm?.saveFile as Uint8Array | ArrayBuffer | undefined);
 
       if (rawBuffer && (rawBuffer as ArrayBuffer).byteLength > 0) {
+        const uint8 = rawBuffer instanceof Uint8Array ? rawBuffer : new Uint8Array(rawBuffer);
+        SaveSyncService.triggerBeaconExit(
+          "current",
+          cleanGameId,
+          game.system === "tabstationtoo" ? "tabstationtoo" : "emulatorjs",
+          uint8
+        );
         await pushSaveToServer(rawBuffer, true);
       }
     } catch (err) {
@@ -632,9 +645,21 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         )}&_t=${Date.now()}`;
       }
 
-      // Pre-download cloud memory card save payload before emulator boot
+      // Pre-download cloud memory card / save state payload before emulator boot
       let cloudBuffer: Uint8Array | null = null;
-      if (loadUrl) {
+      if (game.system !== "psx" && game.system !== "ps1") {
+        try {
+          const cloudSave = await SaveSyncService.fetchCloudSave(cleanGameId, "savestate", 0);
+          if (cloudSave?.bytes && cloudSave.bytes.byteLength > 0) {
+            cloudBuffer = cloudSave.bytes;
+            console.log("[SaveSync] Loaded authoritative database save from user_game_saves, bytes:", cloudBuffer.byteLength);
+          }
+        } catch (err) {
+          console.warn("[SaveSync] Authoritative user_game_saves fetch warning:", err);
+        }
+      }
+
+      if (!cloudBuffer && loadUrl) {
         try {
           const dlRes = await fetch(loadUrl, { credentials: "include" });
           if (dlRes.ok) {
