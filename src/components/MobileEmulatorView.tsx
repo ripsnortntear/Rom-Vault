@@ -191,6 +191,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const activeCardIdRef = useRef<string | null>(null);
   activeCardIdRef.current = activeCardId;
   const lastSyncedChecksumRef = useRef<string | null>(null);
+  const hasNonBlankSaveRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
 
   // Unified save pusher: syncs to user memory card slot or falls back to global game saves route
@@ -218,10 +219,16 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         return;
       }
 
-      // Do not automatically upload an untouched blank PS1 card on initial boot
-      if (isPs1 && !force && isBlankPs1MemoryCard(uint8) && lastSyncedChecksumRef.current === null) {
-        lastSyncedChecksumRef.current = checksumStr;
-        return;
+      if (isPs1) {
+        const isBlank = isBlankPs1MemoryCard(uint8);
+        if (!isBlank) {
+          hasNonBlankSaveRef.current = true;
+        } else if (!force && !hasNonBlankSaveRef.current) {
+          // Do not automatically upload a blank PS1 card when no save has ever been written
+          // (e.g. when a game probes Slot 1 on the "Continue" screen of a brand-new card)
+          lastSyncedChecksumRef.current = checksumStr;
+          return;
+        }
       }
 
       const cardId = activeCardIdRef.current || "active";
@@ -237,6 +244,8 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         const blob = new Blob([uint8 as unknown as BlobPart]);
 
         // 1. Authenticated User / PS1 Virtual Memory Card sync (strictly isolated to /api/users/me/cards)
+        // NOTE: Never set `keepalive: true` on 128 KB PS1 cards — Chromium/Edge enforces a strict
+        // 64 KiB (65,536-byte) body limit on keepalive fetches and throws TypeError: Failed to fetch!
         if (isPs1) {
           const res = await fetch(
             `/roms/api/users/me/cards/${encodeURIComponent(cardId)}/sync?system=${encodeURIComponent(
@@ -247,7 +256,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
               method: "PUT",
               headers: { "Content-Type": "application/octet-stream" },
               body: blob,
-              keepalive: true,
             }
           );
           if (res.ok) {
@@ -260,6 +268,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
               window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saved" }, "*");
             }
           } else {
+            if (!force) {
+              lastSyncedChecksumRef.current = checksumStr;
+            }
             console.warn("[SaveSync] PS1 Memory Card sync returned non-OK status:", res.status);
             if (typeof window !== "undefined" && window.parent && window.parent !== window) {
               window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
@@ -268,7 +279,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           return;
         }
 
-        // 2. Non-PlayStation Global Game Save Sync
+        // 2. Non-PlayStation Global Game Save Sync (only use keepalive if payload <= 48 KB)
         const fallbackRes = await fetch(
           `/roms/api/saves/${encodeURIComponent(cleanGameId)}?system=${encodeURIComponent(game.system)}`,
           {
@@ -276,7 +287,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             method: "POST",
             headers: { "Content-Type": "application/octet-stream" },
             body: blob,
-            keepalive: true,
+            keepalive: uint8.byteLength <= 49152,
           }
         );
 
@@ -294,10 +305,18 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           if (typeof window !== "undefined" && window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "saved" }, "*");
           }
-        } else if (typeof window !== "undefined" && window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
+        } else {
+          if (!force) {
+            lastSyncedChecksumRef.current = checksumStr;
+          }
+          if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
+          }
         }
       } catch (err) {
+        if (!force) {
+          lastSyncedChecksumRef.current = checksumStr;
+        }
         console.warn("[SaveSync] Failed to push save:", err);
         if (typeof window !== "undefined" && window.parent && window.parent !== window) {
           window.parent.postMessage({ type: "VAULT_SAVE_STATUS", status: "error" }, "*");
@@ -1014,14 +1033,17 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
             if (isCloudNonBlank && cloudBuffer) {
               targetBuffer = cloudBuffer;
+              hasNonBlankSaveRef.current = true;
               lastSyncedChecksumRef.current = computeSaveChecksum(cloudBuffer);
               console.log("[SaveSync] Injected cloud memory card into emulator.");
             } else if (isLocalNonBlank && localSaveFound) {
               targetBuffer = localSaveFound;
+              hasNonBlankSaveRef.current = true;
               console.log("[SaveSync] Found non-blank local save; rescuing to MariaDB cloud card.");
               pushSaveToServer(localSaveFound, true);
             } else if (cloudBuffer && (!isPs1 || isValidPs1MemoryCard(cloudBuffer))) {
               targetBuffer = cloudBuffer;
+              hasNonBlankSaveRef.current = false;
               lastSyncedChecksumRef.current = computeSaveChecksum(cloudBuffer);
             }
 
