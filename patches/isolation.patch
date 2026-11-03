@@ -1,0 +1,14 @@
+--- vendor/TabStationToo/pcsx2-wasm/web/isolation.js	2026-11-02 19:38:12.776295462 -0500
++++ public/tabstationtoo/isolation.js	2026-10-31 16:35:41.135551139 -0400
+@@ -62,10 +62,7 @@
+ 	}
+ 
+ 	window.coi = {
+-		// COEP require-corp, the policy serve.py sends. Every file is same-origin, so nothing needs
+-		// "credentialless", which Safari lacks and which this worker forgets whenever the browser
+-		// restarts it.
+-		coepCredentialless: () => false,
++		coepCredentialless: () => true,
+ 		// Only asked while the page is not isolated (crossOriginIsolated === false).
+ 		shouldRegister: () => {
+ 			if (!window.isSecureContext) {

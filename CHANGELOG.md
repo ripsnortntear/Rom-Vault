@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-11-02
 
 ### Added
+- **TabStationToo Submodule Tracking & Upstream Sync**: Configured upstream Git submodule tracking for `https://github.com/TabStationToo/TabStationToo` (`wasm` branch) at `vendor/TabStationToo`, with automated synchronization CLI tool (`npm run sync-tabstationtoo`), contract integrity verification (`npm run verify-tabstationtoo`), and CI/CD build cycle integration preserving all ROM Vault controller shields, cloud memory card synchronization, and subframe unload guards.
 - **Internal Nginx Cache Routing for GitLab Runner**: Configured self-hosted GitLab CI/CD runner to route cache archiving and extraction requests through the internal Nginx reverse proxy endpoint (`your-domain.example.com`) via WebDAV (`/runner-cache/`) with local host persistence at `/var/cache/gitlab-runner/`, eliminating external cloud dependencies and upstream proxy body limits.
 - **Local Domain Loopback Resolution**: Added internal DNS resolution entry in `/etc/hosts` for direct loopback routing (`127.0.0.1`) with full Let's Encrypt TLS certificate verification.
 - **Synchronous 2-Player Retro Multiplayer Rooms**: Real-time room creation, custom join codes, interactive lobby, player chat, dual-ready status tracking, and unified libretro session launching for synchronized browser gameplay (`9e8d39a`).

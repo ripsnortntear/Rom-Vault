@@ -11,6 +11,7 @@ stages:
   - deploy
 
 variables:
+  GIT_SUBMODULE_STRATEGY: normal
   GITLAB_FEATURES: ''
   SECRET_DETECTION_DISABLED: 'true'
   SAST_DISABLED: 'true'
@@ -50,6 +51,8 @@ build_and_verify:
   script:
   - echo "[*] Installing dependencies..."
   - npm ci --include=dev --ignore-scripts
+  - echo "[*] Verifying TabStationToo integration contracts..."
+  - npm run verify-tabstationtoo
   - echo "[*] Checking TypeScript types..."
   - npx tsc --noEmit
   - echo "[*] Running Next.js build..."

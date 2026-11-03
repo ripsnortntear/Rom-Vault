@@ -1,0 +1,437 @@
+--- vendor/TabStationToo/pcsx2-wasm/web/app.js	2026-11-02 19:38:12.775198034 -0500
++++ public/tabstationtoo/app.js	2026-11-02 19:23:45.575565067 -0500
+@@ -1910,8 +1910,15 @@
+ 			render();
+ 			return;
+ 		}
+-		// Not remembered in IndexedDB: ?bios= is for automated runs.
++		// Auto-remember BIOS in IndexedDB across visits
+ 		setBios(name, bytes, 'url', false);
++		try {
++			await idbPut({ name, size: bytes.length, lastModified: Date.now(), savedAt: Date.now(), data: bytes.buffer });
++			if (page.bios && page.bios.name === name) {
++				page.bios.remembered = true;
++				render();
++			}
++		} catch (e) {}
+ 		maybeAutoBoot();
+ 	}
+ 
+@@ -1978,12 +1985,18 @@
+ 	async function restoreRememberedBios() {
+ 		const op = page.biosOp;
+ 		const rec = await idbGet();
+-		if (!rec || !rec.data || page.bios || op !== page.biosOp)
++		if (!rec || !rec.data || page.bios || op !== page.biosOp) {
++			if (!page.bios) {
++				loadBiosFromUrl('/roms/api/bios/scph39001.bin?system=ps2');
++			}
+ 			return;
++		}
+ 		const bytes = new Uint8Array(rec.data);
+ 		const name = sanitizeBiosName(rec.name);
+-		if (checkBiosSize(bytes.length, name))
++		if (checkBiosSize(bytes.length, name)) {
++			loadBiosFromUrl('/roms/api/bios/scph39001.bin?system=ps2');
+ 			return;
++		}
+ 		setBios(name, bytes, 'idb', true);
+ 		ensureRuntime();
+ 		pageLog(`Using the BIOS remembered in this browser: ${name}`);
+@@ -2724,6 +2737,7 @@
+ 			discError(DISC_COPY.notDisc);
+ 			return;
+ 		}
++		page.autoBoot = true;
+ 		chooseDisc({ kind: 'url', url: url.href, name: base, size }, null);
+ 	}
+ 
+@@ -4015,6 +4029,26 @@
+ 	const MEMCARD_STATUS_BUSY = 1; // pcsx2web_memcard_status() flags
+ 	const CARD_PICKER_TYPES = [{ description: 'PS2 memory card', accept: { 'application/octet-stream': ['.ps2'] } }];
+ 
++	const quickCardHash = (bytes) => {
++		if (!bytes || !bytes.length) return '';
++		let hash = 0x811c9dc5;
++		const len = bytes.length;
++		for (let i = 0; i < len; i += 32) {
++			hash = Math.imul(hash ^ bytes[i], 0x01000193);
++		}
++		return ((hash ^ len) >>> 0).toString(16);
++	};
++
++	const cloudSyncState = {
++		inFlight: false,
++		timer: null,
++		pending: null,
++		lastSyncedHash: new Map(),
++		lastSyncAt: 0,
++		MIN_AUTO_SYNC_INTERVAL_MS: 10000,
++		DEBOUNCE_QUIET_MS: 3500,
++	};
++
+ 	const CARD_COPY = {
+ 		slot: (n) => `Card ${n}`,
+ 		empty: (n) => `Card ${n} · empty`,
+@@ -4376,6 +4410,51 @@
+ 			}
+ 			if (changed)
+ 				saveCardMeta();
++
++			// ROM Vault Cloud Virtual Memory Card for PS2:
++			const searchParams = new URLSearchParams(location.search);
++			const cloudMemcardUrl = searchParams.get('memcard');
++			if (cloudMemcardUrl) {
++				try {
++					pageLog(`Fetching cloud virtual memory card from ${cloudMemcardUrl}...`);
++					const res = await fetch(cloudMemcardUrl, { credentials: 'include' });
++					if (res.ok) {
++						const ab = await res.arrayBuffer();
++						if (ab.byteLength === CARD_BYTES) {
++							const cardNameHeader = res.headers.get('X-Card-Name');
++							const cardName = cardNameHeader ? decodeURIComponent(cardNameHeader) : 'Cloud Virtual Memory Card (Slot 1)';
++							const cardId = 'cloud_ps2_slot1';
++							const cloudCard = {
++								id: cardId,
++								name: cardName,
++								created: Date.now(),
++								used: Date.now(),
++								isCloud: true,
++								cloudSyncUrl: cloudMemcardUrl.replace(/\/download(\?|$)/, '/sync$1'),
++							};
++							cards.list.set(cardId, cloudCard);
++							cards.slots[0] = cardId;
++							cards.boot[0] = new Uint8Array(ab);
++							cloudSyncState.lastSyncedHash.set(cardId, quickCardHash(cards.boot[0]));
++							pageLog(`Attached ${cardName} to Slot 1.`);
++							if (window.parent && window.parent !== window) {
++								window.parent.postMessage({
++									type: 'VAULT_SAVE_STATUS',
++									status: 'loaded',
++									cardName: cardName,
++								}, '*');
++							}
++						} else {
++							pageLog(`Cloud memory card size invalid (${ab.byteLength} bytes, expected ${CARD_BYTES}).`, 'warn');
++						}
++					} else {
++						pageLog(`Cloud memory card fetch returned status ${res.status}.`, 'warn');
++					}
++				} catch (err) {
++					pageLog(`Failed to fetch cloud memory card: ${errorText(err)}`, 'warn');
++				}
++			}
++
+ 			if (cards.list.size)
+ 				askPersistentStorage();
+ 			cards.loaded = true;
+@@ -4473,6 +4552,11 @@
+ 
+ 	function onBeforeUnloadWithCard(e) {
+ 		persistMemoryCards(true);
++		// When embedded inside an iframe (e.g. ROM Vault modal/player), never display the native
++		// browser data loss confirmation dialog. The parent frame manages save state and modal lifecycle.
++		if (window.self !== window.top) {
++			return;
++		}
+ 		e.preventDefault();
+ 		e.returnValue = ''; // browsers before preventDefault() was honoured here
+ 	}
+@@ -4483,6 +4567,9 @@
+ 		if (on === memcards.guarded)
+ 			return;
+ 		memcards.guarded = on;
++		// Do not attach beforeunload listener when embedded inside an iframe
++		if (window.self !== window.top)
++			return;
+ 		if (on)
+ 			window.addEventListener('beforeunload', onBeforeUnloadWithCard);
+ 		else
+@@ -4730,6 +4817,140 @@
+ 			persistMemoryCards();
+ 	}
+ 
++	async function doCloudSync(c, bytes, force = false) {
++		const syncUrl = c.cloudSyncUrl || (c.id === 'cloud_ps2_slot1' ? '/roms/api/users/me/cards/active/sync?system=ps2' : null);
++		if (!syncUrl) {
++			if (window.parent && window.parent !== window) {
++				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No cloud sync endpoint configured' }, '*');
++			}
++			return;
++		}
++
++		const cardHash = quickCardHash(bytes);
++		cloudSyncState.inFlight = true;
++
++		try {
++			if (window.parent && window.parent !== window) {
++				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saving', cardName: c.name }, '*');
++			}
++			const res = await fetch(syncUrl, {
++				method: 'PUT',
++				credentials: 'include',
++				headers: {
++					'Content-Type': 'application/octet-stream',
++				},
++				body: new Blob([bytes]),
++			});
++			if (res.ok) {
++				cloudSyncState.lastSyncedHash.set(c.id, cardHash);
++				cloudSyncState.lastSyncAt = performance.now();
++				pageLog(`Cloud virtual memory card synced to ROM Vault: ${c.name}`);
++				if (window.parent && window.parent !== window) {
++					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saved', cardName: c.name }, '*');
++				}
++			} else {
++				pageLog(`Cloud memory card sync failed: HTTP ${res.status}`, 'warn');
++				if (window.parent && window.parent !== window) {
++					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: `HTTP ${res.status}` }, '*');
++				}
++			}
++		} catch (err) {
++			pageLog(`Cloud memory card sync error: ${errorText(err)}`, 'warn');
++			if (window.parent && window.parent !== window) {
++				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: errorText(err) }, '*');
++			}
++		} finally {
++			cloudSyncState.inFlight = false;
++			if (cloudSyncState.pending) {
++				const next = cloudSyncState.pending;
++				cloudSyncState.pending = null;
++				syncCloudCard(next.c, next.bytes, next.force);
++			}
++		}
++	}
++
++	function syncCloudCard(c, bytes, force = false) {
++		if (!c || !bytes) {
++			if (window.parent && window.parent !== window) {
++				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'Missing memory card data' }, '*');
++			}
++			return;
++		}
++
++		const cardHash = quickCardHash(bytes);
++		const lastHash = cloudSyncState.lastSyncedHash.get(c.id);
++
++		// If card content has not changed since the last successful sync, skip redundant upload
++		if (lastHash && cardHash === lastHash) {
++			if (force && window.parent && window.parent !== window) {
++				window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'saved', cardName: c.name }, '*');
++			}
++			return;
++		}
++
++		if (force) {
++			if (cloudSyncState.timer) {
++				clearTimeout(cloudSyncState.timer);
++				cloudSyncState.timer = null;
++			}
++			if (cloudSyncState.inFlight) {
++				cloudSyncState.pending = { c, bytes, force: true };
++				return;
++			}
++			doCloudSync(c, bytes, true);
++			return;
++		}
++
++		// Background debounced auto-sync
++		if (cloudSyncState.timer) {
++			clearTimeout(cloudSyncState.timer);
++			cloudSyncState.timer = null;
++		}
++
++		const now = performance.now();
++		const elapsedSinceLast = now - cloudSyncState.lastSyncAt;
++		let delay = cloudSyncState.DEBOUNCE_QUIET_MS;
++		if (elapsedSinceLast < cloudSyncState.MIN_AUTO_SYNC_INTERVAL_MS) {
++			delay = Math.max(delay, cloudSyncState.MIN_AUTO_SYNC_INTERVAL_MS - elapsedSinceLast);
++		}
++
++		cloudSyncState.timer = setTimeout(() => {
++			cloudSyncState.timer = null;
++			if (cloudSyncState.inFlight) {
++				cloudSyncState.pending = { c, bytes, force: false };
++				return;
++			}
++			doCloudSync(c, bytes, false);
++		}, delay);
++	}
++
++	window.addEventListener('message', (e) => {
++		if (e.data?.type === 'VAULT_FORCE_SAVE') {
++			const id = cards.slots[0];
++			if (id) {
++				const bytes = cards.fsReady ? readCardFile(id) : cards.boot[0];
++				if (bytes) {
++					syncCloudCard(cards.list.get(id) || { id, name: 'Cloud Virtual Memory Card (Slot 1)' }, bytes, true);
++				} else {
++					if (window.parent && window.parent !== window) {
++						window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No memory card file available in slot 1' }, '*');
++					}
++				}
++			} else {
++				if (window.parent && window.parent !== window) {
++					window.parent.postMessage({ type: 'VAULT_SAVE_STATUS', status: 'error', error: 'No memory card attached to slot 1' }, '*');
++				}
++			}
++		} else if (e.data?.type === 'VAULT_SAVE_AND_EXIT') {
++			try {
++				persistMemoryCards(true);
++			} catch {}
++			if (window.parent && window.parent !== window) {
++				window.parent.postMessage({ type: 'VAULT_EXIT_READY' }, '*');
++			}
++		}
++	});
++
+ 	// leaving: the page is being hidden or left. That copy does not wait for the retry pause (it may be the
+ 	// last chance to keep the card), and its failure does not count toward giving up: a few quick tab switches
+ 	// say nothing new about IndexedDB, so only the timed copies decide that.
+@@ -4757,6 +4978,11 @@
+ 					copies.push({ c: cards.list.get(id), bytes });
+ 			}
+ 		}
++		for (const { c, bytes } of copies) {
++			if (c && (c.isCloud || c.cloudSyncUrl || c.id === 'cloud_ps2_slot1')) {
++				syncCloudCard(c, bytes, leaving);
++			}
++		}
+ 		memcards.syncing = true;
+ 		setMemcardGuard(true);
+ 		cardTx('bytes', 'readwrite', (tx) => {
+@@ -6562,7 +6788,8 @@
+ 	// Every press and release seen goes to the PS2 as it is; the emulator holds each for at least two
+ 	// vsyncs so the game sees it. Only the Gamepad tab's picture keeps a press for GAMEPAD_SHOW_MS, so a tap
+ 	// shows there too: holding it for the PS2 would merge quick taps into one press when mashing.
+-	const GAMEPAD_POLL_MS = 0;
++	// Polling aligned to 60 FPS (16ms) to prevent USB polling queue saturation in Chromium / Windows XInput
++	const GAMEPAD_POLL_MS = 16;
+ 	const GAMEPAD_SHOW_MS = 50;
+ 	// Firefox (and browsers built on it, such as Zen) hands a page gamepad changes late and in bursts while
+ 	// the emulator runs: a quick tap's press and release, or a release and the next press when mashing,
+@@ -6855,60 +7082,11 @@
+ 	// game's rumble is on or off (it tests the gamepad). The game's own motors take over at their next change.
+ 	const RUMBLE_TEST_MS = 400;
+ 	function testRumble(port) {
+-		const list = navigator.getGamepads ? navigator.getGamepads() : [];
+-		const acts = [];
+-		for (const g of connectedGamepads()) {
+-			const gp = g.port === port ? list[g.index] : null;
+-			if (gp && gp.vibrationActuator && typeof gp.vibrationActuator.playEffect === 'function')
+-				acts.push(gp.vibrationActuator);
+-		}
+-		const play = (strong, weak, delay) => {
+-			for (const act of acts) {
+-				try {
+-					const done = act.playEffect('dual-rumble', { startDelay: delay, duration: RUMBLE_TEST_MS, strongMagnitude: strong, weakMagnitude: weak });
+-					if (done && typeof done.catch === 'function')
+-						done.catch(() => {});
+-				} catch {
+-					// the gamepad cannot play it
+-				}
+-			}
+-		};
+-		play(1, 0, 0);
+-		setTimeout(() => play(0, 1, 0), RUMBLE_TEST_MS + 150);
+-		// Not left to the effect's duration, which some gamepads ignore in Chromium (stopAllRumble()).
+-		setTimeout(() => {
+-			for (const act of acts) {
+-				try {
+-					const done = typeof act.reset === 'function' ? act.reset() : null;
+-					if (done && typeof done.catch === 'function')
+-						done.catch(() => {});
+-				} catch {
+-					// gone
+-				}
+-			}
+-		}, 2 * RUMBLE_TEST_MS + 150);
+-		pads.note[port - 1] = acts.length ? 'Rumble test: the strong motor, then the weak one.' : 'No gamepad playing as this player can rumble.';
+-		pageLog(`Rumble test for Player ${port} on ${acts.length} gamepad${acts.length === 1 ? '' : 's'}.`);
++		pads.note[port - 1] = 'Vibration neutralized to prevent controller disconnect.';
+ 		renderPads();
+ 	}
+ 
+-	// Every gamepad's motors off now. Chromium does not always end an effect after its duration (a DualShock or
+-	// DualSense kept rumbling after its tab was closed, until the browser quit), so the page stops them itself when it
+-	// goes away, is hidden or loses focus: then rumbleFrame() no longer runs to send the zero.
+ 	function stopAllRumble() {
+-		const list = navigator.getGamepads ? navigator.getGamepads() : [];
+-		for (const gp of list) {
+-			const act = gp && gp.vibrationActuator;
+-			if (!act || typeof act.reset !== 'function')
+-				continue;
+-			try {
+-				const done = act.reset();
+-				if (done && typeof done.catch === 'function')
+-					done.catch(() => {});
+-			} catch {
+-				// gone
+-			}
+-		}
+ 		for (const p of rumble.playing.values())
+ 			p.value = 0;
+ 	}
+@@ -6921,8 +7099,7 @@
+ 	});
+ 
+ 	function canRumble(g) {
+-		const gp = navigator.getGamepads && navigator.getGamepads()[g.index];
+-		return !!(gp && gp.vibrationActuator && typeof gp.vibrationActuator.playEffect === 'function');
++		return false;
+ 	}
+ 
+ 	function rumbleWords() {
+@@ -6938,32 +7115,8 @@
+ 	}
+ 
+ 	function rumbleFrame(list, live) {
+-		const words = live ? rumbleWords() : null;
+-		const now = performance.now();
+-		for (const g of gamepads.values()) {
+-			const gp = g.connected ? list[g.index] : null;
+-			const act = gp && gp.vibrationActuator;
+-			if (!act || typeof act.playEffect !== 'function')
+-				continue;
+-			const port = g.port;
+-			const value = words && port && rumble.on[port - 1] && !g.mapper ? Atomics.load(words, port - 1) : 0;
+-			const p = rumble.playing.get(g.index) || { value: 0, at: 0 };
+-			if (value === p.value && (value === 0 || now - p.at < RUMBLE_RENEW_MS))
+-				continue;
+-			p.value = value;
+-			p.at = now;
+-			rumble.playing.set(g.index, p);
+-			try {
+-				const done = value
+-					? act.playEffect('dual-rumble', { duration: RUMBLE_EFFECT_MS, strongMagnitude: (value >>> 8) / 255,
+-						weakMagnitude: (value & 255) / 255 })
+-					: typeof act.reset === 'function' ? act.reset() : null;
+-				if (done && typeof done.catch === 'function')
+-					done.catch(() => {}); // a newer effect replaced it, or the gamepad went away
+-			} catch {
+-				// the gamepad cannot play it
+-			}
+-		}
++		// Neutralized: high-frequency actuator playEffect/reset calls trip Chromium USB XInput driver faults
++		return;
+ 	}
+ 
+ 	// Plays one state of a gamepad: what the PS2 gets (sent by the caller's syncPads), the Gamepad tab's
+@@ -11242,13 +11395,16 @@
+ 			pageLog('A service worker (coi-serviceworker.js) serves this page and adds the cross-origin isolation headers.');
+ 		loadCardLibrary();
+ 
+-		const biosParam = params.get('bios');
++		const biosParam = params.get('bios') || '/roms/api/bios/scph39001.bin?system=ps2';
+ 		const discParam = params.get('disc');
+ 		const elfParam = params.get('elf');
+ 		const stateParam = params.get('state');
+ 		disc.urlPending = !!discParam; // a queued ?bios= boot waits for the ?disc= check
+ 		devElf.pending = !!elfParam; // and for the ?elf= download
+ 		devState.pending = !!stateParam; // and for the ?state= download
++		if (discParam || biosParam) {
++			page.autoBoot = true;
++		}
+ 		// Touch-only devices: the download waits for a BIOS.
+ 		if (!touchOnlyQuery.matches || biosParam)
+ 			ensureRuntime();

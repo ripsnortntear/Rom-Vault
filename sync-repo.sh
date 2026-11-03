@@ -58,6 +58,11 @@ fi
 echo "[+] Syncing upstream remote changes (git pull --rebase)..."
 git pull --rebase "$GIT_REMOTE" "$GIT_BRANCH" || true
 
+if [[ -f ".gitmodules" ]]; then
+  echo "[+] Updating Git submodules..."
+  git submodule update --init --recursive
+fi
+
 # 5. Check if local is already in sync with upstream
 LOCAL_HASH=$(git rev-parse @)
 REMOTE_HASH=$(git rev-parse @{u} 2>/dev/null || echo "")

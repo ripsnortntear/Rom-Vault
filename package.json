@@ -14,7 +14,9 @@
     "download-boxart": "node scripts/download-boxart.mjs",
     "download-metadata": "node scripts/download-metadata.mjs",
     "audit-metadata": "node scripts/download-metadata.mjs --audit",
-    "prune-orphans": "node scripts/download-metadata.mjs --prune-orphans"
+    "prune-orphans": "node scripts/download-metadata.mjs --prune-orphans",
+    "sync-tabstationtoo": "node scripts/sync-tabstationtoo.mjs",
+    "verify-tabstationtoo": "node scripts/sync-tabstationtoo.mjs --verify"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

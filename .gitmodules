@@ -1,0 +1,4 @@
+[submodule "vendor/TabStationToo"]
+	path = vendor/TabStationToo
+	url = https://github.com/TabStationToo/TabStationToo.git
+	branch = wasm
