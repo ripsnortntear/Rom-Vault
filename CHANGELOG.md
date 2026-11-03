@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multiplayer Console Cores**: Streamlined initial multiplayer room creation core selection by removing Sega Dreamcast (`flycast`) and Sega Saturn (`yabause`/`kronos`) (`432cab2`).
 
 ### Fixed
+- **Tabstationtoo (PS2) Reload Loops & Screen Flickering**: Memoized `playerUrl` and eliminated dynamic timestamp cache-busting (`_t=${Date.now()}`) from the emulator iframe URL in `EmulatorModal.tsx` and `PS2EmulatorView.tsx`, preventing state updates (such as save status changes or gamepad polling) from regenerating the iframe source and destroying the WebAssembly/WebGPU runtime context (`ea76cf1`).
+- **Memory Card Auto-Save Debouncing & Hash Deduplication**: Implemented debouncing (3.5s quiet window, 10s minimum auto-save interval) and rapid stepped FNV-1a buffer content hashing (`quickCardHash`) on the 8.65 MB virtual memory card in `public/tabstationtoo/app.js`, coalescing consecutive writes and skipping redundant 8.65 MB uploads when card data has not changed.
+- **Suppressed Browser Data Loss Warnings in Embedded Iframes**: Gated the window `beforeunload` event listener and prompt in `public/tabstationtoo/app.js` when running inside an embedded iframe (`window.self !== window.top`), preventing Microsoft Edge from popping up native data loss alert dialogs during in-game saves or normal navigation.
 - **Shoutbox Continuous Focus**: Fixed input deactivation on message submit by preserving active focus within the chat field across submissions (`0432559`).
 - **Chat Enter Key Scrolling**: Eliminated default textarea behavior that caused page-level vertical scroll jumping when submitting messages via the Enter key (`66ac737`).
 
