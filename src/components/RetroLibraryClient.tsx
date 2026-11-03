@@ -31,11 +31,15 @@ import { EmulatorErrorBoundary } from "@/components/EmulatorErrorBoundary";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { MultiplayerModal } from "@/components/MultiplayerModal";
 import { EdgeRecommendationBadge } from "@/components/EdgeRecommendationBadge";
+import { ServerUserAgentContext } from "@/hooks/useBrowserEnvironment";
 import { isDesktopOnlySystem } from "@/lib/systems";
 
 interface RetroLibraryClientProps {
   initialGames: GameItem[];
   stats: LibraryStats;
+  initialSeed?: number;
+  initialUser?: Record<string, unknown> | null;
+  initialUserAgent?: string;
 }
 
 const FAVORITES_STORAGE_KEY = "nes_vault_favorites_v1";
@@ -60,6 +64,9 @@ const ICONIC_TITLES = [
 export function RetroLibraryClient({
   initialGames,
   stats,
+  initialSeed,
+  initialUser = null,
+  initialUserAgent = "",
 }: RetroLibraryClientProps): React.ReactElement {
   const searchParams = useSearchParams();
 
@@ -122,8 +129,10 @@ export function RetroLibraryClient({
         ? initialGames
         : initialGames.filter((g) => g.system === initialSystem);
     const candidates = pool.length > 0 ? pool : initialGames;
-    const randomIndex = Math.floor(Math.random() * candidates.length);
-    return candidates[randomIndex] ?? null;
+    // Use server-supplied initialSeed so SSR and client hydration select the exact same game
+    const seed = typeof initialSeed === "number" ? initialSeed : 0;
+    const index = Math.floor(seed * candidates.length) % candidates.length;
+    return candidates[index] ?? null;
   });
 
   const prevSystemRef = useRef<SystemFilter>(selectedSystem);
@@ -131,7 +140,7 @@ export function RetroLibraryClient({
   const [detailGame, setDetailGame] = useState<GameItem | null>(null);
   const [playingGame, setPlayingGame] = useState<GameItem | null>(null);
 
-  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(initialUser);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isMultiplayerModalOpen, setIsMultiplayerModalOpen] = useState<boolean>(false);
   const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
@@ -173,6 +182,9 @@ export function RetroLibraryClient({
   }, []);
 
   useEffect(() => {
+    if (initialUser !== null && initialUser !== undefined) {
+      return;
+    }
     fetch("/roms/api/users/me")
       .then((res) => res.json())
       .then((data) => {
@@ -186,7 +198,7 @@ export function RetroLibraryClient({
         }
       })
       .catch(() => {});
-  }, []);
+  }, [initialUser]);
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -579,6 +591,7 @@ export function RetroLibraryClient({
   );
 
   return (
+    <ServerUserAgentContext.Provider value={initialUserAgent}>
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col">
       <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-zinc-950/90 backdrop-blur-md">
         <div className="w-full px-4 sm:px-6 lg:px-8 2xl:px-10 py-3 flex items-center justify-between gap-3 sm:gap-4">
@@ -982,5 +995,6 @@ export function RetroLibraryClient({
         initialGame={detailGame || featuredGame}
       />
     </div>
+    </ServerUserAgentContext.Provider>
   );
 }

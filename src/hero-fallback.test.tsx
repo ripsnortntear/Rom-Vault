@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HeroSpotlight } from "./components/HeroSpotlight";
@@ -166,5 +168,21 @@ describe("HeroSpotlight Media Fallback Suite", () => {
     expect(html.toLowerCase()).toContain("playsinline");
     expect(html.toLowerCase()).toContain("muted");
     expect(html).toContain('aria-label="Unmute preview video"');
+  });
+
+  it("initializes featuredGame deterministically from server-supplied initialSeed to prevent SSR hydration flip", () => {
+    const clientSource = fs.readFileSync(
+      path.join(process.cwd(), "src/components/RetroLibraryClient.tsx"),
+      "utf-8"
+    );
+    const pageSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/page.tsx"),
+      "utf-8"
+    );
+
+    expect(pageSource).toContain("initialSeed={initialSeed}");
+    expect(pageSource).toContain("initialUser={initialUser}");
+    expect(pageSource).toContain("initialUserAgent={initialUserAgent}");
+    expect(clientSource).toContain("const seed = typeof initialSeed === \"number\" ? initialSeed : 0;");
   });
 });

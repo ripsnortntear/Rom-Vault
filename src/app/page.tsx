@@ -1,14 +1,57 @@
 export const dynamic = "force-dynamic";
 import React, { Suspense } from "react";
+import { headers } from "next/headers";
 import { scanGameLibrary } from "@/lib/scanner";
+import { getCurrentSession } from "@/lib/auth/session";
+import { query } from "@/lib/db";
+import type { UserProfile } from "@/types/auth";
 import { RetroLibraryClient } from "@/components/RetroLibraryClient";
 
 export default async function HomePage(): Promise<React.ReactElement> {
-  const { games, stats } = await scanGameLibrary();
+  const [{ games, stats }, session, reqHeaders] = await Promise.all([
+    scanGameLibrary(),
+    getCurrentSession().catch(() => null),
+    headers().catch(() => null),
+  ]);
+
+  let initialUser: Record<string, unknown> | null = null;
+  if (session?.user) {
+    let profile: UserProfile | undefined;
+    try {
+      const profiles = await query<UserProfile>(
+        "SELECT * FROM user_profiles WHERE user_id = ? LIMIT 1",
+        [session.user.id]
+      );
+      profile = profiles[0];
+    } catch {}
+
+    initialUser = {
+      ...session.user,
+      displayName: profile?.display_name ?? session.user.displayName,
+      quotaDaily:
+        session.user.role === "admin"
+          ? null
+          : (profile?.download_quota_daily ?? 50),
+      quotaUsedToday:
+        session.user.role === "admin"
+          ? 0
+          : (profile?.download_count_today ?? 0),
+    };
+  }
+
+  // Generate random seed once on the server so SSR and Client Hydration select the exact same featured game
+  const initialSeed = Math.random();
+  const initialUserAgent = reqHeaders?.get("user-agent") || "";
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#070709]" />}>
-      <RetroLibraryClient initialGames={games} stats={stats} />
+      <RetroLibraryClient
+        initialGames={games}
+        stats={stats}
+        initialSeed={initialSeed}
+        initialUser={initialUser}
+        initialUserAgent={initialUserAgent}
+      />
     </Suspense>
   );
 }

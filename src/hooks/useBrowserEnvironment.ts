@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
+
+export const ServerUserAgentContext = createContext<string>("");
 
 export type BrowserCompatibilityState =
   | "edge_ready"
@@ -48,12 +50,23 @@ export function detectBrowserEnvironment(
 }
 
 export function useBrowserEnvironment(): BrowserEnvironment {
-  const [env, setEnv] = useState<BrowserEnvironment>({
-    mounted: false,
-    isMobile: false,
-    isEdge: false,
-    hasCOOP_COEP: false,
-    state: "mobile",
+  const serverUA = useContext(ServerUserAgentContext);
+
+  const [env, setEnv] = useState<BrowserEnvironment>(() => {
+    if (serverUA) {
+      const initial = detectBrowserEnvironment(serverUA, 1920, false, true);
+      return {
+        mounted: true,
+        ...initial,
+      };
+    }
+    return {
+      mounted: false,
+      isMobile: false,
+      isEdge: false,
+      hasCOOP_COEP: false,
+      state: "mobile",
+    };
   });
 
   useEffect(() => {
