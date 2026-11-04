@@ -547,7 +547,19 @@ export function RetroLibraryClient({
         const matchesTitle = game.displayTitle.toLowerCase().includes(query);
         const matchesBase = game.baseName.toLowerCase().includes(query);
         const matchesStory = game.story.toLowerCase().includes(query);
-        return matchesTitle || matchesBase || matchesStory;
+        const matchesGenre = game.genres?.some((g) => g.toLowerCase().includes(query)) ?? false;
+        const matchesDeveloper = game.developer?.toLowerCase().includes(query) ?? false;
+        const matchesPublisher = game.publisher?.toLowerCase().includes(query) ?? false;
+        const matchesTags = game.tags?.some((t) => t.toLowerCase().includes(query)) ?? false;
+        return (
+          matchesTitle ||
+          matchesBase ||
+          matchesStory ||
+          matchesGenre ||
+          matchesDeveloper ||
+          matchesPublisher ||
+          matchesTags
+        );
       }
       return true;
     });
