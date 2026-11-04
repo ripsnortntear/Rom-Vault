@@ -100,6 +100,105 @@ function cleanTitleForSearch(title) {
     .trim();
 }
 
+const ROMAN_NUMERALS = {
+  ii: "2",
+  iii: "3",
+  iv: "4",
+  v: "5",
+  vi: "6",
+  vii: "7",
+  viii: "8",
+  ix: "9",
+};
+
+function normalizeForMatch(title) {
+  if (!title) return "";
+  let s = title.toLowerCase();
+  s = s.replace(/\s*\([^)]*\)/g, "").replace(/\s*\[[^\]]*\]/g, "");
+  s = s.replace(/[\-–—:._'"!?]/g, " ");
+  const words = s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => ROMAN_NUMERALS[w] || w);
+  return words.join(" ");
+}
+
+function extractSequelNumber(normalized) {
+  const tokens = normalized.split(/\s+/);
+  for (const t of tokens) {
+    if (/^[0-9]+$/.test(t)) {
+      return t;
+    }
+    const match = t.match(/[a-z]+([0-9]+)$/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function findBestMatch(items, cleanTitle, targetPlatform) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+
+  const cleanNorm = normalizeForMatch(cleanTitle);
+  const cleanNum = extractSequelNumber(cleanNorm);
+
+  let best = null;
+  let bestScore = -1;
+
+  for (const item of items) {
+    if (!item.name) continue;
+    const itemNorm = normalizeForMatch(item.name);
+    const itemNum = extractSequelNumber(itemNorm);
+
+    // Hard constraint: Sequel numbers must strictly match
+    if (cleanNum !== itemNum) {
+      continue;
+    }
+
+    let titleScore = 0;
+    if (itemNorm === cleanNorm) {
+      titleScore = 100;
+    } else if (
+      itemNorm.startsWith(cleanNorm + " ") ||
+      cleanNorm.startsWith(itemNorm + " ")
+    ) {
+      titleScore = 50;
+    } else {
+      const cleanWords = cleanNorm.split(" ");
+      const itemWords = itemNorm.split(" ");
+      const matchingWords = cleanWords.filter((w) => itemWords.includes(w));
+      if (
+        matchingWords.length > 0 &&
+        matchingWords.length >= Math.ceil(cleanWords.length / 2)
+      ) {
+        titleScore = 20 * matchingWords.length;
+      }
+    }
+
+    if (titleScore === 0) {
+      continue;
+    }
+
+    let score = titleScore;
+    const platformMatch =
+      targetPlatform &&
+      Array.isArray(item.platforms) &&
+      item.platforms.includes(targetPlatform);
+
+    if (platformMatch) score += 40;
+    if (item.category === 0) score += 10;
+    if (item.category === 5) score -= 30;
+    if (item.cover?.image_id) score += 5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  }
+
+  if (bestScore < 40) return null;
+  return best;
+}
+
 async function getTwitchToken() {
   if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET in .env.local");
@@ -284,7 +383,7 @@ async function main() {
       const platformId = IGDB_PLATFORM_MAP[item.system.toLowerCase()];
       if (clean && platformId) {
         try {
-          const searchQ = `search "${clean}"; fields name, cover.image_id, platforms; where platforms = [${platformId}]; limit 5;`;
+          const searchQ = `search "${clean}"; fields name, cover.image_id, platforms, category; where platforms = [${platformId}]; limit 15;`;
           const sRes = await fetch("https://api.igdb.com/v4/games", {
             method: "POST",
             headers: {
@@ -296,8 +395,8 @@ async function main() {
 
           if (sRes.ok) {
             const matches = await sRes.json();
-            const hit = matches.find((m) => m?.cover?.image_id);
-            if (hit) {
+            const hit = findBestMatch(matches, clean, platformId);
+            if (hit?.cover?.image_id) {
               imageId = hit.cover.image_id;
             }
           }

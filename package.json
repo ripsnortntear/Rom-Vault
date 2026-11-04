@@ -11,6 +11,7 @@
     "scan": "bash scripts/scan.sh",
     "sync-metadata": "node scripts/sync-metadata.mjs",
     "sync-keywords": "node scripts/backfill-keywords.mjs",
+    "remediate-sequels": "node scripts/remediate-sequel-artwork.mjs",
     "download-screenshots": "node scripts/download-screenshots.mjs",
     "download-boxart": "node scripts/download-boxart.mjs",
     "download-metadata": "node scripts/download-metadata.mjs",

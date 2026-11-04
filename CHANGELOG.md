@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IGDB Keyword & Thematic Search Tags**: Added `keywords` column to MariaDB `game_metadata` and updated metadata downloaders (`scripts/download-metadata.mjs`, `src/lib/igdb.ts`) to ingest IGDB keywords and themes directly into `game.tags`. Games can now be found by conceptual search terms (e.g., "golf", "skateboarding", "tennis", "zombies") even if those terms do not appear in the game's title or description.
 - **Full Database Keyword Backfill**: Created `scripts/backfill-keywords.mjs` (`npm run sync-keywords`) and enriched 6,463 catalog titles in MariaDB with canonical IGDB keywords and themes.
 - **Search Matching Across Metadata Fields**: Expanded search filtering across genres, developer, publisher, and tags in `RetroLibraryClient.tsx`.
+- **Sequel Collision Remediation Script**: Added `scripts/remediate-sequel-artwork.mjs` (`npm run remediate-sequels`) to detect duplicate artwork hashes across sequels, automatically re-download distinct 2D box art, screenshots, and story overviews, and resolve collisions.
+
+### Fixed
+- **Sequel vs Prequel Artwork & Metadata Collision**: Fixed an issue where numbered sequels (e.g., `Dark Cloud 2`, `Devil May Cry 2`, `Red Faction II`, `Dead to Rights II`) were mistakenly matched to their unnumbered first installments or vice-versa due to IGDB popularity ranking, unverified search results (`limit 1`), and Roman vs. Arabic numeral mismatches. Implemented strict title and sequel number matching (`findBestIgdbMatch`, `normalizeForMatch`, `extractSequelNumber`) across `src/lib/igdb.ts`, `scripts/download-boxart.mjs`, and `scripts/download-metadata.mjs`, ensuring prequels and sequels are never conflated.
 
 ---
 

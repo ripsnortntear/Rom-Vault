@@ -72,6 +72,17 @@ export async function getIgdbAccessToken(): Promise<string | null> {
   }
 }
 
+const ROMAN_NUMERALS: Record<string, string> = {
+  ii: "2",
+  iii: "3",
+  iv: "4",
+  v: "5",
+  vi: "6",
+  vii: "7",
+  viii: "8",
+  ix: "9",
+};
+
 /**
  * Clean game title for optimal IGDB search matching.
  */
@@ -85,8 +96,104 @@ export function cleanTitleForSearch(title: string): string {
     .trim();
 }
 
+export function normalizeForMatch(title: string): string {
+  if (!title) return "";
+  let s = title.toLowerCase();
+  s = s.replace(/\s*\([^)]*\)/g, "").replace(/\s*\[[^\]]*\]/g, "");
+  s = s.replace(/[\-–—:._'"!?]/g, " ");
+  const words = s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => ROMAN_NUMERALS[w] || w);
+  return words.join(" ");
+}
+
+export function extractSequelNumber(normalized: string): string | null {
+  const tokens = normalized.split(/\s+/);
+  for (const t of tokens) {
+    if (/^[0-9]+$/.test(t)) {
+      return t;
+    }
+    const match = t.match(/[a-z]+([0-9]+)$/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+export function findBestIgdbMatch(
+  items: any[],
+  cleanTitle: string,
+  targetPlatform?: number | null
+): any | null {
+  if (!Array.isArray(items) || items.length === 0) return null;
+
+  const cleanNorm = normalizeForMatch(cleanTitle);
+  const cleanNum = extractSequelNumber(cleanNorm);
+
+  let best: any = null;
+  let bestScore = -1;
+
+  for (const item of items) {
+    if (!item.name) continue;
+    const itemNorm = normalizeForMatch(item.name);
+    const itemNum = extractSequelNumber(itemNorm);
+
+    // Hard constraint: If one has a sequel number and the other has a different sequel number, reject
+    if (cleanNum !== itemNum) {
+      continue;
+    }
+
+    let titleScore = 0;
+    if (itemNorm === cleanNorm) {
+      titleScore = 100;
+    } else if (
+      itemNorm.startsWith(cleanNorm + " ") ||
+      cleanNorm.startsWith(itemNorm + " ")
+    ) {
+      titleScore = 50;
+    } else {
+      const cleanWords = cleanNorm.split(" ");
+      const itemWords = itemNorm.split(" ");
+      const matchingWords = cleanWords.filter((w) => itemWords.includes(w));
+      if (
+        matchingWords.length > 0 &&
+        matchingWords.length >= Math.ceil(cleanWords.length / 2)
+      ) {
+        titleScore = 20 * matchingWords.length;
+      }
+    }
+
+    // Zero title overlap means unrelated game
+    if (titleScore === 0) {
+      continue;
+    }
+
+    let score = titleScore;
+    const platformMatch =
+      targetPlatform &&
+      Array.isArray(item.platforms) &&
+      item.platforms.includes(targetPlatform);
+
+    if (platformMatch) score += 40;
+    if (item.category === 0) score += 10;
+    if (item.category === 5) score -= 30; // ROM hack penalty
+    if (item.cover?.image_id) score += 5;
+    if (item.first_release_date) score += 5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  }
+
+  // Minimum threshold to prevent arbitrary fallback matches
+  if (bestScore < 40) return null;
+
+  return best;
+}
+
 export function normalizeTitleForComparison(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalizeForMatch(title).replace(/[^a-z0-9]/g, "");
 }
 
 /**
@@ -203,95 +310,16 @@ export async function resolveGameMetadata(
       return null;
     }
 
-    const cleanLower = clean.toLowerCase();
-    const cleanNorm = normalizeTitleForComparison(clean);
+    const match = findBestIgdbMatch(items, clean, targetPlatform);
 
-    // 1. Priority: Exact name match (case-insensitive) + target platform + not a ROM hack (category != 5)
-    let match = items.find(
-      (i) =>
-        i.name &&
-        i.name.toLowerCase() === cleanLower &&
-        targetPlatform &&
-        Array.isArray(i.platforms) &&
-        i.platforms.includes(targetPlatform) &&
-        i.category !== 5
-    );
-
-    // 2. Next: Normalized title match + target platform + not a ROM hack
     if (!match) {
-      match = items.find(
-        (i) =>
-          i.name &&
-          normalizeTitleForComparison(i.name) === cleanNorm &&
-          targetPlatform &&
-          Array.isArray(i.platforms) &&
-          i.platforms.includes(targetPlatform) &&
-          i.category !== 5
-      );
+      // Record negative cache in DB with null year so we don't spam IGDB repeatedly
+      await execute(
+        "INSERT INTO game_metadata (id, system, clean_title, year) VALUES (?, ?, ?, NULL) ON DUPLICATE KEY UPDATE updated_at = NOW()",
+        [id, system, clean]
+      ).catch(() => {});
+      return null;
     }
-
-    // 3. Next: Exact name match + target platform (even if hack or expansion)
-    if (!match) {
-      match = items.find(
-        (i) =>
-          i.name &&
-          i.name.toLowerCase() === cleanLower &&
-          targetPlatform &&
-          Array.isArray(i.platforms) &&
-          i.platforms.includes(targetPlatform)
-      );
-    }
-
-    // 4. Next: Normalized title match + target platform
-    if (!match) {
-      match = items.find(
-        (i) =>
-          i.name &&
-          normalizeTitleForComparison(i.name) === cleanNorm &&
-          targetPlatform &&
-          Array.isArray(i.platforms) &&
-          i.platforms.includes(targetPlatform)
-      );
-    }
-
-    // 5. Next: Platform match with release date (not a ROM hack)
-    if (!match && targetPlatform) {
-      match = items.find(
-        (i) =>
-          Array.isArray(i.platforms) &&
-          i.platforms.includes(targetPlatform) &&
-          i.first_release_date &&
-          i.category !== 5
-      );
-    }
-
-    // 6. Next: Exact title match across any platform (not a ROM hack)
-    if (!match) {
-      match = items.find(
-        (i) =>
-          i.name &&
-          i.name.toLowerCase() === cleanLower &&
-          i.first_release_date &&
-          i.category !== 5
-      );
-    }
-
-    // 7. Next: Normalized title match across any platform
-    if (!match) {
-      match = items.find(
-        (i) =>
-          i.name &&
-          normalizeTitleForComparison(i.name) === cleanNorm &&
-          i.first_release_date
-      );
-    }
-
-    // 8. Fallback: First item with release date
-    if (!match) {
-      match = items.find((i) => i.first_release_date) || items[0];
-    }
-
-    if (!match) return null;
 
     let year: number | null = null;
     if (match.first_release_date) {

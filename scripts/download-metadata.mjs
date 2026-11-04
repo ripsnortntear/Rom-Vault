@@ -425,6 +425,106 @@ function cleanTitleForSearch(title) {
     .trim();
 }
 
+const ROMAN_NUMERALS = {
+  ii: "2",
+  iii: "3",
+  iv: "4",
+  v: "5",
+  vi: "6",
+  vii: "7",
+  viii: "8",
+  ix: "9",
+};
+
+function normalizeForMatch(title) {
+  if (!title) return "";
+  let s = title.toLowerCase();
+  s = s.replace(/\s*\([^)]*\)/g, "").replace(/\s*\[[^\]]*\]/g, "");
+  s = s.replace(/[\-–—:._'"!?]/g, " ");
+  const words = s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => ROMAN_NUMERALS[w] || w);
+  return words.join(" ");
+}
+
+function extractSequelNumber(normalized) {
+  const tokens = normalized.split(/\s+/);
+  for (const t of tokens) {
+    if (/^[0-9]+$/.test(t)) {
+      return t;
+    }
+    const match = t.match(/[a-z]+([0-9]+)$/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function findBestMatch(items, cleanTitle, targetPlatform) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+
+  const cleanNorm = normalizeForMatch(cleanTitle);
+  const cleanNum = extractSequelNumber(cleanNorm);
+
+  let best = null;
+  let bestScore = -1;
+
+  for (const item of items) {
+    if (!item.name) continue;
+    const itemNorm = normalizeForMatch(item.name);
+    const itemNum = extractSequelNumber(itemNorm);
+
+    // Hard constraint: Sequel numbers must strictly match
+    if (cleanNum !== itemNum) {
+      continue;
+    }
+
+    let titleScore = 0;
+    if (itemNorm === cleanNorm) {
+      titleScore = 100;
+    } else if (
+      itemNorm.startsWith(cleanNorm + " ") ||
+      cleanNorm.startsWith(itemNorm + " ")
+    ) {
+      titleScore = 50;
+    } else {
+      const cleanWords = cleanNorm.split(" ");
+      const itemWords = itemNorm.split(" ");
+      const matchingWords = cleanWords.filter((w) => itemWords.includes(w));
+      if (
+        matchingWords.length > 0 &&
+        matchingWords.length >= Math.ceil(cleanWords.length / 2)
+      ) {
+        titleScore = 20 * matchingWords.length;
+      }
+    }
+
+    if (titleScore === 0) {
+      continue;
+    }
+
+    let score = titleScore;
+    const platformMatch =
+      targetPlatform &&
+      Array.isArray(item.platforms) &&
+      item.platforms.includes(targetPlatform);
+
+    if (platformMatch) score += 40;
+    if (item.category === 0) score += 10;
+    if (item.category === 5) score -= 30;
+    if (item.cover?.image_id) score += 5;
+    if (item.first_release_date) score += 5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  }
+
+  if (bestScore < 40) return null;
+  return best;
+}
+
 async function getTwitchToken() {
   if (!CLIENT_ID || !CLIENT_SECRET) return null;
   try {
@@ -480,7 +580,7 @@ async function fetchSteamGridDbLogo(cleanTitle) {
     );
     if (!sRes.ok) return null;
     const sData = await sRes.json();
-    const game = sData?.data?.[0];
+    const game = sData?.data ? findBestMatch(sData.data, cleanTitle) : null;
     if (!game?.id) return null;
 
     const lRes = await fetch(`https://www.steamgriddb.com/api/v2/logos/game/${game.id}`, {
@@ -504,7 +604,7 @@ async function fetchSteamGridDbCover(cleanTitle) {
     );
     if (!sRes.ok) return null;
     const sData = await sRes.json();
-    const game = sData?.data?.[0];
+    const game = sData?.data ? findBestMatch(sData.data, cleanTitle) : null;
     if (!game?.id) return null;
 
     const gRes = await fetch(
@@ -1365,7 +1465,7 @@ async function main() {
         } else {
           const pId = item.config.igdbId;
           if (clean && pId) {
-            q = `search "${clean}"; fields name, summary, cover.image_id, screenshots.image_id, videos.video_id, platforms, genres.name, keywords.name, themes.name; where platforms = [${pId}]; limit 1;`;
+            q = `search "${clean}"; fields name, summary, cover.image_id, screenshots.image_id, videos.video_id, platforms, category, genres.name, keywords.name, themes.name; where platforms = [${pId}]; limit 15;`;
           }
         }
 
@@ -1384,8 +1484,8 @@ async function main() {
           } else if (res.ok) {
             const list = await res.json();
             if (list.length > 0) {
-              igdbData = list[0];
-              if (dbPool) {
+              igdbData = item.igdbId ? list[0] : findBestMatch(list, clean, item.config.igdbId);
+              if (igdbData && dbPool) {
                 const kws = [
                   ...(Array.isArray(igdbData.keywords) ? igdbData.keywords.map((k) => k.name) : []),
                   ...(Array.isArray(igdbData.themes) ? igdbData.themes.map((t) => t.name) : []),
