@@ -34,6 +34,7 @@ export async function GET(
         developer: metadata.developer,
         publisher: metadata.publisher,
         genres: metadata.genres,
+        tags: metadata.keywords,
         story: metadata.summary || undefined,
       });
       // Also update under decoded ID in case of subtle encoding differences
@@ -43,6 +44,7 @@ export async function GET(
           developer: metadata.developer,
           publisher: metadata.publisher,
           genres: metadata.genres,
+          tags: metadata.keywords,
           story: metadata.summary || undefined,
         });
       }

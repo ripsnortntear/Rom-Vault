@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **IGDB Keyword & Thematic Search Tags**: Added `keywords` column to MariaDB `game_metadata` and updated metadata downloaders (`scripts/download-metadata.mjs`, `src/lib/igdb.ts`) to ingest IGDB keywords and themes directly into `game.tags`. Games can now be found by conceptual search terms (e.g., "golf", "skateboarding", "tennis", "zombies") even if those terms do not appear in the game's title or description.
+- **Full Database Keyword Backfill**: Created `scripts/backfill-keywords.mjs` (`npm run sync-keywords`) and enriched 6,463 catalog titles in MariaDB with canonical IGDB keywords and themes.
+- **Search Matching Across Metadata Fields**: Expanded search filtering across genres, developer, publisher, and tags in `RetroLibraryClient.tsx`.
+
 ---
 
 ## [0.1.1] - 2026-11-03

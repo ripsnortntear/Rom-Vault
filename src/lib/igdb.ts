@@ -8,6 +8,7 @@ export interface IgdbGameMetadata {
   releaseDate: number | null;
   summary: string | null;
   genres: string[];
+  keywords: string[];
   developer: string | null;
   publisher: string | null;
   igdbId: number | null;
@@ -95,7 +96,7 @@ export async function getAllCachedMetadataMap(): Promise<Map<string, IgdbGameMet
   const map = new Map<string, IgdbGameMetadata>();
   try {
     const rows = await query<any>(
-      "SELECT id, system, clean_title, year, release_date, summary, genres, developer, publisher, igdb_id FROM game_metadata"
+      "SELECT id, system, clean_title, year, release_date, summary, genres, keywords, developer, publisher, igdb_id FROM game_metadata"
     );
 
     for (const r of rows) {
@@ -106,7 +107,8 @@ export async function getAllCachedMetadataMap(): Promise<Map<string, IgdbGameMet
         year: r.year,
         releaseDate: r.release_date ? Number(r.release_date) : null,
         summary: r.summary,
-        genres: r.genres ? r.genres.split(",").map((g: string) => g.trim()) : [],
+        genres: r.genres ? r.genres.split(",").map((g: string) => g.trim()).filter(Boolean) : [],
+        keywords: r.keywords ? r.keywords.split(",").map((k: string) => k.trim()).filter(Boolean) : [],
         developer: r.developer,
         publisher: r.publisher,
         igdbId: r.igdb_id,
@@ -144,7 +146,7 @@ export async function resolveGameMetadata(
   // 1. Check database first
   try {
     const rows = await query<any>(
-      "SELECT id, system, clean_title, year, release_date, summary, genres, developer, publisher, igdb_id FROM game_metadata WHERE id = ? LIMIT 1",
+      "SELECT id, system, clean_title, year, release_date, summary, genres, keywords, developer, publisher, igdb_id FROM game_metadata WHERE id = ? LIMIT 1",
       [id]
     );
     if (rows.length > 0) {
@@ -156,7 +158,8 @@ export async function resolveGameMetadata(
         year: r.year,
         releaseDate: r.release_date ? Number(r.release_date) : null,
         summary: r.summary,
-        genres: r.genres ? r.genres.split(",").map((g: string) => g.trim()) : [],
+        genres: r.genres ? r.genres.split(",").map((g: string) => g.trim()).filter(Boolean) : [],
+        keywords: r.keywords ? r.keywords.split(",").map((k: string) => k.trim()).filter(Boolean) : [],
         developer: r.developer,
         publisher: r.publisher,
         igdbId: r.igdb_id,
@@ -174,7 +177,7 @@ export async function resolveGameMetadata(
   const targetPlatform = IGDB_PLATFORM_MAP[system.toLowerCase()] ?? null;
 
   try {
-    const apicalypseQuery = `search "${clean}"; fields name, first_release_date, platforms, category, summary, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher; limit 20;`;
+    const apicalypseQuery = `search "${clean}"; fields name, first_release_date, platforms, category, summary, genres.name, keywords.name, themes.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher; limit 20;`;
 
     const res = await fetch("https://api.igdb.com/v4/games", {
       method: "POST",
@@ -313,6 +316,11 @@ export async function resolveGameMetadata(
       ? match.genres.map((g: any) => g.name).filter(Boolean)
       : [];
 
+    const keywordList: string[] = [
+      ...(Array.isArray(match.keywords) ? match.keywords.map((k: any) => k.name) : []),
+      ...(Array.isArray(match.themes) ? match.themes.map((t: any) => t.name) : []),
+    ].filter(Boolean);
+
     const meta: IgdbGameMetadata = {
       id,
       system,
@@ -321,6 +329,7 @@ export async function resolveGameMetadata(
       releaseDate: match.first_release_date ?? null,
       summary: match.summary ?? null,
       genres: genreList,
+      keywords: keywordList,
       developer: devName,
       publisher: pubName,
       igdbId: match.id ?? null,
@@ -328,13 +337,14 @@ export async function resolveGameMetadata(
 
     // Save to database
     await execute(
-      `INSERT INTO game_metadata (id, system, clean_title, year, release_date, summary, genres, developer, publisher, igdb_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO game_metadata (id, system, clean_title, year, release_date, summary, genres, keywords, developer, publisher, igdb_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          year = VALUES(year),
          release_date = VALUES(release_date),
          summary = VALUES(summary),
          genres = VALUES(genres),
+         keywords = VALUES(keywords),
          developer = VALUES(developer),
          publisher = VALUES(publisher),
          igdb_id = VALUES(igdb_id)`,
@@ -346,6 +356,7 @@ export async function resolveGameMetadata(
         meta.releaseDate,
         meta.summary,
         meta.genres.join(", "),
+        meta.keywords.join(", "),
         meta.developer,
         meta.publisher,
         meta.igdbId,

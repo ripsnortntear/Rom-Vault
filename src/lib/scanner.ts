@@ -530,6 +530,13 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
             if (meta.developer) game.developer = meta.developer;
             if (meta.publisher) game.publisher = meta.publisher;
             if (meta.genres && meta.genres.length > 0) game.genres = meta.genres;
+            if (meta.keywords && meta.keywords.length > 0) {
+              const tagSet = new Set(game.tags || []);
+              for (const kw of meta.keywords) {
+                if (kw) tagSet.add(kw);
+              }
+              game.tags = Array.from(tagSet);
+            }
             if (!game.story && meta.summary) game.story = meta.summary;
           }
         }
@@ -588,6 +595,13 @@ export function updateCachedGameMetadata(id: string, meta: Partial<GameItem>): v
     if (meta.developer !== undefined) game.developer = meta.developer;
     if (meta.publisher !== undefined) game.publisher = meta.publisher;
     if (meta.genres !== undefined) game.genres = meta.genres;
+    if (meta.tags && meta.tags.length > 0) {
+      const tagSet = new Set(game.tags || []);
+      for (const t of meta.tags) {
+        if (t) tagSet.add(t);
+      }
+      game.tags = Array.from(tagSet);
+    }
     if (!game.story && meta.story) game.story = meta.story;
   }
 }

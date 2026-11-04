@@ -1193,21 +1193,23 @@ async function main() {
 
   // Load known IGDB IDs from MariaDB
   let mysql;
+  let dbPool = null;
   const igdbMap = new Map();
   try {
     mysql = await import("mysql2/promise");
-    const pool = mysql.createPool({
+    dbPool = mysql.createPool({
       host: process.env.DB_HOST || "127.0.0.1",
       port: parseInt(process.env.DB_PORT || "3306", 10),
       user: process.env.DB_USER || "cfw34683",
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || "rom_vault",
+      waitForConnections: true,
+      connectionLimit: 5,
     });
 
-    const [dbRows] = await pool.query(
+    const [dbRows] = await dbPool.query(
       "SELECT id, igdb_id FROM game_metadata WHERE igdb_id IS NOT NULL"
     );
-    await pool.end();
 
     for (const row of dbRows) {
       igdbMap.set(row.id, row.igdb_id);
@@ -1359,11 +1361,11 @@ async function main() {
       try {
         let q = "";
         if (item.igdbId) {
-          q = `fields name, summary, cover.image_id, screenshots.image_id, videos.video_id; where id = ${item.igdbId}; limit 1;`;
+          q = `fields name, summary, cover.image_id, screenshots.image_id, videos.video_id, genres.name, keywords.name, themes.name; where id = ${item.igdbId}; limit 1;`;
         } else {
           const pId = item.config.igdbId;
           if (clean && pId) {
-            q = `search "${clean}"; fields name, summary, cover.image_id, screenshots.image_id, videos.video_id, platforms; where platforms = [${pId}]; limit 1;`;
+            q = `search "${clean}"; fields name, summary, cover.image_id, screenshots.image_id, videos.video_id, platforms, genres.name, keywords.name, themes.name; where platforms = [${pId}]; limit 1;`;
           }
         }
 
@@ -1381,7 +1383,39 @@ async function main() {
             await sleep(5000);
           } else if (res.ok) {
             const list = await res.json();
-            if (list.length > 0) igdbData = list[0];
+            if (list.length > 0) {
+              igdbData = list[0];
+              if (dbPool) {
+                const kws = [
+                  ...(Array.isArray(igdbData.keywords) ? igdbData.keywords.map((k) => k.name) : []),
+                  ...(Array.isArray(igdbData.themes) ? igdbData.themes.map((t) => t.name) : []),
+                ].filter(Boolean);
+                const genres = Array.isArray(igdbData.genres)
+                  ? igdbData.genres.map((g) => g.name).filter(Boolean)
+                  : [];
+                if (kws.length > 0 || genres.length > 0 || igdbData.summary) {
+                  const gameId = `${sys}__${encodeURIComponent(base)}`;
+                  dbPool.query(
+                    `INSERT INTO game_metadata (id, system, clean_title, summary, genres, keywords, igdb_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE
+                       summary = COALESCE(VALUES(summary), summary),
+                       genres = COALESCE(VALUES(genres), genres),
+                       keywords = COALESCE(VALUES(keywords), keywords),
+                       igdb_id = COALESCE(VALUES(igdb_id), igdb_id)`,
+                    [
+                      gameId,
+                      sys,
+                      clean,
+                      igdbData.summary || null,
+                      genres.length > 0 ? genres.join(", ") : null,
+                      kws.length > 0 ? kws.join(", ") : null,
+                      igdbData.id || null,
+                    ]
+                  ).catch(() => {});
+                }
+              }
+            }
           }
         }
       } catch {}
@@ -1553,6 +1587,9 @@ async function main() {
   console.log(`    - Games Untouched:${notFoundCount}`);
   console.log("==================================================================");
   console.log("[*] Run 'npm run scan' (or click Rescan in Admin) to update catalog.");
+  if (dbPool) {
+    await dbPool.end();
+  }
 }
 
 main().catch((err) => {
