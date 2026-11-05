@@ -193,6 +193,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   const lastSyncedChecksumRef = useRef<string | null>(null);
   const hasNonBlankSaveRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
+  const hasPriorCloudSaveRef = useRef<boolean>(false);
 
   // Unified save pusher: syncs to user memory card slot or falls back to global game saves route
   const pushSaveToServer = useCallback(
@@ -831,6 +832,9 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         lastSyncedChecksumRef.current = computeSaveChecksum(cloudBuffer);
       }
       let resolvedBootSaveBuffer: Uint8Array | null = cloudBuffer;
+      const hasPriorSave = Boolean(cloudBuffer && cloudBuffer.byteLength > 0);
+      hasPriorCloudSaveRef.current = hasPriorSave;
+      console.log("[SaveSync] Prior cloud save exists in database:", hasPriorSave);
 
       if (typeof window !== "undefined") {
         const screenAny = (screen as unknown as { orientation?: { lock?: unknown } })?.orientation;
@@ -1137,9 +1141,30 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           }
         };
 
+        const dismissSaveDropzone = () => {
+          try {
+            const emu = (window as unknown as { EJS_emulator?: { elements?: { statePopupPanel?: { parentElement?: HTMLElement } } } }).EJS_emulator;
+            if (emu?.elements?.statePopupPanel?.parentElement) {
+              emu.elements.statePopupPanel.parentElement.style.display = "none";
+            }
+            const dropzones = containerRef.current?.querySelectorAll<HTMLElement>(
+              ".ejs_popup_container, .ejs_state_dropzone_container"
+            );
+            dropzones?.forEach((dz) => {
+              const text = dz.textContent?.toLowerCase() || "";
+              if (text.includes("drop save") || text.includes("drop a save")) {
+                dz.style.display = "none";
+              }
+            });
+          } catch {}
+        };
+
         window.EJS_onStart = () => {
           setBootState("running");
           applyAnalogMapping();
+          if (!hasPriorSave) {
+            dismissSaveDropzone();
+          }
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_EMU_STARTED" }, "*");
           }
@@ -1149,6 +1174,12 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           applyAnalogMapping();
           setTimeout(applyAnalogMapping, 500);
           setTimeout(applyAnalogMapping, 1500);
+          if (!hasPriorSave) {
+            dismissSaveDropzone();
+            setTimeout(dismissSaveDropzone, 100);
+            setTimeout(dismissSaveDropzone, 500);
+            setTimeout(dismissSaveDropzone, 1500);
+          }
           try {
             const activePreset =
               (typeof window !== "undefined"
@@ -1285,17 +1316,69 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     const container = containerRef.current;
     if (!container) return;
 
+    const attachDropzoneDismiss = (popup: HTMLElement) => {
+      if (popup.querySelector(".ejs_dropzone_dismiss_btn")) return;
+      const startNewGameBtn = document.createElement("button");
+      startNewGameBtn.type = "button";
+      startNewGameBtn.className = "ejs_button ejs_dropzone_dismiss_btn";
+      startNewGameBtn.innerHTML = "▶ Start New Game";
+      const onDismiss = (e?: Event) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        popup.style.display = "none";
+        const emu = (window as unknown as { EJS_emulator?: { elements?: { statePopupPanel?: { parentElement?: HTMLElement } } } }).EJS_emulator;
+        if (emu?.elements?.statePopupPanel?.parentElement) {
+          emu.elements.statePopupPanel.parentElement.style.display = "none";
+        }
+      };
+      startNewGameBtn.onclick = onDismiss;
+      startNewGameBtn.ontouchend = onDismiss;
+
+      let footer = popup.querySelector(".ejs_popup_footer");
+      if (!footer) {
+        footer = document.createElement("div");
+        footer.className = "ejs_popup_footer";
+        popup.appendChild(footer);
+      }
+      footer.appendChild(startNewGameBtn);
+    };
+
     const decoratePopup = (popup: HTMLElement) => {
       // Ignore sub-dialogs like key capture popup box
       if (popup.classList.contains("ejs_popup_box") || popup.hasAttribute("hidden")) return;
-      if (popup.querySelector(".ejs_popup_header")) return;
+
+      const text = popup.textContent?.toLowerCase() || "";
+      const isDropzone =
+        popup.classList.contains("ejs_state_dropzone_container") ||
+        text.includes("drop save") ||
+        text.includes("drop a save");
+
+      // Auto-bypass/dismiss if database confirms no prior cloud save exists
+      if (isDropzone && !hasPriorCloudSaveRef.current) {
+        popup.style.display = "none";
+        return;
+      }
+
+      if (popup.querySelector(".ejs_popup_header")) {
+        if (isDropzone && !popup.querySelector(".ejs_dropzone_dismiss_btn")) {
+          attachDropzoneDismiss(popup);
+        }
+        return;
+      }
 
       const titleEl = popup.querySelector("h4");
-      const titleText = titleEl?.textContent?.trim() || "Control Settings";
+      const titleText =
+        titleEl?.textContent?.trim() ||
+        (isDropzone ? "Cloud Save Loader" : "Control Settings");
 
       // Locate close button or handler in popup
       const closeBtnExisting = Array.from(popup.querySelectorAll<HTMLAnchorElement>(".ejs_button")).find(
-        (b) => b.textContent?.trim().toLowerCase() === "close"
+        (b) => {
+          const t = b.textContent?.trim().toLowerCase();
+          return t === "close" || t === "dismiss" || t === "start new game" || t === "play without save";
+        }
       );
 
       const handleDismiss = (e?: Event) => {
@@ -1316,8 +1399,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
       const backBtn = document.createElement("button");
       backBtn.type = "button";
       backBtn.className = "ejs_popup_back_btn";
-      backBtn.setAttribute("aria-label", "Back");
-      backBtn.innerHTML = '<span class="ejs_popup_back_arrow" aria-hidden="true">&#8249;</span> Back';
+      backBtn.setAttribute("aria-label", isDropzone ? "Dismiss" : "Back");
+      backBtn.innerHTML = isDropzone
+        ? '&#10005; Dismiss'
+        : '<span class="ejs_popup_back_arrow" aria-hidden="true">&#8249;</span> Back';
       backBtn.onclick = handleDismiss;
       backBtn.ontouchend = handleDismiss;
 
@@ -1343,16 +1428,20 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         popup.insertBefore(header, popup.firstChild);
       }
 
-      // Ensure footer wraps bottom action buttons if not already wrapped
-      if (!popup.querySelector(".ejs_popup_footer")) {
-        const buttons = Array.from(popup.children).filter((c) =>
-          c.classList.contains("ejs_button")
-        );
-        if (buttons.length > 0) {
-          const footer = document.createElement("div");
-          footer.className = "ejs_popup_footer";
-          buttons.forEach((btn) => footer.appendChild(btn));
-          popup.appendChild(footer);
+      if (isDropzone) {
+        attachDropzoneDismiss(popup);
+      } else {
+        // Ensure footer wraps bottom action buttons if not already wrapped
+        if (!popup.querySelector(".ejs_popup_footer")) {
+          const buttons = Array.from(popup.children).filter((c) =>
+            c.classList.contains("ejs_button")
+          );
+          if (buttons.length > 0) {
+            const footer = document.createElement("div");
+            footer.className = "ejs_popup_footer";
+            buttons.forEach((btn) => footer.appendChild(btn));
+            popup.appendChild(footer);
+          }
         }
       }
     };
@@ -1692,6 +1781,32 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           background-color: rgba(255, 255, 255, 0.15) !important;
           border: 1px solid rgba(255, 255, 255, 0.25) !important;
           color: #e4e4e7 !important;
+        }
+
+        /* Save Dropzone Container & Prominent Dismiss Button */
+        #mobile-emulator-container .ejs_state_dropzone_container {
+          backdrop-filter: blur(16px) !important;
+          -webkit-backdrop-filter: blur(16px) !important;
+          background: rgba(9, 9, 12, 0.94) !important;
+        }
+
+        #mobile-emulator-container .ejs_dropzone_dismiss_btn {
+          background-color: #4f46e5 !important;
+          color: #ffffff !important;
+          font-size: 15px !important;
+          font-weight: 700 !important;
+          min-height: 44px !important;
+          padding: 10px 24px !important;
+          border-radius: 12px !important;
+          box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
+          touch-action: manipulation !important;
+          cursor: pointer !important;
+          border: none !important;
+        }
+
+        #mobile-emulator-container .ejs_dropzone_dismiss_btn:active {
+          background-color: #4338ca !important;
+          transform: scale(0.97) !important;
         }
       `}</style>
 

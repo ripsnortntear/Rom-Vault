@@ -107,4 +107,34 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
     expect(cssContent).toContain("calc(env(safe-area-inset-bottom,0px) + 8px)");
     expect(cssContent).toContain("flex:1 1 auto");
   });
+
+  it("automatically bypasses or dismisses save dropzone overlay when no prior save exists", () => {
+    const viewContent = fs.readFileSync(mobileViewPath, "utf-8");
+    const jsContent = fs.readFileSync(emulatorJsPath, "utf-8");
+    const cssContent = fs.readFileSync(emulatorCssPath, "utf-8");
+
+    // Tracks prior save in database
+    expect(viewContent).toContain("hasPriorCloudSaveRef");
+    expect(viewContent).toContain("hasPriorSave");
+
+    // Automatically bypasses dropzone if no prior save exists
+    expect(viewContent).toContain("isDropzone && !hasPriorCloudSaveRef.current");
+    expect(viewContent).toContain("dismissSaveDropzone");
+
+    // Prominent Start New Game button for mobile viewports
+    expect(viewContent).toContain("ejs_dropzone_dismiss_btn");
+    expect(viewContent).toContain("Start New Game");
+
+    // emulator.min.js provides dismiss actions to statePopupPanel
+    expect(jsContent).toContain("ejs_state_dropzone_container");
+    expect(jsContent).toContain("Start New Game");
+    expect(jsContent).toContain("Play Without Save");
+
+    // Synthetic mobile dragenter ignored
+    expect(jsContent).toContain("ontouchstart");
+
+    // CSS styles for dropzone container and prominent button
+    expect(cssContent).toContain(".ejs_state_dropzone_container");
+    expect(cssContent).toContain(".ejs_dropzone_dismiss_btn");
+  });
 });
