@@ -130,4 +130,20 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
     expect(cssContent).toContain(".ejs_state_dropzone_container{display:none!important");
     expect(viewContent).toContain("#mobile-emulator-container .ejs_state_dropzone_container");
   });
+
+  it("enforces display: none for pre-initialized dialogs so 2P rooms, cheats, and controls never pop up on launch", () => {
+    const viewContent = fs.readFileSync(mobileViewPath, "utf-8");
+    const cssContent = fs.readFileSync(emulatorCssPath, "utf-8");
+
+    // CSS strictly honors display: none so pre-created menus (Controls, Cheats, Netplay) do not pop up on game start
+    expect(viewContent).toContain('.ejs_popup_container[style*="display: none"]');
+    expect(viewContent).toContain("display: none !important");
+    expect(cssContent).toContain('.ejs_popup_container[style*="display: none"]');
+    expect(cssContent).toContain("display:none!important");
+
+    // Only unhidden popups receive display: flex
+    expect(viewContent).toContain(
+      '#mobile-emulator-container .ejs_popup_container:not([style*="display: none"])'
+    );
+  });
 });

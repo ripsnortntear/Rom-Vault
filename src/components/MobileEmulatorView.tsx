@@ -1366,9 +1366,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         }
         popup.style.display = "none";
         popup.style.pointerEvents = "none";
-        try {
-          popup.remove();
-        } catch {}
       };
 
       const header = document.createElement("div");
@@ -1607,7 +1604,6 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           width: 100% !important;
           height: 100% !important;
           max-height: 100% !important;
-          display: flex !important;
           flex-direction: column !important;
           background: rgba(10, 10, 14, 0.96) !important;
           backdrop-filter: blur(12px) !important;
@@ -1615,6 +1611,20 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           z-index: 9999 !important;
           overflow: hidden !important;
           box-sizing: border-box !important;
+        }
+
+        /* Enforce display: none for pre-initialized hidden dialogs (Controls, Cheats, Netplay) */
+        #mobile-emulator-container .ejs_popup_container[style*="display: none"],
+        #mobile-emulator-container .ejs_popup_container[style*="display:none"],
+        #mobile-emulator-container .ejs_popup_container[hidden] {
+          display: none !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
+
+        /* Only render visible when explicitly opened by user via hamburger menu / buttons */
+        #mobile-emulator-container .ejs_popup_container:not([style*="display: none"]):not([style*="display:none"]):not([hidden]) {
+          display: flex !important;
         }
 
         #mobile-emulator-container .ejs_popup_header {
