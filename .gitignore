@@ -26,6 +26,7 @@
 audit-report*.txt
 contributions/
 .metadata_cache.json*
+Screenshot*.png
 
 # debug
 npm-debug.log*

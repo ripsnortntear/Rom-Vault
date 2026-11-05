@@ -97,15 +97,15 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
 
     // View styling protects footer and buttons with safe-area
     expect(viewContent).toContain(".ejs_popup_footer");
-    expect(viewContent).toContain("calc(env(safe-area-inset-bottom, 0px) + 8px)");
+    expect(viewContent).toContain("calc(env(safe-area-inset-bottom, 0px) + 20px)");
 
     // JS createPopup wraps action buttons in ejs_popup_footer
     expect(jsContent).toContain("ejs_popup_footer");
 
     // CSS defines flex layout preventing body overflow from pushing footer off-screen
     expect(cssContent).toContain(".ejs_popup_footer");
-    expect(cssContent).toContain("calc(env(safe-area-inset-bottom,0px) + 8px)");
-    expect(cssContent).toContain("flex:1 1 auto");
+    expect(cssContent).toContain("calc(env(safe-area-inset-bottom,0px) + 20px)");
+    expect(cssContent).toContain("flex:1 1 0%");
   });
 
   it("permanently suppresses desktop save state dropzone on mobile and preserves native in-game saves", () => {

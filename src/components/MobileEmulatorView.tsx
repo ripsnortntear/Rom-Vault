@@ -1413,6 +1413,21 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           popup.appendChild(footer);
         }
       }
+
+      // Guarantee immediate touch response for footer action buttons
+      popup.querySelectorAll<HTMLElement>(".ejs_popup_footer .ejs_button").forEach((btn) => {
+        if (!btn.dataset.touchBound) {
+          btn.dataset.touchBound = "true";
+          btn.addEventListener(
+            "touchend",
+            (e) => {
+              e.preventDefault();
+              btn.click();
+            },
+            { passive: false }
+          );
+        }
+      });
     };
 
     // Decorate any existing popups already rendered
@@ -1701,15 +1716,17 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           transform: scale(0.97) !important;
         }
 
-        #mobile-emulator-container .ejs_popup_body {
-          flex: 1 1 auto !important;
+        #mobile-emulator-container .ejs_popup_body,
+        #mobile-emulator-container .ejs_control_body {
+          flex: 1 1 0% !important;
           height: auto !important;
           min-height: 0 !important;
-          max-height: none !important;
+          max-height: 100% !important;
           width: 100% !important;
           overflow-y: auto !important;
           -webkit-overflow-scrolling: touch !important;
-          padding: 12px 16px !important;
+          overscroll-behavior: contain !important;
+          padding: 12px 16px 24px !important;
           box-sizing: border-box !important;
         }
 
@@ -1718,24 +1735,25 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           flex-wrap: wrap !important;
           align-items: center !important;
           justify-content: center !important;
-          gap: 10px !important;
+          gap: 12px !important;
           width: 100% !important;
           flex-shrink: 0 !important;
           margin-top: auto !important;
-          padding: 10px 16px max(14px, calc(env(safe-area-inset-bottom, 0px) + 8px)) 16px !important;
+          padding: 12px 16px max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px)) 16px !important;
           background: rgba(18, 18, 24, 0.98) !important;
-          border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+          border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
           box-sizing: border-box !important;
           z-index: 20 !important;
         }
 
         #mobile-emulator-container .ejs_button,
         #mobile-emulator-container .ejs_popup_container .ejs_button {
-          border-radius: 0.375rem !important;
-          font-size: 0.875rem !important;
-          font-weight: 600 !important;
-          min-height: 38px !important;
-          padding: 0.5rem 1.1rem !important;
+          border-radius: 8px !important;
+          font-size: 15px !important;
+          font-weight: 700 !important;
+          min-height: 44px !important;
+          min-width: 80px !important;
+          padding: 10px 20px !important;
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
