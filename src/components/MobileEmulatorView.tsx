@@ -1279,6 +1279,98 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     } catch {}
   };
 
+  // Safe navigation decorator: ensures controller configuration and menu popups
+  // contain accessible header dismiss controls (Back / Close) and lift action buttons above mobile safe-areas
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const decoratePopup = (popup: HTMLElement) => {
+      // Ignore sub-dialogs like key capture popup box
+      if (popup.classList.contains("ejs_popup_box") || popup.hasAttribute("hidden")) return;
+      if (popup.querySelector(".ejs_popup_header")) return;
+
+      const titleEl = popup.querySelector("h4");
+      const titleText = titleEl?.textContent?.trim() || "Control Settings";
+
+      // Locate close button or handler in popup
+      const closeBtnExisting = Array.from(popup.querySelectorAll<HTMLAnchorElement>(".ejs_button")).find(
+        (b) => b.textContent?.trim().toLowerCase() === "close"
+      );
+
+      const handleDismiss = (e?: Event) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (closeBtnExisting) {
+          closeBtnExisting.click();
+        } else {
+          popup.style.display = "none";
+        }
+      };
+
+      const header = document.createElement("div");
+      header.className = "ejs_popup_header";
+
+      const backBtn = document.createElement("button");
+      backBtn.type = "button";
+      backBtn.className = "ejs_popup_back_btn";
+      backBtn.setAttribute("aria-label", "Back");
+      backBtn.innerHTML = '<span class="ejs_popup_back_arrow" aria-hidden="true">&#8249;</span> Back';
+      backBtn.onclick = handleDismiss;
+      backBtn.ontouchend = handleDismiss;
+
+      const title = document.createElement("h4");
+      title.className = "ejs_popup_title";
+      title.textContent = titleText;
+
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "ejs_popup_close_btn";
+      closeBtn.setAttribute("aria-label", "Close");
+      closeBtn.innerHTML = "&#10005;";
+      closeBtn.onclick = handleDismiss;
+      closeBtn.ontouchend = handleDismiss;
+
+      header.appendChild(backBtn);
+      header.appendChild(title);
+      header.appendChild(closeBtn);
+
+      if (titleEl) {
+        titleEl.replaceWith(header);
+      } else {
+        popup.insertBefore(header, popup.firstChild);
+      }
+
+      // Ensure footer wraps bottom action buttons if not already wrapped
+      if (!popup.querySelector(".ejs_popup_footer")) {
+        const buttons = Array.from(popup.children).filter((c) =>
+          c.classList.contains("ejs_button")
+        );
+        if (buttons.length > 0) {
+          const footer = document.createElement("div");
+          footer.className = "ejs_popup_footer";
+          buttons.forEach((btn) => footer.appendChild(btn));
+          popup.appendChild(footer);
+        }
+      }
+    };
+
+    // Decorate any existing popups already rendered
+    container.querySelectorAll<HTMLElement>(".ejs_popup_container").forEach(decoratePopup);
+
+    const observer = new MutationObserver(() => {
+      container.querySelectorAll<HTMLElement>(".ejs_popup_container").forEach(decoratePopup);
+    });
+
+    observer.observe(container, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   if (isMobileDevice && isDesktopOnlySystem(game.system)) {
     return <MobileDesktopRequired game={game} />;
   }
@@ -1442,6 +1534,164 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
 
         #mobile-emulator-container .ejs_virtualGamepad_top .b_r {
           right: max(16px, env(safe-area-inset-right, 0px)) !important;
+        }
+
+        /* Modal Overlay & Controller Mapping Menu Styling */
+        #mobile-emulator-container .ejs_popup_container {
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          max-height: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          background: rgba(10, 10, 14, 0.96) !important;
+          backdrop-filter: blur(12px) !important;
+          -webkit-backdrop-filter: blur(12px) !important;
+          z-index: 9999 !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_header {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          width: 100% !important;
+          min-height: 48px !important;
+          padding: max(8px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px)) !important;
+          background: rgba(18, 18, 24, 0.98) !important;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+          flex-shrink: 0 !important;
+          box-sizing: border-box !important;
+          gap: 8px !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_back_btn {
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 4px !important;
+          background: rgba(99, 102, 241, 0.18) !important;
+          border: 1px solid rgba(99, 102, 241, 0.4) !important;
+          color: #a5b4fc !important;
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          border-radius: 8px !important;
+          padding: 6px 12px !important;
+          min-height: 36px !important;
+          cursor: pointer !important;
+          touch-action: manipulation !important;
+          flex-shrink: 0 !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_back_btn:active {
+          background: rgba(99, 102, 241, 0.35) !important;
+          color: #ffffff !important;
+          transform: scale(0.97) !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_title,
+        #mobile-emulator-container .ejs_popup_container h4 {
+          color: #f4f4f5 !important;
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          text-align: center !important;
+          flex: 1 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_close_btn {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: 36px !important;
+          height: 36px !important;
+          background: rgba(255, 255, 255, 0.1) !important;
+          border: 1px solid rgba(255, 255, 255, 0.2) !important;
+          color: #e4e4e7 !important;
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          border-radius: 8px !important;
+          cursor: pointer !important;
+          touch-action: manipulation !important;
+          flex-shrink: 0 !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_close_btn:active {
+          background: rgba(255, 255, 255, 0.2) !important;
+          color: #ffffff !important;
+          transform: scale(0.97) !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_body {
+          flex: 1 1 auto !important;
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          width: 100% !important;
+          overflow-y: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          padding: 12px 16px !important;
+          box-sizing: border-box !important;
+        }
+
+        #mobile-emulator-container .ejs_popup_footer {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 10px !important;
+          width: 100% !important;
+          flex-shrink: 0 !important;
+          margin-top: auto !important;
+          padding: 10px 16px max(14px, calc(env(safe-area-inset-bottom, 0px) + 8px)) 16px !important;
+          background: rgba(18, 18, 24, 0.98) !important;
+          border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+          box-sizing: border-box !important;
+          z-index: 20 !important;
+        }
+
+        #mobile-emulator-container .ejs_button,
+        #mobile-emulator-container .ejs_popup_container .ejs_button {
+          border-radius: 0.375rem !important;
+          font-size: 0.875rem !important;
+          font-weight: 600 !important;
+          min-height: 38px !important;
+          padding: 0.5rem 1.1rem !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background-color: rgba(var(--ejs-primary-color, 99, 102, 241), 1) !important;
+          margin: 4px 6px !important;
+          color: #fff !important;
+          touch-action: manipulation !important;
+          cursor: pointer !important;
+          text-decoration: none !important;
+        }
+
+        #mobile-emulator-container .ejs_control_set_button {
+          touch-action: manipulation !important;
+          min-height: 32px !important;
+          min-width: 50px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border-radius: 6px !important;
+          font-weight: 600 !important;
+        }
+
+        #mobile-emulator-container .ejs_control_cancel_button {
+          margin-left: 8px !important;
+          background-color: rgba(255, 255, 255, 0.15) !important;
+          border: 1px solid rgba(255, 255, 255, 0.25) !important;
+          color: #e4e4e7 !important;
         }
       `}</style>
 
