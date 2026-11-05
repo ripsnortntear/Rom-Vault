@@ -1286,6 +1286,16 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-black overflow-hidden select-none">
       <style>{`
+        :root {
+          --ejs-virtual-pad-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(180px, 24vh, 260px));
+        }
+
+        @media (orientation: landscape) {
+          :root {
+            --ejs-virtual-pad-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + 24px);
+          }
+        }
+
         #mobile-emulator-container {
           display: flex !important;
           align-items: center !important;
@@ -1294,14 +1304,62 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           height: 100% !important;
           position: relative !important;
           margin: 0 auto !important;
+          overflow: hidden !important;
         }
 
-        #mobile-emulator-container canvas {
-          display: block !important;
-          margin: auto !important;
-          max-width: 100% !important;
-          max-height: 100% !important;
-          object-fit: contain !important;
+        /* Portrait Canvas Scaling: Restrict canvas parent area to the upper viewport above lifted controls */
+        @media (orientation: portrait) {
+          #mobile-emulator-container .ejs_canvas_parent,
+          #mobile-emulator-container #ejs_parent .ejs_canvas_parent {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: calc(var(--ejs-virtual-pad-bottom-offset) + 140px) !important;
+            width: 100% !important;
+            height: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 8px !important;
+            box-sizing: border-box !important;
+          }
+
+          #mobile-emulator-container canvas,
+          #mobile-emulator-container .ejs_canvas {
+            display: block !important;
+            margin: auto !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            object-fit: contain !important;
+          }
+        }
+
+        /* Landscape Canvas Scaling: Occupy full height with controls flanking in horizontal pillarboxes */
+        @media (orientation: landscape) {
+          #mobile-emulator-container .ejs_canvas_parent,
+          #mobile-emulator-container #ejs_parent .ejs_canvas_parent {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+          }
+
+          #mobile-emulator-container canvas,
+          #mobile-emulator-container .ejs_canvas {
+            display: block !important;
+            margin: auto !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            object-fit: contain !important;
+          }
         }
 
         #mobile-emulator-container > div,
@@ -1313,6 +1371,77 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         #mobile-emulator-container #ejs_start_button,
         #mobile-emulator-container .ejs_start_btn {
           display: none !important;
+        }
+
+        /* Virtual Gamepad Deck Layout & Touch Isolation */
+        #mobile-emulator-container .ejs_virtualGamepad_parent,
+        .ejs_virtualGamepad_parent {
+          width: 100% !important;
+          position: absolute !important;
+          bottom: var(--ejs-virtual-pad-bottom-offset) !important;
+          left: 0 !important;
+          right: 0 !important;
+          pointer-events: none !important;
+          z-index: 30 !important;
+        }
+
+        #mobile-emulator-container .ejs_virtualGamepad_parent > *,
+        .ejs_virtualGamepad_parent > * {
+          pointer-events: auto !important;
+        }
+
+        /* Directional Controls (D-Pad & Analog Stick) */
+        #mobile-emulator-container .ejs_virtualGamepad_left,
+        .ejs_virtualGamepad_left {
+          position: absolute !important;
+          bottom: 0 !important;
+          left: max(16px, env(safe-area-inset-left, 0px)) !important;
+          width: 140px !important;
+          height: 140px !important;
+          touch-action: none !important;
+        }
+
+        /* Action Buttons (A, B, X, Y) */
+        #mobile-emulator-container .ejs_virtualGamepad_right,
+        .ejs_virtualGamepad_right {
+          position: absolute !important;
+          bottom: 0 !important;
+          right: max(16px, env(safe-area-inset-right, 0px)) !important;
+          width: 140px !important;
+          height: 140px !important;
+          touch-action: none !important;
+        }
+
+        /* Center Control Deck (Select, Start, Speed Toggles) */
+        #mobile-emulator-container .ejs_virtualGamepad_bottom,
+        .ejs_virtualGamepad_bottom {
+          position: absolute !important;
+          bottom: -45px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          margin-left: 0 !important;
+          height: 32px !important;
+          width: 140px !important;
+          touch-action: none !important;
+        }
+
+        /* Upper Deck (L, R, Z Shoulders) */
+        #mobile-emulator-container .ejs_virtualGamepad_top,
+        .ejs_virtualGamepad_top {
+          position: absolute !important;
+          bottom: 145px !important;
+          width: 100% !important;
+          left: 0 !important;
+          right: 0 !important;
+          touch-action: none !important;
+        }
+
+        #mobile-emulator-container .ejs_virtualGamepad_top .b_l {
+          left: max(16px, env(safe-area-inset-left, 0px)) !important;
+        }
+
+        #mobile-emulator-container .ejs_virtualGamepad_top .b_r {
+          right: max(16px, env(safe-area-inset-right, 0px)) !important;
         }
       `}</style>
 

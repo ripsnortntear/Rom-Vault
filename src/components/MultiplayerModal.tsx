@@ -1721,7 +1721,7 @@ export function MultiplayerModal({
                     </button>
 
                     {/* Interactive Player 2 Controller Deck (Bottom Bar for Touch/Mouse + Visual Feedback) */}
-                    <div className="w-full shrink-0 bg-zinc-950/95 border-t border-white/10 px-4 py-2.5 flex flex-wrap items-center justify-between gap-4">
+                    <div className="w-full shrink-0 bg-zinc-950/95 border-t border-white/10 px-4 py-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] flex flex-wrap items-center justify-between gap-4">
                       {/* D-Pad */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 mr-2">
