@@ -12,18 +12,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const { searchParams } = new URL(request.url);
     const gameId = searchParams.get("gameId");
-    const saveType = searchParams.get("saveType") || "savestate";
+    const saveType = searchParams.get("saveType") || "savegame";
     const slotIndex = parseInt(searchParams.get("slotIndex") || "0", 10);
 
     if (!gameId) {
       return NextResponse.json({ error: "Missing gameId" }, { status: 400 });
     }
 
-    // 1. Authoritative lookup in user_game_saves
+    // 1. Authoritative lookup in user_game_saves (with priority-ranked fallback for slot 0)
     try {
       const [rows] = await db.query<any>(
-        "SELECT save_data, checksum, file_size, updated_at FROM user_game_saves WHERE user_id = ? AND game_id = ? AND save_type = ? AND slot_index = ? LIMIT 1",
-        [session.userId, gameId, saveType, slotIndex]
+        slotIndex === 0
+          ? "SELECT save_data, checksum, file_size, updated_at FROM user_game_saves WHERE user_id = ? AND game_id = ? AND slot_index = 0 AND (save_type = ? OR save_type IN ('savegame', 'memory_card', 'savestate')) ORDER BY CASE WHEN save_type = ? THEN 1 WHEN save_type = 'savegame' THEN 2 WHEN save_type = 'memory_card' THEN 3 ELSE 4 END LIMIT 1"
+          : "SELECT save_data, checksum, file_size, updated_at FROM user_game_saves WHERE user_id = ? AND game_id = ? AND save_type = ? AND slot_index = ? LIMIT 1",
+        slotIndex === 0
+          ? [session.userId, gameId, saveType, saveType]
+          : [session.userId, gameId, saveType, slotIndex]
       );
 
       if (Array.isArray(rows) && rows.length > 0 && rows[0].save_data) {
@@ -85,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const contentType = request.headers.get("content-type") || "";
     let gameId: string | null = null;
-    let saveType = "savestate";
+    let saveType = "savegame";
     let slotIndex = 0;
     let buffer: Buffer | null = null;
 
@@ -104,7 +108,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Raw octet-stream support
       const { searchParams } = new URL(request.url);
       gameId = searchParams.get("gameId");
-      if (searchParams.has("saveType")) saveType = searchParams.get("saveType") || "savestate";
+      if (searchParams.has("saveType")) saveType = searchParams.get("saveType") || "savegame";
       if (searchParams.has("slotIndex")) slotIndex = parseInt(searchParams.get("slotIndex") || "0", 10);
 
       const arrayBuf = await request.arrayBuffer();

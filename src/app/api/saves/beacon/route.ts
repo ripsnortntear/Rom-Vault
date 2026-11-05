@@ -29,7 +29,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const saveType =
-      body.saveType || (emulatorType === "tabstationtoo" ? "savestate" : "memory_card");
+      body.saveType || (emulatorType === "tabstationtoo" ? "savestate" : "savegame");
     const buffer = Buffer.from(saveData, "base64");
     if (buffer.length === 0) {
       return NextResponse.json({ error: "Zero-byte save data" }, { status: 400 });

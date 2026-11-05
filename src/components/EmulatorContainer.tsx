@@ -24,7 +24,7 @@ export default function EmulatorContainer({
     try {
       const saveBytes = SaveSyncService.captureSaveFromEmulator(gameId, emulatorType);
       if (saveBytes && saveBytes.byteLength > 0) {
-        const saveType = emulatorType === "tabstationtoo" ? "savestate" : "memory_card";
+        const saveType = emulatorType === "tabstationtoo" ? "savestate" : "savegame";
         await SaveSyncService.uploadCloudSave(gameId, saveBytes, saveType, 0);
         console.log("[EmulatorContainer] Auto-save successfully synced to MariaDB database.");
       }
@@ -52,7 +52,7 @@ export default function EmulatorContainer({
         setStatusMessage("Fetching cloud save data...");
 
         // 1. Determine save type based on system/emulator
-        const saveType = emulatorType === "tabstationtoo" ? "savestate" : "memory_card";
+        const saveType = emulatorType === "tabstationtoo" ? "savestate" : "savegame";
 
         // 2. Pull authoritative save from MariaDB via API
         const cloudSave = await SaveSyncService.fetchCloudSave(gameId, saveType, 0);

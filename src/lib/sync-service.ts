@@ -113,7 +113,7 @@ export const SaveSyncService = {
    */
   async fetchCloudSave(
     gameId: string,
-    saveType: string = "savestate",
+    saveType: string = "savegame",
     slotIndex: number = 0
   ): Promise<CloudSaveResult | null> {
     try {
@@ -156,7 +156,7 @@ export const SaveSyncService = {
   async uploadCloudSave(
     gameId: string,
     saveDataBytes: Uint8Array,
-    saveType: string = "savestate",
+    saveType: string = "savegame",
     slotIndex: number = 0
   ): Promise<{ success: boolean; checksum?: string } | null> {
     try {
@@ -294,7 +294,8 @@ export const SaveSyncService = {
     userId: string,
     gameId: string,
     emulatorType: string,
-    saveBytes?: Uint8Array | null
+    saveBytes?: Uint8Array | null,
+    saveType?: string
   ): boolean {
     if (typeof navigator === "undefined" || typeof navigator.sendBeacon !== "function") {
       return false;
@@ -310,7 +311,7 @@ export const SaveSyncService = {
         gameId,
         emulatorType,
         saveData: base64Data,
-        saveType: emulatorType === "tabstationtoo" ? "savestate" : "memory_card",
+        saveType: saveType || (emulatorType === "tabstationtoo" ? "savestate" : "savegame"),
         slotIndex: 0,
       });
 

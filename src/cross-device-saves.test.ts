@@ -152,6 +152,38 @@ describe("Universal Cross-Device Save Synchronization & Database Authority Suite
       expect(json.fileSize).toBe(sampleSave.length);
     });
 
+    it("defaults saveType to savegame for in-game saves when omitted from query", async () => {
+      mockGetCurrentSession.mockResolvedValue({
+        user: { id: "user-123", username: "player1", role: "user" },
+      });
+
+      const sampleSave = Buffer.from("POKEMON_RED_GBA_SRAM");
+      const sha256 = crypto.createHash("sha256").update(sampleSave).digest("hex");
+
+      mockDbQuery.mockResolvedValueOnce([
+        [
+          {
+            save_data: sampleSave,
+            checksum: sha256,
+            file_size: sampleSave.length,
+            updated_at: "2026-11-04T12:00:00Z",
+          },
+        ],
+      ]);
+
+      const req = new NextRequest("http://localhost:39254/api/saves?gameId=gba__PokemonFireRed&slotIndex=0");
+      const res = await getSaves(req);
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.exists).toBe(true);
+      expect(json.checksum).toBe(sha256);
+      expect(mockDbQuery).toHaveBeenCalledWith(
+        expect.stringContaining("save_type = ?"),
+        expect.arrayContaining(["user-123", "gba__PokemonFireRed", "savegame", "savegame"])
+      );
+    });
+
     it("falls back to legacy user_saves when record not found in user_game_saves", async () => {
       mockGetCurrentSession.mockResolvedValue({
         user: { id: "user-123", username: "player1", role: "user" },

@@ -108,33 +108,26 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
     expect(cssContent).toContain("flex:1 1 auto");
   });
 
-  it("automatically bypasses or dismisses save dropzone overlay when no prior save exists", () => {
+  it("permanently suppresses desktop save state dropzone on mobile and preserves native in-game saves", () => {
     const viewContent = fs.readFileSync(mobileViewPath, "utf-8");
     const jsContent = fs.readFileSync(emulatorJsPath, "utf-8");
     const cssContent = fs.readFileSync(emulatorCssPath, "utf-8");
 
-    // Tracks prior save in database
-    expect(viewContent).toContain("hasPriorCloudSaveRef");
-    expect(viewContent).toContain("hasPriorSave");
+    // Native in-game save synchronization uses "savegame"
+    expect(viewContent).toContain('SaveSyncService.fetchCloudSave(cleanGameId, "savegame", 0)');
+    expect(viewContent).toContain('SaveSyncService.uploadCloudSave(cleanGameId, uint8, "savegame", 0)');
 
-    // Automatically bypasses dropzone if no prior save exists
-    expect(viewContent).toContain("isDropzone && !hasPriorCloudSaveRef.current");
+    // Desktop save-state dropzone is permanently suppressed on mobile viewports
+    expect(viewContent).toContain("Desktop save-state dropzone is permanently suppressed on mobile viewports");
     expect(viewContent).toContain("dismissSaveDropzone");
 
-    // Prominent Start New Game button for mobile viewports
-    expect(viewContent).toContain("ejs_dropzone_dismiss_btn");
-    expect(viewContent).toContain("Start New Game");
-
-    // emulator.min.js provides dismiss actions to statePopupPanel
-    expect(jsContent).toContain("ejs_state_dropzone_container");
-    expect(jsContent).toContain("Start New Game");
-    expect(jsContent).toContain("Play Without Save");
-
-    // Synthetic mobile dragenter ignored
+    // Synthetic touch dragenter ignored on touch / mobile devices
     expect(jsContent).toContain("ontouchstart");
+    expect(jsContent).toContain("navigator.maxTouchPoints");
 
-    // CSS styles for dropzone container and prominent button
-    expect(cssContent).toContain(".ejs_state_dropzone_container");
-    expect(cssContent).toContain(".ejs_dropzone_dismiss_btn");
+    // CSS suppresses dropzone on mobile / coarse pointer screens
+    expect(cssContent).toContain("@media(max-width:1024px),(pointer:coarse)");
+    expect(cssContent).toContain(".ejs_state_dropzone_container{display:none!important");
+    expect(viewContent).toContain("#mobile-emulator-container .ejs_state_dropzone_container");
   });
 });
