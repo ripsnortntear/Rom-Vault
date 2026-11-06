@@ -1739,7 +1739,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           width: 100% !important;
           flex-shrink: 0 !important;
           margin-top: auto !important;
-          padding: 12px 16px max(35px, calc(env(safe-area-inset-bottom, 0px) + 25px)) 16px !important;
+          padding: 14px 16px max(50px, calc(env(safe-area-inset-bottom, 0px) + 40px)) 16px !important;
           background: rgba(18, 18, 24, 0.98) !important;
           border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
           box-sizing: border-box !important;
