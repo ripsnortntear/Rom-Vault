@@ -140,6 +140,18 @@ const PLATFORM_CONFIG = {
     isDisc: false,
     label: "Super Game Boy",
   },
+  mame: {
+    igdbId: 52,
+    libretroRepo: "MAME",
+    isDisc: false,
+    label: "MAME Arcade",
+  },
+  arcade: {
+    igdbId: 52,
+    libretroRepo: "MAME",
+    isDisc: false,
+    label: "Arcade",
+  },
 };
 
 // Help manual generator
@@ -198,10 +210,11 @@ INTEGRATED APIS & DATA SOURCES:
   2. Libretro CDN: Authentic title screens (Named_Titles), 2D box art, screenshots
   3. SteamGridDB: Official transparent PNG wheel logos and high-res grids
   4. TheGamesDB: Community game overviews, developer/publisher metadata, fallback covers
+  5. ArcadeDB (Arcade Italia): Dedicated MAME/Arcade flyers, marquees, title screens, in-game snaps & video previews
 
-SUPPORTED CONSOLE SYSTEMS:
+SUPPORTED CONSOLE & ARCADE SYSTEMS:
   ps2, psx, gamecube, dreamcast, saturn, n64, snes, nes,
-  gba, gbc, gb, sgb, genesis, sega32x, sms, sgg
+  gba, gbc, gb, sgb, genesis, sega32x, sms, sgg, mame, arcade
 
 EXAMPLES:
   # Interactively find and delete leftover orphan artwork for PS2 (prompts Y/N):
@@ -632,6 +645,40 @@ async function fetchTheGamesDbData(cleanTitle) {
     if (!game) return null;
     return {
       overview: game.overview || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ArcadeDB (Arcade Italia): Dedicated MAME metadata, flyer, marquee, snap & video provider
+async function fetchArcadeDbData(romBaseName) {
+  if (!romBaseName) return null;
+  const cleanName = romBaseName.replace(/\.zip$/i, "").trim().toLowerCase();
+  try {
+    const url = `https://adb.arcadeitalia.net/service_scraper.php?ajax=query_mame&lang=en&game_name=${encodeURIComponent(cleanName)}`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "ROM-Vault-Metadata-Engine/1.0",
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const item = data?.result?.[0];
+    if (!item) return null;
+
+    return {
+      title: item.short_title || item.title || null,
+      manufacturer: item.manufacturer || null,
+      year: item.year || null,
+      genre: item.genre || null,
+      overview: item.history || null,
+      flyerUrl: item.url_image_flyer || null,
+      snapUrl: item.url_image_ingame || null,
+      titleUrl: item.url_image_title || null,
+      marqueeUrl: item.url_image_marquee || null,
+      cabinetUrl: item.url_image_cabinet || null,
+      videoUrl: item.url_video_shortplay_hd || item.url_video_shortplay || null,
     };
   } catch {
     return null;
@@ -1451,9 +1498,18 @@ async function main() {
 
     const sys = item.system;
     const base = item.baseName;
-    const clean = cleanTitleForSearch(base);
+    let clean = cleanTitleForSearch(base);
     const artBaseDir = path.join(STORAGE_ROOT, sys, "artwork");
     const downloadedForGame = [];
+
+    // For MAME / Arcade, query ArcadeDB first to get canonical title, flyer, marquee, snaps, and video
+    let arcadeDbData = null;
+    if (sys.toLowerCase() === "mame" || sys.toLowerCase() === "arcade" || item.config.igdbId === 52) {
+      arcadeDbData = await fetchArcadeDbData(base);
+      if (arcadeDbData?.title) {
+        clean = cleanTitleForSearch(arcadeDbData.title);
+      }
+    }
 
     // 1. Fetch IGDB Metadata (if token available and needed)
     let igdbData = null;
@@ -1521,7 +1577,27 @@ async function main() {
       } catch {}
     }
 
-    // --- Asset A: 2D Box Art ---
+    // Save ArcadeDB metadata to MariaDB if IGDB did not populate
+    if (arcadeDbData && !igdbData && dbPool) {
+      const gameId = `${sys}__${encodeURIComponent(base)}`;
+      dbPool.query(
+        `INSERT INTO game_metadata (id, system, clean_title, summary, genres)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           clean_title = COALESCE(VALUES(clean_title), clean_title),
+           summary = COALESCE(VALUES(summary), summary),
+           genres = COALESCE(VALUES(genres), genres)`,
+        [
+          gameId,
+          sys,
+          arcadeDbData.title || clean,
+          arcadeDbData.overview || null,
+          arcadeDbData.genre || null,
+        ]
+      ).catch(() => {});
+    }
+
+    // --- Asset A: 2D Box Art / Flyer ---
     if (item.needs.boxart) {
       let saved = false;
       const targetPath = path.join(artBaseDir, "artwork_front", `${base}.jpg`);
@@ -1536,17 +1612,30 @@ async function main() {
         }
       }
 
-      // 2. Fallback: Libretro Named_Boxarts
-      if (!saved && item.config.libretroRepo) {
-        const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Boxarts/${encodeURIComponent(base)}.png`;
-        const bytes = await downloadBinary(lrUrl, path.join(artBaseDir, "artwork_front", `${base}.png`));
+      // 2. ArcadeDB Flyer (Arcade / MAME)
+      if (!saved && arcadeDbData?.flyerUrl) {
+        const bytes = await downloadBinary(arcadeDbData.flyerUrl, targetPath);
         if (bytes) {
-          downloadedForGame.push("2D Box Art (Libretro)");
+          downloadedForGame.push("Flyer (ArcadeDB)");
           saved = true;
         }
       }
 
-      // 3. Fallback: SteamGridDB Grids
+      // 3. Fallback: Libretro Named_Boxarts
+      if (!saved && item.config.libretroRepo) {
+        const lrCandidates = [arcadeDbData?.title, base].filter(Boolean);
+        for (const cand of lrCandidates) {
+          const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Boxarts/${encodeURIComponent(cand)}.png`;
+          const bytes = await downloadBinary(lrUrl, path.join(artBaseDir, "artwork_front", `${base}.png`));
+          if (bytes) {
+            downloadedForGame.push("2D Box Art (Libretro)");
+            saved = true;
+            break;
+          }
+        }
+      }
+
+      // 4. Fallback: SteamGridDB Grids
       if (!saved && STEAMGRIDDB_API_KEY) {
         const sgdbCover = await fetchSteamGridDbCover(clean);
         if (sgdbCover) {
@@ -1555,6 +1644,19 @@ async function main() {
             downloadedForGame.push("2D Box Art (SteamGridDB)");
             saved = true;
           }
+        }
+      }
+    }
+
+    // --- Asset A2: 3D Box Art / Cabinet Photo ---
+    if (item.needs.boxart3d) {
+      let saved = false;
+      const targetPath = path.join(artBaseDir, "artwork_3d", `${base}.png`);
+      if (arcadeDbData?.cabinetUrl) {
+        const bytes = await downloadBinary(arcadeDbData.cabinetUrl, targetPath);
+        if (bytes) {
+          downloadedForGame.push("Cabinet Photo (ArcadeDB)");
+          saved = true;
         }
       }
     }
@@ -1575,13 +1677,26 @@ async function main() {
         }
       }
 
-      // 2. Fallback: Libretro Named_Snaps
-      if (!saved && item.config.libretroRepo) {
-        const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Snaps/${encodeURIComponent(base)}.png`;
-        const bytes = await downloadBinary(lrUrl, path.join(artBaseDir, "screenshot", `${base}.png`));
+      // 2. ArcadeDB Snap (Arcade / MAME)
+      if (!saved && arcadeDbData?.snapUrl) {
+        const bytes = await downloadBinary(arcadeDbData.snapUrl, targetPath);
         if (bytes) {
-          downloadedForGame.push("Screenshot (Libretro)");
+          downloadedForGame.push("Screenshot (ArcadeDB)");
           saved = true;
+        }
+      }
+
+      // 3. Fallback: Libretro Named_Snaps
+      if (!saved && item.config.libretroRepo) {
+        const lrCandidates = [arcadeDbData?.title, base].filter(Boolean);
+        for (const cand of lrCandidates) {
+          const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Snaps/${encodeURIComponent(cand)}.png`;
+          const bytes = await downloadBinary(lrUrl, path.join(artBaseDir, "screenshot", `${base}.png`));
+          if (bytes) {
+            downloadedForGame.push("Screenshot (Libretro)");
+            saved = true;
+            break;
+          }
         }
       }
     }
@@ -1593,15 +1708,28 @@ async function main() {
 
       // 1. Try Libretro Named_Titles
       if (item.config.libretroRepo) {
-        const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Titles/${encodeURIComponent(base)}.png`;
-        const bytes = await downloadBinary(lrUrl, targetPath);
+        const lrCandidates = [arcadeDbData?.title, base].filter(Boolean);
+        for (const cand of lrCandidates) {
+          const lrUrl = `https://raw.githubusercontent.com/libretro-thumbnails/${item.config.libretroRepo}/master/Named_Titles/${encodeURIComponent(cand)}.png`;
+          const bytes = await downloadBinary(lrUrl, targetPath);
+          if (bytes) {
+            downloadedForGame.push("Title Screen (Libretro)");
+            saved = true;
+            break;
+          }
+        }
+      }
+
+      // 2. ArcadeDB Title Screen
+      if (!saved && arcadeDbData?.titleUrl) {
+        const bytes = await downloadBinary(arcadeDbData.titleUrl, targetPath);
         if (bytes) {
-          downloadedForGame.push("Title Screen (Libretro)");
+          downloadedForGame.push("Title Screen (ArcadeDB)");
           saved = true;
         }
       }
 
-      // 2. Fallback: Second IGDB screenshot
+      // 3. Fallback: Second IGDB screenshot
       if (!saved && Array.isArray(igdbData?.screenshots) && igdbData.screenshots.length > 1) {
         const shotId = igdbData.screenshots[1].image_id;
         const shotUrl = `https://images.igdb.com/igdb/image/upload/t_720p/${shotId}.jpg`;
@@ -1613,11 +1741,12 @@ async function main() {
       }
     }
 
-    // --- Asset D: Transparent Wheel Logos (SteamGridDB) ---
+    // --- Asset D: Transparent Wheel Logos / Marquees ---
     if (item.needs.logos) {
       let saved = false;
       const targetPath = path.join(artBaseDir, "logo", `${base}.png`);
 
+      // 1. SteamGridDB Logo
       if (STEAMGRIDDB_API_KEY) {
         const logoUrl = await fetchSteamGridDbLogo(clean);
         if (logoUrl) {
@@ -1628,11 +1757,23 @@ async function main() {
           }
         }
       }
+
+      // 2. ArcadeDB Marquee
+      if (!saved && arcadeDbData?.marqueeUrl) {
+        const bytes = await downloadBinary(arcadeDbData.marqueeUrl, targetPath);
+        if (bytes) {
+          downloadedForGame.push("Cabinet Marquee (ArcadeDB)");
+          saved = true;
+        }
+      }
     }
 
     // --- Asset E: Stories / Plot Summaries ---
     if (item.needs.stories) {
       let storyText = igdbData?.summary || null;
+      if (!storyText && arcadeDbData?.overview) {
+        storyText = arcadeDbData.overview;
+      }
       if (!storyText && THEGAMESDB_API_KEY) {
         const tgdb = await fetchTheGamesDbData(clean);
         if (tgdb?.overview) storyText = tgdb.overview;
@@ -1652,6 +1793,15 @@ async function main() {
       const folder = item.needs.discOrCart;
       const targetPath = path.join(artBaseDir, folder, `${base}.png`);
       // Libretro has titles and snaps; media repos checked
+    }
+
+    // --- Asset G: Preview Video ---
+    if (item.needs.videos && arcadeDbData?.videoUrl) {
+      const targetPath = path.join(artBaseDir, "video", `${base}.mp4`);
+      const bytes = await downloadBinary(arcadeDbData.videoUrl, targetPath);
+      if (bytes) {
+        downloadedForGame.push("Video Preview (ArcadeDB)");
+      }
     }
 
     // Output Result
