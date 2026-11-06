@@ -97,14 +97,14 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
 
     // View styling protects footer and buttons with safe-area
     expect(viewContent).toContain(".ejs_popup_footer");
-    expect(viewContent).toContain("calc(env(safe-area-inset-bottom, 0px) + 50px)");
+    expect(viewContent).toContain("calc(env(safe-area-inset-bottom, 0px) + 63px)");
 
     // JS createPopup wraps action buttons in ejs_popup_footer
     expect(jsContent).toContain("ejs_popup_footer");
 
     // CSS defines flex layout preventing body overflow from pushing footer off-screen
     expect(cssContent).toContain(".ejs_popup_footer");
-    expect(cssContent).toContain("calc(env(safe-area-inset-bottom,0px) + 50px)");
+    expect(cssContent).toContain("calc(env(safe-area-inset-bottom,0px) + 63px)");
     expect(cssContent).toContain("flex:1 1 0%");
   });
 
