@@ -67,6 +67,8 @@ declare global {
     EJS_saveFileNames?: string[];
     EJS_onStart?: () => void;
     EJS_onGameStart?: () => void;
+    EJS_onLinkPacket?: (kind: number, data: number, fast: number) => void;
+    EJS_pollLinkPackets?: () => void;
     EJS_coreSettings?: Record<string, string>;
     EJS_defaultOptions?: Record<string, string>;
     EJS_defaultControls?: Record<number, Record<number, { value?: string; value2?: string }>>;
@@ -557,6 +559,37 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         return;
       }
 
+      // Game Boy / Game Boy Color Virtual Link Cable packet from peer over WebRTC
+      if (e.data?.type === "VAULT_LINK_PACKET_IN") {
+        const { kind, data, fast } = e.data;
+        try {
+          const emu = window.EJS_emulator as any;
+          const mod = emu?.gameManager?.Module || (window as any).Module;
+          if (mod && typeof mod._ejs_link_cable_receive === "function") {
+            mod._ejs_link_cable_receive(Number(kind) || 0, Number(data) || 0, Number(fast) || 0);
+          }
+        } catch (err) {
+          console.warn("[LinkCable] Error receiving link packet in iframe:", err);
+        }
+        return;
+      }
+
+      // Explicit trigger to start link cable session
+      if (e.data?.type === "VAULT_LINK_CABLE_CONNECT") {
+        const isHost = Boolean(e.data?.isHost);
+        try {
+          const emu = window.EJS_emulator as any;
+          const mod = emu?.gameManager?.Module || (window as any).Module;
+          if (mod && typeof mod._ejs_link_cable_start === "function") {
+            console.log(`[LinkCable] Connecting link cable via message (${isHost ? "Host" : "Guest"})`);
+            mod._ejs_link_cable_start(isHost ? 1 : 0);
+          }
+        } catch (err) {
+          console.warn("[LinkCable] Error connecting link cable via message:", err);
+        }
+        return;
+      }
+
       if (e.data?.type === "VAULT_SET_SHADER") {
         const shader = e.data.shader;
         if (typeof shader === "string") {
@@ -903,6 +936,21 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         window.EJS_audioBufferSize = 2048;
         window.EJS_sampleRate = 44100;
 
+        // Game Boy & Game Boy Color Virtual Link Cable outbound packet bridge
+        window.EJS_onLinkPacket = (kind: number, data: number, fast: number) => {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(
+              {
+                type: "VAULT_LINK_PACKET_OUT",
+                kind,
+                data,
+                fast,
+              },
+              "*"
+            );
+          }
+        };
+
         // Configure dual-controller mappings for Port 0 (Player 1) and Port 1 (Player 2)
         window.EJS_defaultControls = {
           0: {
@@ -1172,6 +1220,26 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_EMU_STARTED" }, "*");
           }
+
+          // Check for Game Boy online virtual link cable mode
+          try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mpRole = urlParams.get("multiplayer");
+            if (mpRole === "link-host" || mpRole === "link-guest") {
+              const isHost = mpRole === "link-host";
+              const emu = window.EJS_emulator as any;
+              const mod = emu?.gameManager?.Module || (window as any).Module;
+              if (mod && typeof mod._ejs_link_cable_start === "function") {
+                console.log(`[LinkCable] Gambatte Virtual Link Cable started (${isHost ? "Host" : "Guest"})`);
+                mod._ejs_link_cable_start(isHost ? 1 : 0);
+              }
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: "VAULT_LINK_CABLE_READY", role: mpRole }, "*");
+              }
+            }
+          } catch (e) {
+            console.warn("[LinkCable] Auto-start check error:", e);
+          }
         };
         window.EJS_onGameStart = () => {
           setBootState("running");
@@ -1194,6 +1262,26 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
           } catch {}
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: "VAULT_EMU_STARTED" }, "*");
+          }
+
+          // Check for Game Boy online virtual link cable mode
+          try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mpRole = urlParams.get("multiplayer");
+            if (mpRole === "link-host" || mpRole === "link-guest") {
+              const isHost = mpRole === "link-host";
+              const emu = window.EJS_emulator as any;
+              const mod = emu?.gameManager?.Module || (window as any).Module;
+              if (mod && typeof mod._ejs_link_cable_start === "function") {
+                console.log(`[LinkCable] Gambatte Virtual Link Cable started (${isHost ? "Host" : "Guest"})`);
+                mod._ejs_link_cable_start(isHost ? 1 : 0);
+              }
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: "VAULT_LINK_CABLE_READY", role: mpRole }, "*");
+              }
+            }
+          } catch (e) {
+            console.warn("[LinkCable] Auto-start check error:", e);
           }
 
           try {

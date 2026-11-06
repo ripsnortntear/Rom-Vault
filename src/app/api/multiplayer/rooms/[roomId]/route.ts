@@ -5,6 +5,7 @@ import {
   getRoomChat,
   joinRoom,
   selectRoomGame,
+  selectGuestRoomGame,
   togglePlayerReady,
   startMultiplayerSession,
   returnRoomToLobby,
@@ -109,6 +110,19 @@ export async function PATCH(
         systemId: typeof body.systemId === "string" ? body.systemId : "snes",
         gameId: typeof body.gameId === "string" ? body.gameId : null,
         gameTitle: typeof body.gameTitle === "string" ? body.gameTitle : null,
+        gameFileName: typeof body.gameFileName === "string" ? body.gameFileName : null,
+        gameCoverUrl: typeof body.gameCoverUrl === "string" ? body.gameCoverUrl : null,
+      });
+      const chat = await getRoomChat(roomId, 80);
+      return NextResponse.json({ success: true, room, chat });
+    }
+
+    if (action === "select_guest_game") {
+      const room = await selectGuestRoomGame({
+        roomId,
+        guestId: playerId,
+        gameId: typeof body.gameId === "string" ? body.gameId : "",
+        gameTitle: typeof body.gameTitle === "string" ? body.gameTitle : "",
         gameFileName: typeof body.gameFileName === "string" ? body.gameFileName : null,
         gameCoverUrl: typeof body.gameCoverUrl === "string" ? body.gameCoverUrl : null,
       });

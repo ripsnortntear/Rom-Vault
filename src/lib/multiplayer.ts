@@ -12,14 +12,19 @@ import {
   SUPPORTED_MULTIPLAYER_SYSTEMS,
   UNSUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
+  isLinkCableSystem,
+  getMultiplayerModeForSystem,
+  LinkCablePacket,
 } from "@/types/multiplayer";
 
 export {
   SUPPORTED_MULTIPLAYER_SYSTEMS,
   UNSUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
+  isLinkCableSystem,
+  getMultiplayerModeForSystem,
 };
-export type { SupportedMultiplayerSystem };
+export type { SupportedMultiplayerSystem, LinkCablePacket };
 
 interface RoomRow {
   id: string;
@@ -30,6 +35,10 @@ interface RoomRow {
   game_title: string | null;
   game_file_name: string | null;
   game_cover_url: string | null;
+  guest_game_id?: string | null;
+  guest_game_title?: string | null;
+  guest_game_file_name?: string | null;
+  guest_game_cover_url?: string | null;
   status: RoomStatus;
   host_id: string;
   host_username: string;
@@ -109,9 +118,21 @@ export async function ensureMultiplayerInitialized(): Promise<void> {
         guest_last_seen TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        guest_game_id VARCHAR(255) NULL,
+        guest_game_title VARCHAR(255) NULL,
+        guest_game_file_name VARCHAR(255) NULL,
+        guest_game_cover_url VARCHAR(1024) NULL,
         INDEX idx_mp_status (status, updated_at DESC)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    // Self-healing columns for existing databases
+    try {
+      await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_id VARCHAR(255) NULL");
+      await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_title VARCHAR(255) NULL");
+      await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_file_name VARCHAR(255) NULL");
+      await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_cover_url VARCHAR(1024) NULL");
+    } catch {}
 
     await execute(`
       CREATE TABLE IF NOT EXISTS multiplayer_chat (
@@ -162,10 +183,15 @@ function mapRowToRoom(row: RoomRow): MultiplayerRoom {
     name: row.name,
     systemId: row.system_id,
     emulatorCore: row.emulator_core,
+    mode: isLinkCableSystem(row.system_id) ? "link-cable" : "couch",
     gameId: row.game_id,
     gameTitle: row.game_title,
     gameFileName: row.game_file_name,
     gameCoverUrl: row.game_cover_url,
+    guestGameId: row.guest_game_id || row.game_id,
+    guestGameTitle: row.guest_game_title || row.game_title,
+    guestGameFileName: row.guest_game_file_name || row.game_file_name,
+    guestGameCoverUrl: row.guest_game_cover_url || row.game_cover_url,
     status: computedStatus,
     host: {
       id: row.host_id,
@@ -509,6 +535,59 @@ export async function selectRoomGame(input: {
       message: `Host switched target console emulator to ${sysMeta.name} (${emulatorCore}).`,
     });
   }
+
+  const updated = await getRoomById(normalizedId);
+  if (!updated) throw new Error("Room not found after update.");
+  return updated;
+}
+
+/**
+ * Allow Guest in a Link Cable room to select their own Game Boy game and save
+ * (e.g. Host chooses Pokemon Red, Guest chooses Pokemon Blue).
+ */
+export async function selectGuestRoomGame(input: {
+  roomId: string;
+  guestId: string;
+  gameId: string;
+  gameTitle: string;
+  gameFileName?: string | null;
+  gameCoverUrl?: string | null;
+}): Promise<MultiplayerRoom> {
+  await ensureMultiplayerInitialized();
+  const normalizedId = input.roomId.trim().toUpperCase();
+  const existing = await getRoomById(normalizedId);
+
+  if (!existing) {
+    throw new Error("Room not found.");
+  }
+  if (!existing.guest || existing.guest.id !== input.guestId) {
+    throw new Error("Only the joined guest can choose their link cable cartridge.");
+  }
+  if (existing.mode !== "link-cable") {
+    throw new Error("Custom guest game selection is only supported in Link Cable rooms.");
+  }
+
+  await execute(
+    `UPDATE multiplayer_rooms
+     SET guest_game_id = ?, guest_game_title = ?, guest_game_file_name = ?, guest_game_cover_url = ?,
+         guest_ready = 0, guest_last_seen = NOW()
+     WHERE id = ?`,
+    [
+      input.gameId,
+      input.gameTitle,
+      input.gameFileName || null,
+      input.gameCoverUrl || null,
+      normalizedId,
+    ]
+  );
+
+  await addRoomChatMessage({
+    roomId: normalizedId,
+    senderId: "system",
+    senderName: "Link Cable System",
+    senderRole: "system",
+    message: `${existing.guest.displayName} connected cartridge: ${input.gameTitle}. Ready up to link!`,
+  });
 
   const updated = await getRoomById(normalizedId);
   if (!updated) throw new Error("Room not found after update.");

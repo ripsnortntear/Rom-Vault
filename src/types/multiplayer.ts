@@ -29,7 +29,18 @@ export type SignalMessageType =
   | "webrtc-ice"
   | "p2-input"
   | "frame-sync"
-  | "session-state";
+  | "session-state"
+  | "link-packet"
+  | "link-cable-ready";
+
+export type MultiplayerMode = "couch" | "link-cable";
+
+export interface LinkCablePacket {
+  kind: number; // 1 = master byte, 2 = slave reply byte
+  data: number; // 8-bit byte value (0-255)
+  fast: number; // CGB double-speed flag (0 or 1)
+  timestamp?: number;
+}
 
 export interface MultiplayerSignal {
   id: number;
@@ -46,10 +57,15 @@ export interface MultiplayerRoom {
   name: string;
   systemId: string;
   emulatorCore: string;
+  mode?: MultiplayerMode;
   gameId: string | null;
   gameTitle: string | null;
   gameFileName: string | null;
   gameCoverUrl: string | null;
+  guestGameId?: string | null;
+  guestGameTitle?: string | null;
+  guestGameFileName?: string | null;
+  guestGameCoverUrl?: string | null;
   status: RoomStatus;
   host: MultiplayerParticipant;
   guest: MultiplayerParticipant | null;
@@ -113,4 +129,19 @@ export function isSupportedMultiplayerSystem(systemId: string | null | undefined
   const norm = systemId.toLowerCase().trim();
   if (norm === "dreamcast" || norm === "saturn") return false;
   return SUPPORTED_MULTIPLAYER_SYSTEMS.some((sys) => sys.id === norm);
+}
+
+/**
+ * Game Boy (GB) and Game Boy Color (GBC) utilize the Virtual Link Cable protocol
+ * allowing two separate Game Boy emulator instances (each with their own ROM and save file)
+ * to communicate over WebRTC serial link cable packets.
+ */
+export function isLinkCableSystem(systemId: string | null | undefined): boolean {
+  if (!systemId) return false;
+  const norm = systemId.toLowerCase().trim();
+  return norm === "gb" || norm === "gbc";
+}
+
+export function getMultiplayerModeForSystem(systemId: string | null | undefined): MultiplayerMode {
+  return isLinkCableSystem(systemId) ? "link-cable" : "couch";
 }

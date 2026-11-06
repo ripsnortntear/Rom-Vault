@@ -23,6 +23,9 @@ import {
   MessageSquare,
   Volume2,
   VolumeX,
+  Cable,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
 import {
@@ -31,6 +34,8 @@ import {
   MultiplayerSignal,
   SUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
+  isLinkCableSystem,
+  LinkCablePacket,
 } from "@/types/multiplayer";
 import { KNOWN_SYSTEMS, getSystemMeta } from "@/lib/systems";
 import {
@@ -170,12 +175,22 @@ export function MultiplayerModal({
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLInputElement | null>(null);
   const hostIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const guestIframeRef = useRef<HTMLIFrameElement | null>(null);
   const guestVideoRef = useRef<HTMLVideoElement | null>(null);
+  const peerVideoRef = useRef<HTMLVideoElement | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const lastSignalIdRef = useRef<number>(0);
   const lastChatCountRef = useRef<number>(0);
   const pressedKeysRef = useRef<Set<string>>(new Set());
+
+  // Game Boy & Game Boy Color Link Cable mode state
+  const [linkPipExpanded, setLinkPipExpanded] = useState<boolean>(false);
+  const [linkPacketsCount, setLinkPacketsCount] = useState<number>(0);
+  const [isSelectingGuestGame, setIsSelectingGuestGame] = useState<boolean>(false);
+  const [guestGameSearchQuery, setGuestGameSearchQuery] = useState<string>("");
+
+  const isLinkMode = Boolean(activeRoom && isLinkCableSystem(activeRoom.systemId));
 
   // Filter playable games for the selected console emulator
   const systemGames = useMemo(() => {
@@ -197,6 +212,28 @@ export function MultiplayerModal({
     if (!targetId) return null;
     return allGames.find((g) => g.id === targetId) || null;
   }, [allGames, activeRoom, selectedGameId]);
+
+  const guestSystemGames = useMemo(() => {
+    if (!activeRoom) return [];
+    const q = guestGameSearchQuery.trim().toLowerCase();
+    return allGames
+      .filter((g) => g.system.toLowerCase() === activeRoom.systemId.toLowerCase())
+      .filter((g) => {
+        if (!q) return true;
+        return (
+          g.displayTitle.toLowerCase().includes(q) ||
+          g.baseName.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 120);
+  }, [allGames, activeRoom?.systemId, guestGameSearchQuery]);
+
+  const guestSelectedGameObj = useMemo(() => {
+    if (!activeRoom) return null;
+    const targetId = activeRoom.guestGameId || activeRoom.gameId;
+    if (!targetId) return null;
+    return allGames.find((g) => g.id === targetId) || null;
+  }, [allGames, activeRoom?.guestGameId, activeRoom?.gameId]);
 
   const scrollChatToBottom = useCallback((smooth = true) => {
     const el = chatContainerRef.current;
@@ -357,6 +394,21 @@ export function MultiplayerModal({
               await pc.addIceCandidate(new RTCIceCandidate(candidate));
             }
           } catch {}
+        } else if (sig.type === "link-packet") {
+          try {
+            const data = JSON.parse(sig.payload);
+            const targetWin = (role === "host" ? hostIframeRef.current : guestIframeRef.current)?.contentWindow as any;
+            targetWin?.postMessage(
+              {
+                type: "VAULT_LINK_PACKET_IN",
+                kind: data.kind,
+                data: data.data,
+                fast: data.fast,
+              },
+              "*"
+            );
+            setLinkPacketsCount((c) => c + 1);
+          } catch {}
         }
       }
     },
@@ -453,20 +505,42 @@ export function MultiplayerModal({
       };
 
       if (myRole === "host") {
-        // Create low-latency DataChannel for Player 2 controller inputs
-        const dc = pc.createDataChannel("p2-controller", { ordered: false, maxRetransmits: 0 });
+        // Create low-latency DataChannel for Player 2 controller inputs and link cable packets
+        const dc = pc.createDataChannel("p2-controller", { ordered: true });
         dataChannelRef.current = dc;
         dc.onopen = () => setConnectionState("webrtc-live");
         dc.onmessage = (ev) => {
           try {
             const msg = JSON.parse(ev.data);
-            if (typeof msg.buttonIndex === "number") {
+            if (msg.type === "link-packet") {
+              const targetWin = hostIframeRef.current?.contentWindow as any;
+              targetWin?.postMessage(
+                {
+                  type: "VAULT_LINK_PACKET_IN",
+                  kind: msg.kind,
+                  data: msg.data,
+                  fast: msg.fast,
+                },
+                "*"
+              );
+              setLinkPacketsCount((c) => c + 1);
+            } else if (typeof msg.buttonIndex === "number") {
               injectPlayer2InputOnHost(msg.buttonIndex, Boolean(msg.pressed));
             }
           } catch {}
         };
 
-        // Wait for EmulatorJS WebGL canvas inside hostIframeRef and attach captureStream(60)
+        // Host receives Guest's video track in link mode
+        pc.ontrack = (ev) => {
+          const [remoteStream] = ev.streams;
+          if (remoteStream && peerVideoRef.current) {
+            peerVideoRef.current.srcObject = remoteStream;
+            peerVideoRef.current.play().catch(() => {});
+            setConnectionState("webrtc-live");
+          }
+        };
+
+        // Wait for EmulatorJS WebGL canvas inside hostIframeRef and attach captureStream(30)
         let streamAttached = false;
         streamAttachTimer = setInterval(async () => {
           if (streamAttached) return;
@@ -477,7 +551,7 @@ export function MultiplayerModal({
             ) as HTMLCanvasElement | null;
             if (canvas && typeof canvas.captureStream === "function") {
               streamAttached = true;
-              const stream = canvas.captureStream(60);
+              const stream = canvas.captureStream(30);
               stream.getTracks().forEach((track) => pc.addTrack(track, stream));
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
@@ -489,9 +563,10 @@ export function MultiplayerModal({
         // Guest receives video stream and opens DataChannel
         pc.ontrack = (ev) => {
           const [remoteStream] = ev.streams;
-          if (remoteStream && guestVideoRef.current) {
-            guestVideoRef.current.srcObject = remoteStream;
-            guestVideoRef.current.play().catch(() => {});
+          const targetVideo = isLinkMode ? peerVideoRef.current : guestVideoRef.current;
+          if (remoteStream && targetVideo) {
+            targetVideo.srcObject = remoteStream;
+            targetVideo.play().catch(() => {});
             setConnectionState("webrtc-live");
           }
         };
@@ -500,7 +575,44 @@ export function MultiplayerModal({
           const dc = ev.channel;
           dataChannelRef.current = dc;
           dc.onopen = () => setConnectionState("webrtc-live");
+          dc.onmessage = (msgEv) => {
+            try {
+              const msg = JSON.parse(msgEv.data);
+              if (msg.type === "link-packet") {
+                const targetWin = guestIframeRef.current?.contentWindow as any;
+                targetWin?.postMessage(
+                  {
+                    type: "VAULT_LINK_PACKET_IN",
+                    kind: msg.kind,
+                    data: msg.data,
+                    fast: msg.fast,
+                  },
+                  "*"
+                );
+                setLinkPacketsCount((c) => c + 1);
+              }
+            } catch {}
+          };
         };
+
+        // In link-cable mode, Guest also captures and sends their canvas back to Host
+        if (isLinkMode) {
+          let guestStreamAttached = false;
+          streamAttachTimer = setInterval(async () => {
+            if (guestStreamAttached) return;
+            try {
+              const iframeDoc = guestIframeRef.current?.contentDocument;
+              const canvas = iframeDoc?.querySelector(
+                "#mobile-emulator-container canvas"
+              ) as HTMLCanvasElement | null;
+              if (canvas && typeof canvas.captureStream === "function") {
+                guestStreamAttached = true;
+                const stream = canvas.captureStream(30);
+                stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+              }
+            } catch {}
+          }, 1000);
+        }
       }
     }
 
@@ -652,6 +764,51 @@ export function MultiplayerModal({
     };
   }, [isOpen, activeRoom, myRole, injectPlayerInputOnHost, sendGuestControllerInput]);
 
+  // Listen for outbound virtual Link Cable packets emitted from the local EmulatorJS iframe
+  useEffect(() => {
+    if (!isOpen || !activeRoom || activeRoom.status !== "playing" || !isLinkMode) {
+      return;
+    }
+
+    const handleWindowMessage = (e: MessageEvent) => {
+      if (e.data?.type === "VAULT_LINK_PACKET_OUT") {
+        const { kind, data, fast } = e.data;
+        const payloadObj = {
+          type: "link-packet",
+          kind,
+          data,
+          fast,
+          timestamp: Date.now(),
+        };
+        const payloadStr = JSON.stringify(payloadObj);
+
+        // Try direct WebRTC DataChannel first for sub-millisecond latency
+        const dc = dataChannelRef.current;
+        if (dc && dc.readyState === "open") {
+          try {
+            dc.send(payloadStr);
+            setLinkPacketsCount((c) => c + 1);
+            return;
+          } catch {}
+        }
+
+        // Fallback to server signaling queue if WebRTC DataChannel isn't open yet
+        const targetRole = myRole === "host" ? "guest" : "host";
+        postSignal(activeRoom.id, targetRole, "link-packet", {
+          kind,
+          data,
+          fast,
+        });
+        setLinkPacketsCount((c) => c + 1);
+      }
+    };
+
+    window.addEventListener("message", handleWindowMessage);
+    return () => {
+      window.removeEventListener("message", handleWindowMessage);
+    };
+  }, [isOpen, activeRoom?.id, activeRoom?.status, isLinkMode, myRole, postSignal]);
+
   // Room Actions
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -777,6 +934,37 @@ export function MultiplayerModal({
       if (data.success && data.room) {
         setActiveRoom(data.room);
         if (Array.isArray(data.chat)) setChatMessages(data.chat);
+      }
+    } catch {}
+  };
+
+  const handleSelectGuestGame = async (game: GameItem | null) => {
+    if (!activeRoom || myRole !== "guest" || !game) return;
+    try {
+      const res = await fetch(
+        `/roms/api/multiplayer/rooms/${encodeURIComponent(activeRoom.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "select_guest_game",
+            playerId: clientId,
+            gameId: game.id,
+            gameTitle: game.displayTitle || game.baseName,
+            gameFileName: game.romFileName,
+            gameCoverUrl:
+              game.media.artworkFront ||
+              game.media.artwork3d ||
+              game.media.screenTitle ||
+              null,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data.success && data.room) {
+        setActiveRoom(data.room);
+        if (Array.isArray(data.chat)) setChatMessages(data.chat);
+        setIsSelectingGuestGame(false);
       }
     } catch {}
   };
@@ -1284,7 +1472,9 @@ export function MultiplayerModal({
                     )}
                   </div>
                   <p className="text-[11px] text-zinc-400 mt-1">
-                    Selects target emulator &amp; ROM • Runs primary Libretro core
+                    {isLinkMode
+                      ? "Selects Game Boy system • Runs Player 1 handheld instance"
+                      : "Selects target emulator & ROM • Runs primary Libretro core"}
                   </p>
                 </div>
 
@@ -1298,7 +1488,7 @@ export function MultiplayerModal({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="px-2 py-0.5 rounded bg-indigo-600/20 border border-indigo-500/40 text-[10px] font-black uppercase tracking-wider text-indigo-300">
-                      Controller Port 2 • Challenger
+                      {isLinkMode ? "Link Port 2 • Challenger" : "Controller Port 2 • Challenger"}
                     </span>
                     {activeRoom.guest ? (
                       activeRoom.guest.isReady ? (
@@ -1325,7 +1515,9 @@ export function MultiplayerModal({
                         )}
                       </div>
                       <p className="text-[11px] text-zinc-400 mt-1">
-                        Bound to Libretro Port 2 controller • Synchronized stream
+                        {isLinkMode
+                          ? "Selects own Game Boy cartridge • Runs Player 2 handheld instance"
+                          : "Bound to Libretro Port 2 controller • Synchronized stream"}
                       </p>
                     </>
                   ) : (
@@ -1344,6 +1536,22 @@ export function MultiplayerModal({
 
               {/* Game & Emulator Selection Panel */}
               <div className="flex-1 flex flex-col bg-zinc-900/60 border border-white/10 rounded-2xl p-5">
+                {isLinkMode && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 text-xs text-indigo-200 mb-4">
+                    <Cable className="w-5 h-5 text-indigo-400 shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-bold text-indigo-300 flex items-center gap-2">
+                        <span>Game Boy Virtual Link Cable Mode</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
+                          Independent Handhelds
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-300 mt-0.5">
+                        Each player runs their own Game Boy with their personal save file. Guest can choose any Game Boy cartridge from the library (e.g. Pokémon Red vs. Pokémon Blue) to trade and battle over the link cable!
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                   <div className="flex items-center gap-2">
                     <Tv className="w-5 h-5 text-red-400" />
@@ -1378,7 +1586,7 @@ export function MultiplayerModal({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-red-600 text-white">
-                        {getSystemMeta(activeRoom.systemId).shortLabel}
+                        {isLinkMode ? "P1 Cartridge" : getSystemMeta(activeRoom.systemId).shortLabel}
                       </span>
                       <span className="text-xs font-mono text-zinc-400">
                         Core: {activeRoom.emulatorCore}
@@ -1389,6 +1597,106 @@ export function MultiplayerModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Player 2 Cartridge Banner & Selector for Link Cable Mode */}
+                {isLinkMode && (
+                  <div className="p-3.5 rounded-xl bg-zinc-950 border border-indigo-500/30 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                        <Cable className="w-3.5 h-3.5" /> P2 Cartridge (Challenger)
+                      </span>
+                      {myRole === "guest" && (
+                        <button
+                          type="button"
+                          onClick={() => setIsSelectingGuestGame((v) => !v)}
+                          className="text-xs font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline"
+                        >
+                          {isSelectingGuestGame ? "Done Choosing" : "Change My Cartridge"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {activeRoom.guestGameCoverUrl || guestSelectedGameObj?.media.artworkFront ? (
+                        <img
+                          src={
+                            activeRoom.guestGameCoverUrl ||
+                            guestSelectedGameObj?.media.artworkFront ||
+                            ""
+                          }
+                          alt={activeRoom.guestGameTitle || "Guest Game"}
+                          className="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0 bg-zinc-900"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0">
+                          <Gamepad2 className="w-5 h-5 text-zinc-600" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-white truncate">
+                          {activeRoom.guestGameTitle || activeRoom.gameTitle || "Matching Host Game"}
+                        </div>
+                        <p className="text-[11px] text-zinc-400">
+                          {activeRoom.guestGameTitle
+                            ? "Custom cartridge chosen by Player 2"
+                            : "Matching Host cartridge (Player 2 can click 'Change My Cartridge' to pick a different ROM)"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Guest Cartridge Selector Accordion */}
+                    {isSelectingGuestGame && myRole === "guest" && (
+                      <div className="mt-3 pt-3 border-t border-white/10 flex flex-col gap-2">
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={guestGameSearchQuery}
+                            onChange={(e) => setGuestGameSearchQuery(e.target.value)}
+                            placeholder="Search Game Boy cartridges..."
+                            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white focus:outline-none focus:border-indigo-500/60"
+                          />
+                        </div>
+                        <div className="max-h-[160px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 pr-1">
+                          {guestSystemGames.map((g) => {
+                            const isSelected =
+                              (activeRoom.guestGameId || activeRoom.gameId) === g.id;
+                            return (
+                              <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => handleSelectGuestGame(g)}
+                                className={`flex items-center gap-2 p-1.5 rounded-lg border text-left transition cursor-pointer ${
+                                  isSelected
+                                    ? "bg-indigo-600/30 border-indigo-400 text-white"
+                                    : "bg-zinc-900/80 hover:bg-zinc-800 border-white/10 text-zinc-300"
+                                }`}
+                              >
+                                <div className="w-6 h-6 rounded bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                                  {g.media.artworkFront ? (
+                                    <img
+                                      src={g.media.artworkFront}
+                                      alt={g.displayTitle}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <Gamepad2 className="w-3 h-3 text-zinc-500" />
+                                  )}
+                                </div>
+                                <span className="text-xs font-semibold truncate flex-1">
+                                  {g.displayTitle}
+                                </span>
+                                {isSelected && (
+                                  <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Host Controls for changing Console Emulator and Game */}
                 {myRole === "host" ? (
@@ -1638,33 +1946,99 @@ export function MultiplayerModal({
               {/* Synchronized Status Bar */}
               <div className="shrink-0 px-4 py-2 bg-zinc-950/90 border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
-                    <Wifi className="w-3.5 h-3.5" />
-                    {connectionState === "webrtc-live"
-                      ? "WebRTC P2P Stream Active"
-                      : "Synchronized Relay Stream Active"}
+                  {isLinkMode ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold">
+                      <Cable className="w-3.5 h-3.5" />
+                      Virtual Link Cable Active ({linkPacketsCount} packets)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                      <Wifi className="w-3.5 h-3.5" />
+                      {connectionState === "webrtc-live"
+                        ? "WebRTC P2P Stream Active"
+                        : "Synchronized Relay Stream Active"}
+                    </span>
+                  )}
+                  <span className="text-zinc-300 font-semibold">
+                    <strong className="text-red-400">P1 ({activeRoom.host.displayName}):</strong>{" "}
+                    {activeRoom.gameTitle}
                   </span>
                   <span className="text-zinc-300 font-semibold">
-                    <strong className="text-red-400">P1 (Port 1):</strong>{" "}
-                    {activeRoom.host.displayName}
-                  </span>
-                  <span className="text-zinc-300 font-semibold">
-                    <strong className="text-indigo-400">P2 (Port 2):</strong>{" "}
-                    {activeRoom.guest?.displayName || "Player 2"}
+                    <strong className="text-indigo-400">P2 ({activeRoom.guest?.displayName || "Player 2"}):</strong>{" "}
+                    {isLinkMode ? (activeRoom.guestGameTitle || activeRoom.gameTitle) : "Controller Port 2"}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   <span className="text-[11px] text-zinc-400">
-                    Controls: Arrows = D-Pad • Z = A • X = B • A = X • S = Y • Enter = Start
+                    Controls: Arrows = D-Pad • Z = A • X = B • Enter = Start • Shift = Select
                   </span>
                 </div>
               </div>
 
-              {/* Game Viewport: Host renders unified EmulatorJS instance; Guest renders synchronized stream + P2 controller */}
+              {/* Game Viewport: Link Cable Mode renders independent handhelds with Cable Cam PIP; Couch mode renders unified host + guest stream */}
               <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
-                {myRole === "host" && activeRoom.gameId ? (
+                {isLinkMode ? (
+                  <div className="relative w-full h-full bg-black flex items-center justify-center">
+                    {myRole === "host" && activeRoom.gameId ? (
+                      <iframe
+                        ref={hostIframeRef}
+                        src={`/roms/play/${encodeURIComponent(activeRoom.gameId)}?autostart=1&multiplayer=link-host`}
+                        title={activeRoom.gameTitle || "Host Game Boy"}
+                        className="w-full h-full border-0"
+                        allow="autoplay; fullscreen; gamepad"
+                      />
+                    ) : (
+                      <iframe
+                        ref={guestIframeRef}
+                        src={`/roms/play/${encodeURIComponent(activeRoom.guestGameId || activeRoom.gameId || "")}?autostart=1&multiplayer=link-guest`}
+                        title={activeRoom.guestGameTitle || activeRoom.gameTitle || "Guest Game Boy"}
+                        className="w-full h-full border-0"
+                        allow="autoplay; fullscreen; gamepad"
+                      />
+                    )}
+
+                    {/* Floating Picture-in-Picture "Cable Cam" showing partner's Game Boy */}
+                    <div
+                      className={`absolute top-4 right-4 z-20 rounded-xl overflow-hidden border border-white/20 bg-zinc-950/95 shadow-2xl transition-all duration-300 ${
+                        linkPipExpanded ? "w-80 h-72" : "w-48 h-44"
+                      }`}
+                    >
+                      <div className="px-2.5 py-1.5 bg-zinc-900 border-b border-white/10 flex items-center justify-between text-[11px] font-bold text-white select-none">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Cable className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="truncate">
+                            {myRole === "host"
+                              ? `${activeRoom.guest?.displayName || "Player 2"}'s Screen`
+                              : `${activeRoom.host.displayName}'s Screen`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setLinkPipExpanded((v) => !v)}
+                          className="p-1 hover:bg-white/10 rounded text-zinc-300 hover:text-white cursor-pointer"
+                          title={linkPipExpanded ? "Minimize" : "Expand"}
+                        >
+                          {linkPipExpanded ? (
+                            <Minimize2 className="w-3.5 h-3.5" />
+                          ) : (
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="relative w-full h-[calc(100%-28px)] bg-black flex items-center justify-center">
+                        <video
+                          ref={peerVideoRef}
+                          playsInline
+                          autoPlay
+                          muted
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : myRole === "host" && activeRoom.gameId ? (
                   <iframe
                     ref={hostIframeRef}
                     src={`/roms/play/${encodeURIComponent(activeRoom.gameId)}?autostart=1&multiplayer=host`}
