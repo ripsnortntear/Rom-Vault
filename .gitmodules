@@ -2,3 +2,7 @@
 	path = vendor/TabStationToo
 	url = https://github.com/TabStationToo/TabStationToo.git
 	branch = wasm
+[submodule "vendor/Gambatte-GameVault"]
+	path = vendor/Gambatte-GameVault
+	url = https://github.com/skitzellez/Gambatte-GameVault.git
+	branch = gamevault

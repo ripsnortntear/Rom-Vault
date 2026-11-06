@@ -18,7 +18,9 @@
     "audit-metadata": "node scripts/download-metadata.mjs --audit",
     "prune-orphans": "node scripts/download-metadata.mjs --prune-orphans",
     "sync-tabstationtoo": "node scripts/sync-tabstationtoo.mjs",
-    "verify-tabstationtoo": "node scripts/sync-tabstationtoo.mjs --verify"
+    "verify-tabstationtoo": "node scripts/sync-tabstationtoo.mjs --verify",
+    "sync-gambatte": "node scripts/sync-gambatte.mjs",
+    "verify-gambatte": "node scripts/sync-gambatte.mjs --verify"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -208,6 +208,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       break;
     }
 
+    case "gambatte": {
+      const subAction = body?.action || "verify";
+      args = [path.join(rootDir, "scripts", "sync-gambatte.mjs")];
+
+      if (subAction === "verify") {
+        title = "Gambatte-GameVault: Verify Integration Contracts";
+        args.push("--verify");
+      } else if (subAction === "check") {
+        title = "Gambatte-GameVault: Check Upstream Commits";
+        args.push("--check");
+      } else if (subAction === "rebuild") {
+        title = "Gambatte-GameVault: Rebuild WebAssembly Core";
+        args.push("--rebuild");
+      } else {
+        title = "Gambatte-GameVault: Pull & Sync Upstream Core";
+      }
+      break;
+    }
+
     case "sync_repo": {
       title = "Git Repository & Submodule Synchronization";
       cmd = "/var/www/html/roms/sync-repo.sh";

@@ -1,0 +1,170 @@
+diff --git a/Makefile.libretro b/Makefile.libretro
+index 1842538..d88caa8 100644
+--- a/Makefile.libretro
++++ b/Makefile.libretro
+@@ -237,6 +237,7 @@ else ifneq (,$(filter $(platform), ps3 psl1ght))
+    TARGET := $(TARGET_NAME)_libretro_$(platform).a
+    PLATFORM_DEFINES := -D__PS3__
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+    CC = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)gcc$(EXE_EXT)
+    CXX = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)g++$(EXE_EXT)
+    AR = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)ar$(EXE_EXT)
+@@ -254,6 +255,7 @@ else ifeq ($(platform), ps2)
+    CFLAGS += -G0
+    CXXFLAGS += -G0
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+    VIDEO_RGB565 = 0
+ 
+ 
+@@ -267,6 +269,7 @@ else ifeq ($(platform), psp1)
+    CFLAGS += -G0
+    CXXFLAGS += -G0
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # Vita
+ else ifeq ($(platform), vita)
+@@ -277,6 +280,7 @@ else ifeq ($(platform), vita)
+    CFLAGS += -DVITA
+    CXXFLAGS += -DVITA
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # CTR(3DS)
+ else ifeq ($(platform), ctr)
+@@ -290,6 +294,7 @@ else ifeq ($(platform), ctr)
+    CFLAGS += -fomit-frame-pointer -ffast-math
+    CXXFLAGS += $(CFLAGS)
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # DOS
+ else ifeq ($(platform), dos)
+@@ -302,6 +307,7 @@ else ifeq ($(platform), dos)
+    CFLAGS += -fomit-frame-pointer -ffast-math
+    CXXFLAGS += $(CFLAGS)
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # Xbox 360
+ else ifeq ($(platform), xenon)
+@@ -311,6 +317,7 @@ else ifeq ($(platform), xenon)
+    AR = xenon-ar$(EXE_EXT)
+    PLATFORM_DEFINES := -D__LIBXENON__
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # Nintendo Game Cube / Wii / WiiU
+ else ifneq (,$(filter $(platform), ngc wii wiiu))
+@@ -321,6 +328,7 @@ else ifneq (,$(filter $(platform), ngc wii wiiu))
+    PLATFORM_DEFINES += -DGEKKO -mcpu=750 -meabi -mhard-float
+    PLATFORM_DEFINES += -ffunction-sections -fdata-sections -D__wiiu__ -D__wut__
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+    # Nintendo WiiU
+    ifneq (,$(findstring wiiu,$(platform)))
+@@ -356,11 +364,13 @@ else ifeq ($(platform), libnx)
+     CXXFLAGS += $(ASFLAGS) $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
+     CFLAGS += -std=gnu11
+     STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # emscripten
+ else ifeq ($(platform), emscripten)
+    TARGET := $(TARGET_NAME)_libretro_$(platform).bc
+    STATIC_LINKING = 1
++   HAVE_NETWORK = 1
+ 
+ # RS90
+ else ifeq ($(platform), rs90)
+@@ -658,7 +668,7 @@ endif
+ 
+ ifeq (,$(findstring msvc,$(platform)))
+ CXXFLAGS += -fno-exceptions -fno-rtti
+-CXXFLAGS += -std=c++98
++CXXFLAGS += -std=c++11
+ else
+ CFLAGS += -D_CRT_SECURE_NO_DEPRECATE
+ CXXFLAGS += -D_CRT_SECURE_NO_DEPRECATE
+diff --git a/libgambatte/libretro/libretro.cpp b/libgambatte/libretro/libretro.cpp
+index fca1d72..ad50a2a 100644
+--- a/libgambatte/libretro/libretro.cpp
++++ b/libgambatte/libretro/libretro.cpp
+@@ -85,6 +85,51 @@ static const struct retro_netpacket_callback link_iface = {
+    "gamevault-link-1" /* both ends must speak the same packets */
+ };
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++
++static void ejs_netpacket_send_cb(int flags, const void* buf, size_t len, uint16_t client_id)
++{
++   if (!buf || len < 3) return;
++   const unsigned char* p = (const unsigned char*)buf;
++   char js[256];
++   snprintf(js, sizeof(js),
++      "if(typeof window!='undefined'){"
++      "if(window.parent&&window.parent!==window)window.parent.postMessage({type:'VAULT_LINK_PACKET_OUT',kind:%d,data:%d,fast:%d},'*');"
++      "if(window.EJS_onLinkPacket)window.EJS_onLinkPacket(%d,%d,%d);}",
++      (int)p[0], (int)p[1], (int)p[2], (int)p[0], (int)p[1], (int)p[2]);
++   emscripten_run_script(js);
++}
++
++static void ejs_netpacket_poll_cb(void)
++{
++   emscripten_run_script("if(typeof window!='undefined'&&window.EJS_pollLinkPackets)window.EJS_pollLinkPackets();");
++}
++
++extern "C" {
++EMSCRIPTEN_KEEPALIVE void ejs_link_cable_start(int is_host)
++{
++   gb_packet_serial.start(is_host ? 0 : 1, ejs_netpacket_send_cb, ejs_netpacket_poll_cb);
++   gb.setSerialIO(&gb_packet_serial);
++   if (is_host) {
++      gb_packet_serial.connect(1);
++   }
++}
++
++EMSCRIPTEN_KEEPALIVE void ejs_link_cable_receive(int kind, int data, int fast)
++{
++   unsigned char buf[3] = { (unsigned char)kind, (unsigned char)data, (unsigned char)fast };
++   gb_packet_serial.receive(buf, 3, 1);
++}
++
++EMSCRIPTEN_KEEPALIVE void ejs_link_cable_stop(void)
++{
++   gb_packet_serial.stop();
++   gb.setSerialIO(NULL);
++}
++}
++#endif
++
+ static bool libretro_supports_option_categories = false;
+ static bool libretro_supports_bitmasks          = false;
+ static bool libretro_supports_set_variable      = false;
+diff --git a/libgambatte/libretro/packet_serial.cpp b/libgambatte/libretro/packet_serial.cpp
+index 8867614..16e922f 100644
+--- a/libgambatte/libretro/packet_serial.cpp
++++ b/libgambatte/libretro/packet_serial.cpp
+@@ -1,3 +1,6 @@
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ /* Copyright (c) 2026 Skitzelles - part of Game Vault, https://github.com/skitzellez/xbox-game-vault
+  * GPL-2.0-or-later, like Gambatte.
+  *
+@@ -108,7 +111,11 @@ unsigned char PacketSerial::send(unsigned char data, bool fastCgb)
+             gambatte_log(RETRO_LOG_WARN, "[link] no answer from the other Game Boy\n");
+          return 0xFF;
+       }
++#ifdef __EMSCRIPTEN__
++      emscripten_sleep(1);
++#else
+       poll_fn_();
++#endif
+    }
+    static unsigned long count = 0;
+    static clock_t since = 0;
