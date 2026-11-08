@@ -80,9 +80,11 @@ interface SignalRow {
 }
 
 let isInitialized = false;
+let lastPruneTimestamp = 0;
 
 export function _resetMultiplayerInitForTesting(): void {
   isInitialized = false;
+  lastPruneTimestamp = 0;
 }
 
 function toIsoString(val: Date | string | null | undefined): string {
@@ -247,15 +249,92 @@ function generateRoomCode(): string {
   return code;
 }
 
-export async function listActiveRooms(): Promise<MultiplayerRoom[]> {
-  await ensureMultiplayerInitialized();
+/**
+ * Active Heartbeat Auto-Pruner:
+ * Automatically closes abandoned rooms if host hasn't polled in > 75 seconds,
+ * evicts ghost guests if guest hasn't polled in > 45 seconds,
+ * and clears stale signals (> 3 minutes).
+ * Throttled to execute at most once every 4 seconds.
+ */
+export async function pruneGhostRoomsAndPlayers(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastPruneTimestamp < 4000) {
+    return;
+  }
+  lastPruneTimestamp = now;
 
-  // Mark rooms untouched for > 45 minutes as closed
   try {
+    // 1. Close abandoned rooms where host has ghosted (> 75 seconds without heartbeat) or room untouched > 15 minutes
     await execute(
-      "UPDATE multiplayer_rooms SET status = 'closed' WHERE status != 'closed' AND updated_at < (NOW() - INTERVAL 45 MINUTE)"
+      `UPDATE multiplayer_rooms
+       SET status = 'closed'
+       WHERE status != 'closed'
+         AND (
+           host_last_seen < (NOW() - INTERVAL 75 SECOND)
+           OR updated_at < (NOW() - INTERVAL 15 MINUTE)
+         )`
+    );
+
+    // 2. Evict ghost guests who haven't polled in > 45 seconds so Slot 2 reopens
+    await execute(
+      `UPDATE multiplayer_rooms
+       SET guest_id = NULL, guest_username = NULL, guest_display_name = NULL,
+           guest_ready = 0, guest_joined_at = NULL, guest_last_seen = NULL,
+           guest_system_id = NULL, guest_game_id = NULL, guest_game_title = NULL,
+           guest_game_file_name = NULL, guest_game_cover_url = NULL,
+           status = 'waiting', host_ready = 0
+       WHERE status != 'closed'
+         AND guest_id IS NOT NULL
+         AND guest_last_seen IS NOT NULL
+         AND guest_last_seen < (NOW() - INTERVAL 45 SECOND)`
+    );
+
+    // 3. Clean up stale multiplayer signaling messages (> 3 minutes old)
+    await execute(
+      "DELETE FROM multiplayer_signals WHERE created_at < (NOW() - INTERVAL 3 MINUTE)"
     );
   } catch {}
+}
+
+/**
+ * Touch active room player heartbeat timestamp.
+ * Updates at most once every 3 seconds per player to keep DB writes minimal.
+ */
+export async function touchRoomHeartbeat(input: {
+  roomId: string;
+  role: "host" | "guest";
+  playerId?: string;
+}): Promise<void> {
+  await ensureMultiplayerInitialized();
+  const normalizedId = input.roomId.trim().toUpperCase();
+
+  try {
+    if (input.role === "host") {
+      await execute(
+        `UPDATE multiplayer_rooms
+         SET host_last_seen = NOW()
+         WHERE id = ?
+           AND status != 'closed'
+           AND (host_last_seen IS NULL OR host_last_seen < (NOW() - INTERVAL 3 SECOND))`,
+        [normalizedId]
+      );
+    } else if (input.role === "guest") {
+      await execute(
+        `UPDATE multiplayer_rooms
+         SET guest_last_seen = NOW()
+         WHERE id = ?
+           AND status != 'closed'
+           AND guest_id IS NOT NULL
+           AND (guest_last_seen IS NULL OR guest_last_seen < (NOW() - INTERVAL 3 SECOND))`,
+        [normalizedId]
+      );
+    }
+  } catch {}
+}
+
+export async function listActiveRooms(): Promise<MultiplayerRoom[]> {
+  await ensureMultiplayerInitialized();
+  await pruneGhostRoomsAndPlayers();
 
   const rows = await query<RoomRow>(
     `SELECT * FROM multiplayer_rooms
@@ -270,6 +349,7 @@ export async function listActiveRooms(): Promise<MultiplayerRoom[]> {
 
 export async function getRoomById(roomId: string): Promise<MultiplayerRoom | null> {
   await ensureMultiplayerInitialized();
+  await pruneGhostRoomsAndPlayers();
   const normalizedId = roomId.trim().toUpperCase();
 
   const rows = await query<RoomRow>(

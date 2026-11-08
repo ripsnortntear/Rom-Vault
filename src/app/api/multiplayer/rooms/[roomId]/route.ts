@@ -12,6 +12,7 @@ import {
   leaveRoom,
   addRoomChatMessage,
   pollMultiplayerSignals,
+  touchRoomHeartbeat,
 } from "@/lib/multiplayer";
 
 export async function GET(
@@ -32,6 +33,13 @@ export async function GET(
     const url = new URL(req.url);
     const roleParam = url.searchParams.get("role");
     const afterSignalId = parseInt(url.searchParams.get("afterSignalId") || "0", 10) || 0;
+
+    if (roleParam === "host" || roleParam === "guest") {
+      await touchRoomHeartbeat({
+        roomId,
+        role: roleParam,
+      });
+    }
 
     const chat = await getRoomChat(roomId, 80);
     const signals =
@@ -207,4 +215,11 @@ export async function PATCH(
       { status: 400 }
     );
   }
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ roomId: string }> }
+): Promise<NextResponse> {
+  return PATCH(req, context);
 }

@@ -33,6 +33,8 @@ import {
   addRoomChatMessage,
   sendMultiplayerSignal,
   pollMultiplayerSignals,
+  touchRoomHeartbeat,
+  pruneGhostRoomsAndPlayers,
   SUPPORTED_MULTIPLAYER_SYSTEMS,
   UNSUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
@@ -334,6 +336,53 @@ describe("2-Player Retro Multiplayer Room System Unit Tests", () => {
           gameTitle: "Sonic Adventure (USA)",
         })
       ).rejects.toThrow(/not supported for 2-player multiplayer rooms/);
+    });
+  });
+
+  describe("Active Heartbeat & Ghost Room Auto-Pruning", () => {
+    it("touchRoomHeartbeat updates host_last_seen or guest_last_seen with rate limiting", async () => {
+      await touchRoomHeartbeat({
+        roomId: "RM-TEST",
+        role: "host",
+      });
+
+      expect(mockDbExecute).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE multiplayer_rooms"),
+        ["RM-TEST"]
+      );
+
+      const hostCall = mockDbExecute.mock.calls.find((call) =>
+        call[0].includes("host_last_seen = NOW()")
+      );
+      expect(hostCall).toBeDefined();
+
+      await touchRoomHeartbeat({
+        roomId: "RM-TEST",
+        role: "guest",
+      });
+
+      const guestCall = mockDbExecute.mock.calls.find((call) =>
+        call[0].includes("guest_last_seen = NOW()")
+      );
+      expect(guestCall).toBeDefined();
+    });
+
+    it("pruneGhostRoomsAndPlayers executes queries to close stale rooms and evict ghost guests", async () => {
+      await pruneGhostRoomsAndPlayers(true);
+
+      const closeAbandonedCall = mockDbExecute.mock.calls.find(
+        (call) =>
+          call[0].includes("status = 'closed'") &&
+          call[0].includes("host_last_seen < (NOW() - INTERVAL 75 SECOND)")
+      );
+      expect(closeAbandonedCall).toBeDefined();
+
+      const evictGhostGuestCall = mockDbExecute.mock.calls.find(
+        (call) =>
+          call[0].includes("guest_id = NULL") &&
+          call[0].includes("guest_last_seen < (NOW() - INTERVAL 45 SECOND)")
+      );
+      expect(evictGhostGuestCall).toBeDefined();
     });
   });
 });

@@ -493,6 +493,41 @@ export function MultiplayerModal({
     };
   }, [isOpen, activeRoom?.id, activeRoom?.status, myRole, processIncomingSignals]);
 
+  // Instant room/guest cleanup beacon on browser tab close or navigation
+  useEffect(() => {
+    if (!isOpen || !activeRoom) return;
+    const roomId = activeRoom.id;
+    const pId = clientId;
+
+    const handleUnload = () => {
+      try {
+        const payload = JSON.stringify({
+          action: "leave",
+          playerId: pId,
+        });
+        const url = `/roms/api/multiplayer/rooms/${encodeURIComponent(roomId)}`;
+        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: "application/json" });
+          navigator.sendBeacon(url, blob);
+        } else {
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+            keepalive: true,
+          }).catch(() => {});
+        }
+      } catch {}
+    };
+
+    window.addEventListener("pagehide", handleUnload);
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("pagehide", handleUnload);
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, [isOpen, activeRoom?.id, clientId]);
+
   // Setup WebRTC & Canvas Streaming when session status === "playing"
   useEffect(() => {
     if (!isOpen || !activeRoom || activeRoom.status !== "playing") {
