@@ -2316,106 +2316,306 @@ export function MultiplayerModal({
                     </button>
                   </div>
 
-                  {/* Interactive Player 2 Controller Deck (Bottom Bar for Touch/Mouse + Visual Feedback) */}
-                  <div className="w-full shrink-0 bg-zinc-950 border-t border-white/10 px-2 sm:px-4 py-2 sm:py-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] flex items-center justify-between gap-2 overflow-x-auto">
-                    {/* D-Pad */}
-                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                      <span className="hidden md:inline text-[10px] font-black uppercase tracking-wider text-indigo-400 mr-1">
-                        P2 D-Pad
-                      </span>
-                      {[
-                        { label: "◀", idx: 6 },
-                        { label: "▲", idx: 4 },
-                        { label: "▼", idx: 5 },
-                        { label: "▶", idx: 7 },
-                      ].map((btn) => (
+                  {/* Interactive Player 2 Virtual Gamepad Deck (Mirrors Player 1's On-Screen Gamepad) */}
+                  <div className="w-full shrink-0 bg-zinc-950/95 border-t border-white/10 px-3 sm:px-6 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] flex items-center justify-between touch-none select-none">
+                    <div className="w-full max-w-lg mx-auto flex items-end justify-between gap-2 sm:gap-6">
+                      {/* Left Side: L Shoulder + Cross D-Pad */}
+                      <div className="flex flex-col items-center gap-1.5 shrink-0">
                         <button
-                          key={btn.idx}
                           type="button"
-                          onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
-                          onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
-                          onMouseLeave={() => sendGuestControllerInput(btn.idx, false)}
+                          onMouseDown={() => sendGuestControllerInput(10, true)}
+                          onMouseUp={() => sendGuestControllerInput(10, false)}
+                          onMouseLeave={() => sendGuestControllerInput(10, false)}
                           onTouchStart={(e) => {
                             e.preventDefault();
-                            sendGuestControllerInput(btn.idx, true);
+                            sendGuestControllerInput(10, true);
                           }}
                           onTouchEnd={(e) => {
                             e.preventDefault();
-                            sendGuestControllerInput(btn.idx, false);
+                            sendGuestControllerInput(10, false);
                           }}
-                          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-bold text-xs border transition select-none cursor-pointer flex items-center justify-center ${
-                            activeP2Buttons[btn.idx]
-                              ? "bg-indigo-600 text-white border-indigo-400 scale-95"
-                              : "bg-zinc-900 text-zinc-200 border-white/10 hover:bg-zinc-800 active:bg-zinc-700"
+                          className={`w-16 h-7 rounded-lg font-black text-xs border tracking-wider transition-transform select-none cursor-pointer flex items-center justify-center ${
+                            activeP2Buttons[10]
+                              ? "bg-indigo-600 text-white border-indigo-400 scale-95 shadow-md shadow-indigo-500/40"
+                              : "bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800"
                           }`}
                         >
-                          {btn.label}
+                          L
                         </button>
-                      ))}
-                    </div>
 
-                    {/* Select / Start */}
-                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                      {[
-                        { label: "SELECT", idx: 2 },
-                        { label: "START", idx: 3 },
-                      ].map((btn) => (
-                        <button
-                          key={btn.idx}
-                          type="button"
-                          onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
-                          onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
-                          onTouchStart={(e) => {
-                            e.preventDefault();
-                            sendGuestControllerInput(btn.idx, true);
-                          }}
-                          onTouchEnd={(e) => {
-                            e.preventDefault();
-                            sendGuestControllerInput(btn.idx, false);
-                          }}
-                          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-black text-[9px] sm:text-[10px] tracking-wider border transition select-none cursor-pointer ${
-                            activeP2Buttons[btn.idx]
-                              ? "bg-amber-500 text-black border-amber-300 scale-95"
-                              : "bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800 active:bg-zinc-700"
-                          }`}
-                        >
-                          {btn.label}
-                        </button>
-                      ))}
-                    </div>
+                        {/* D-Pad Cross */}
+                        <div className="relative w-[112px] h-[112px] flex items-center justify-center">
+                          {/* Center Cross Pivot */}
+                          <div className="absolute w-9 h-9 bg-zinc-900/90 border border-white/10 rounded-sm pointer-events-none flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-zinc-700/60" />
+                          </div>
 
-                    {/* Action Buttons (A, B, X, Y, L, R) */}
-                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                      {[
-                        { label: "Y", idx: 1 },
-                        { label: "X", idx: 9 },
-                        { label: "B", idx: 0 },
-                        { label: "A", idx: 8 },
-                        { label: "L", idx: 10 },
-                        { label: "R", idx: 11 },
-                      ].map((btn) => (
+                          {/* Up Button */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(4, true)}
+                            onMouseUp={() => sendGuestControllerInput(4, false)}
+                            onMouseLeave={() => sendGuestControllerInput(4, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(4, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(4, false);
+                            }}
+                            className={`absolute top-0 left-[38px] w-9 h-9 rounded-t-xl rounded-b-none border font-bold text-xs flex items-center justify-center select-none cursor-pointer transition-transform ${
+                              activeP2Buttons[4]
+                                ? "bg-indigo-600 text-white border-indigo-400 scale-95"
+                                : "bg-zinc-900 text-zinc-200 border-white/15 hover:bg-zinc-800"
+                            }`}
+                            title="Up"
+                          >
+                            ▲
+                          </button>
+
+                          {/* Down Button */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(5, true)}
+                            onMouseUp={() => sendGuestControllerInput(5, false)}
+                            onMouseLeave={() => sendGuestControllerInput(5, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(5, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(5, false);
+                            }}
+                            className={`absolute bottom-0 left-[38px] w-9 h-9 rounded-b-xl rounded-t-none border font-bold text-xs flex items-center justify-center select-none cursor-pointer transition-transform ${
+                              activeP2Buttons[5]
+                                ? "bg-indigo-600 text-white border-indigo-400 scale-95"
+                                : "bg-zinc-900 text-zinc-200 border-white/15 hover:bg-zinc-800"
+                            }`}
+                            title="Down"
+                          >
+                            ▼
+                          </button>
+
+                          {/* Left Button */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(6, true)}
+                            onMouseUp={() => sendGuestControllerInput(6, false)}
+                            onMouseLeave={() => sendGuestControllerInput(6, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(6, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(6, false);
+                            }}
+                            className={`absolute top-[38px] left-0 w-9 h-9 rounded-l-xl rounded-r-none border font-bold text-xs flex items-center justify-center select-none cursor-pointer transition-transform ${
+                              activeP2Buttons[6]
+                                ? "bg-indigo-600 text-white border-indigo-400 scale-95"
+                                : "bg-zinc-900 text-zinc-200 border-white/15 hover:bg-zinc-800"
+                            }`}
+                            title="Left"
+                          >
+                            ◀
+                          </button>
+
+                          {/* Right Button */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(7, true)}
+                            onMouseUp={() => sendGuestControllerInput(7, false)}
+                            onMouseLeave={() => sendGuestControllerInput(7, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(7, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(7, false);
+                            }}
+                            className={`absolute top-[38px] right-0 w-9 h-9 rounded-r-xl rounded-l-none border font-bold text-xs flex items-center justify-center select-none cursor-pointer transition-transform ${
+                              activeP2Buttons[7]
+                                ? "bg-indigo-600 text-white border-indigo-400 scale-95"
+                              : "bg-zinc-900 text-zinc-200 border-white/15 hover:bg-zinc-800"
+                            }`}
+                            title="Right"
+                          >
+                            ▶
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Center: Select & Start Pills */}
+                      <div className="flex flex-col items-center justify-end pb-2 gap-2.5 shrink-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 select-none">
+                          Port 2
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(2, true)}
+                            onMouseUp={() => sendGuestControllerInput(2, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(2, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(2, false);
+                            }}
+                            className={`px-3 py-1.5 rounded-full font-black text-[9px] tracking-wider border transition-transform select-none cursor-pointer ${
+                              activeP2Buttons[2]
+                                ? "bg-amber-500 text-black border-amber-300 scale-95"
+                                : "bg-zinc-900 text-zinc-400 border-white/15 hover:bg-zinc-800"
+                            }`}
+                          >
+                            SELECT
+                          </button>
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(3, true)}
+                            onMouseUp={() => sendGuestControllerInput(3, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(3, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(3, false);
+                            }}
+                            className={`px-3 py-1.5 rounded-full font-black text-[9px] tracking-wider border transition-transform select-none cursor-pointer ${
+                              activeP2Buttons[3]
+                                ? "bg-amber-500 text-black border-amber-300 scale-95"
+                                : "bg-zinc-900 text-zinc-400 border-white/15 hover:bg-zinc-800"
+                            }`}
+                          >
+                            START
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right Side: R Shoulder + Diamond Action Buttons */}
+                      <div className="flex flex-col items-center gap-1.5 shrink-0">
                         <button
-                          key={btn.idx}
                           type="button"
-                          onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
-                          onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
+                          onMouseDown={() => sendGuestControllerInput(11, true)}
+                          onMouseUp={() => sendGuestControllerInput(11, false)}
+                          onMouseLeave={() => sendGuestControllerInput(11, false)}
                           onTouchStart={(e) => {
                             e.preventDefault();
-                            sendGuestControllerInput(btn.idx, true);
+                            sendGuestControllerInput(11, true);
                           }}
                           onTouchEnd={(e) => {
                             e.preventDefault();
-                            sendGuestControllerInput(btn.idx, false);
+                            sendGuestControllerInput(11, false);
                           }}
-                          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full font-black text-xs border transition select-none cursor-pointer flex items-center justify-center ${
-                            activeP2Buttons[btn.idx]
-                              ? "bg-emerald-500 text-black border-emerald-300 scale-95"
-                              : "bg-zinc-900 text-white border-white/15 hover:bg-zinc-800 active:bg-zinc-700"
+                          className={`w-16 h-7 rounded-lg font-black text-xs border tracking-wider transition-transform select-none cursor-pointer flex items-center justify-center ${
+                            activeP2Buttons[11]
+                              ? "bg-indigo-600 text-white border-indigo-400 scale-95 shadow-md shadow-indigo-500/40"
+                              : "bg-zinc-900 text-zinc-300 border-white/15 hover:bg-zinc-800"
                           }`}
                         >
-                          {btn.label}
+                          R
                         </button>
-                      ))}
+
+                        {/* Action Diamond (X Top, B Bottom, Y Left, A Right) */}
+                        <div className="relative w-[112px] h-[112px] flex items-center justify-center">
+                          {/* X Button (Top) */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(9, true)}
+                            onMouseUp={() => sendGuestControllerInput(9, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(9, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(9, false);
+                            }}
+                            className={`absolute top-0 left-[38px] w-9 h-9 rounded-full font-black text-xs border transition-transform select-none cursor-pointer flex items-center justify-center shadow-md ${
+                              activeP2Buttons[9]
+                                ? "bg-blue-500 text-white border-blue-300 scale-95 shadow-blue-500/50"
+                                : "bg-zinc-900 text-blue-300 border-blue-500/30 hover:bg-zinc-800"
+                            }`}
+                            title="X"
+                          >
+                            X
+                          </button>
+
+                          {/* B Button (Bottom) */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(0, true)}
+                            onMouseUp={() => sendGuestControllerInput(0, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(0, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(0, false);
+                            }}
+                            className={`absolute bottom-0 left-[38px] w-9 h-9 rounded-full font-black text-xs border transition-transform select-none cursor-pointer flex items-center justify-center shadow-md ${
+                              activeP2Buttons[0]
+                                ? "bg-amber-500 text-black border-amber-300 scale-95 shadow-amber-500/50"
+                                : "bg-zinc-900 text-amber-300 border-amber-500/30 hover:bg-zinc-800"
+                            }`}
+                            title="B"
+                          >
+                            B
+                          </button>
+
+                          {/* Y Button (Left) */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(1, true)}
+                            onMouseUp={() => sendGuestControllerInput(1, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(1, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(1, false);
+                            }}
+                            className={`absolute top-[38px] left-0 w-9 h-9 rounded-full font-black text-xs border transition-transform select-none cursor-pointer flex items-center justify-center shadow-md ${
+                              activeP2Buttons[1]
+                                ? "bg-emerald-500 text-black border-emerald-300 scale-95 shadow-emerald-500/50"
+                                : "bg-zinc-900 text-emerald-300 border-emerald-500/30 hover:bg-zinc-800"
+                            }`}
+                            title="Y"
+                          >
+                            Y
+                          </button>
+
+                          {/* A Button (Right) */}
+                          <button
+                            type="button"
+                            onMouseDown={() => sendGuestControllerInput(8, true)}
+                            onMouseUp={() => sendGuestControllerInput(8, false)}
+                            onTouchStart={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(8, true);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault();
+                              sendGuestControllerInput(8, false);
+                            }}
+                            className={`absolute top-[38px] right-0 w-9 h-9 rounded-full font-black text-xs border transition-transform select-none cursor-pointer flex items-center justify-center shadow-md ${
+                              activeP2Buttons[8]
+                                ? "bg-red-500 text-white border-red-300 scale-95 shadow-red-500/50"
+                                : "bg-zinc-900 text-red-300 border-red-500/30 hover:bg-zinc-800"
+                            }`}
+                            title="A"
+                          >
+                            A
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

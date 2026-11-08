@@ -166,5 +166,14 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
     // Cable Cam PIP supports toggle / minimization so it never blocks the emulator overlay
     expect(content).toContain("linkPipVisible");
     expect(content).toContain("Cable Cam");
+
+    // Player 2 virtual gamepad mirrors Player 1 with cross D-Pad, diamond action buttons, and no scrollbars
+    expect(content).not.toContain("overflow-x-auto");
+    expect(content).toContain("D-Pad Cross");
+    expect(content).toContain("Action Diamond");
+    expect(content).toContain("L");
+    expect(content).toContain("R");
+    expect(content).toContain("SELECT");
+    expect(content).toContain("START");
   });
 });
