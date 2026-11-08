@@ -586,22 +586,45 @@ export async function selectRoomGame(input: {
   const sysMeta = getSystemMeta(systemId);
   const emulatorCore = sysMeta.ejsCore || systemId;
 
+  const isLink = isLinkCableSystem(systemId);
+  const allowed = getLinkCableAllowedSystems(systemId);
+  const shouldResetGuest = !isLink || (existing.guestSystemId && !allowed.includes(existing.guestSystemId.toLowerCase()));
+
   // Changing game resets ready status so both players confirm the new selection
-  await execute(
-    `UPDATE multiplayer_rooms
-     SET system_id = ?, emulator_core = ?, game_id = ?, game_title = ?, game_file_name = ?, game_cover_url = ?,
-         host_ready = 0, guest_ready = 0, status = 'waiting', host_last_seen = NOW()
-     WHERE id = ?`,
-    [
-      systemId,
-      emulatorCore,
-      input.gameId,
-      input.gameTitle,
-      input.gameFileName || null,
-      input.gameCoverUrl || null,
-      normalizedId,
-    ]
-  );
+  if (shouldResetGuest) {
+    await execute(
+      `UPDATE multiplayer_rooms
+       SET system_id = ?, emulator_core = ?, game_id = ?, game_title = ?, game_file_name = ?, game_cover_url = ?,
+           guest_system_id = NULL, guest_game_id = NULL, guest_game_title = NULL, guest_game_file_name = NULL, guest_game_cover_url = NULL,
+           host_ready = 0, guest_ready = 0, status = 'waiting', host_last_seen = NOW()
+       WHERE id = ?`,
+      [
+        systemId,
+        emulatorCore,
+        input.gameId,
+        input.gameTitle,
+        input.gameFileName || null,
+        input.gameCoverUrl || null,
+        normalizedId,
+      ]
+    );
+  } else {
+    await execute(
+      `UPDATE multiplayer_rooms
+       SET system_id = ?, emulator_core = ?, game_id = ?, game_title = ?, game_file_name = ?, game_cover_url = ?,
+           host_ready = 0, guest_ready = 0, status = 'waiting', host_last_seen = NOW()
+       WHERE id = ?`,
+      [
+        systemId,
+        emulatorCore,
+        input.gameId,
+        input.gameTitle,
+        input.gameFileName || null,
+        input.gameCoverUrl || null,
+        normalizedId,
+      ]
+    );
+  }
 
   if (input.gameTitle) {
     await addRoomChatMessage({

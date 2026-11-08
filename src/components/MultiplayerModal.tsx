@@ -213,10 +213,17 @@ export function MultiplayerModal({
     }
   }, [activeRoom?.systemId, activeRoom?.guestSystemId]);
 
-  // Automatically trigger cartridge selection when entering a link-cable room as guest
+  // Automatically trigger cartridge selection when entering a link-cable room as guest, or when host switches to a link-cable system
+  const prevLinkSystemRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeRoom && isLinkCableSystem(activeRoom.systemId) && myRole === "guest") {
-      setIsSelectingGuestGame(true);
+      const currentSys = `${activeRoom.id}:${activeRoom.systemId}`;
+      if (prevLinkSystemRef.current !== currentSys) {
+        setIsSelectingGuestGame(true);
+        prevLinkSystemRef.current = currentSys;
+      }
+    } else {
+      prevLinkSystemRef.current = null;
     }
   }, [activeRoom?.id, activeRoom?.systemId, myRole]);
 
@@ -1696,6 +1703,28 @@ export function MultiplayerModal({
                           ? "Selects own Game Boy cartridge • Runs Player 2 handheld instance"
                           : "Bound to Libretro Port 2 controller • Synchronized stream"}
                       </p>
+                      {isLinkMode && (
+                        <div className="mt-2.5 pt-2.5 border-t border-white/10 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-indigo-600 text-white shrink-0">
+                              {getSystemMeta(selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).shortLabel}
+                            </span>
+                            <span className="text-xs font-bold text-white truncate">
+                              {activeRoom.guestGameTitle || activeRoom.gameTitle || "Choose Cartridge..."}
+                            </span>
+                          </div>
+                          {myRole === "guest" && (
+                            <button
+                              type="button"
+                              onClick={() => setIsSelectingGuestGame(true)}
+                              className="shrink-0 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow shadow-indigo-600/30"
+                            >
+                              <Cable className="w-3 h-3" />
+                              <span>Change Game</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div>
@@ -1739,40 +1768,10 @@ export function MultiplayerModal({
                   <span className="text-xs text-zinc-400">
                     {myRole === "host"
                       ? "You are the Host — choose an emulator & game below"
+                      : isLinkMode
+                      ? "Link Cable Mode active — choose your cartridge below"
                       : "Host is selecting the console emulator & game"}
                   </span>
-                </div>
-
-                {/* Selected Game Banner */}
-                <div className="flex items-center gap-4 p-3.5 rounded-xl bg-zinc-950 border border-white/10 mb-4">
-                  {activeRoom.gameCoverUrl || selectedGameObj?.media.artworkFront ? (
-                    <img
-                      src={
-                        activeRoom.gameCoverUrl ||
-                        selectedGameObj?.media.artworkFront ||
-                        ""
-                      }
-                      alt={activeRoom.gameTitle || "Selected Game"}
-                      className="w-14 h-14 rounded-lg object-cover border border-white/10 shrink-0 bg-zinc-900"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0">
-                      <Gamepad2 className="w-6 h-6 text-zinc-600" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-red-600 text-white">
-                        {isLinkMode ? "P1 Cartridge" : getSystemMeta(activeRoom.systemId).shortLabel}
-                      </span>
-                      <span className="text-xs font-mono text-zinc-400">
-                        Core: {activeRoom.emulatorCore}
-                      </span>
-                    </div>
-                    <div className="text-base font-black text-white truncate mt-0.5">
-                      {activeRoom.gameTitle || "No game selected yet — pick a ROM below"}
-                    </div>
-                  </div>
                 </div>
 
                 {/* Link Cable Mode: Cartridge & Emulator Selector for Player 2 */}
@@ -1781,12 +1780,21 @@ export function MultiplayerModal({
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
                         <Cable className="w-4 h-4" />
-                        <span>{myRole === "guest" ? "2. Your Link Cable Handheld & Cartridge" : "Player 2 Handheld Cartridge"}</span>
+                        <span>{myRole === "guest" ? "Your Link Cable Handheld & Cartridge" : "Player 2 Handheld Cartridge"}</span>
                       </span>
                       {myRole === "guest" && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-                          Independent Handheld
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                            Independent Handheld
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setIsSelectingGuestGame(true)}
+                            className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white transition cursor-pointer"
+                          >
+                            Browse All
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -1819,7 +1827,7 @@ export function MultiplayerModal({
                         <p className="text-[11px] text-zinc-400 mt-0.5">
                           {myRole === "guest"
                             ? activeRoom.guestGameTitle
-                              ? "✓ Cartridge locked in. You can choose any different game below anytime."
+                              ? "✓ Cartridge locked in. You can change your console variant or game below anytime."
                               : "Choose any cartridge below from the library to play over the link cable."
                             : activeRoom.guestGameTitle
                             ? "Custom cartridge chosen by Player 2"
@@ -1831,35 +1839,61 @@ export function MultiplayerModal({
                     {/* Guest Cartridge & Emulator Selector */}
                     {myRole === "guest" && (
                       <div className="pt-3 border-t border-white/10 flex flex-col gap-3">
-                        {/* If multiple link-cable ready emulators (e.g. GB and GBC), show emulator switcher */}
-                        {allowedGuestSystems.length > 1 && (
-                          <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                              Link-Cable Handheld Core:
-                            </label>
-                            <div className="flex items-center gap-2">
-                              {allowedGuestSystems.map((sysId) => {
-                                const isCurrentSys =
-                                  (selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).toLowerCase() ===
-                                  sysId.toLowerCase();
-                                const meta = getSystemMeta(sysId);
-                                return (
-                                  <button
-                                    key={sysId}
-                                    type="button"
-                                    onClick={() => setSelectedGuestSystemId(sysId)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
-                                      isCurrentSys
-                                        ? "bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-600/30"
-                                        : "bg-zinc-900 border-white/10 text-zinc-400 hover:text-white"
-                                    }`}
-                                  >
-                                    <Cable className="w-3.5 h-3.5" />
-                                    <span>{meta.name} ({meta.shortLabel})</span>
-                                  </button>
-                                );
-                              })}
+                        {/* Handheld Core Switcher */}
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                            Link-Cable Handheld Core:
+                          </label>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {allowedGuestSystems.map((sysId) => {
+                              const isCurrentSys =
+                                (selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).toLowerCase() ===
+                                sysId.toLowerCase();
+                              const meta = getSystemMeta(sysId);
+                              const count = allGames.filter((g) => g.system.toLowerCase() === sysId.toLowerCase()).length;
+                              return (
+                                <button
+                                  key={sysId}
+                                  type="button"
+                                  onClick={() => setSelectedGuestSystemId(sysId)}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                                    isCurrentSys
+                                      ? "bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400"
+                                      : "bg-zinc-900 border-white/10 text-zinc-400 hover:text-white"
+                                  }`}
+                                >
+                                  <Cable className="w-3.5 h-3.5" />
+                                  <span>{meta.shortLabel}</span>
+                                  <span className="text-[10px] font-normal opacity-75">({meta.name} • {count})</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Quick Option: Match Host's Game */}
+                        {activeRoom.gameId && activeRoom.guestGameId !== activeRoom.gameId && (
+                          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex items-center gap-2">
+                              {activeRoom.gameCoverUrl ? (
+                                <img src={activeRoom.gameCoverUrl} alt={activeRoom.gameTitle || ""} className="w-7 h-7 rounded object-cover shrink-0" />
+                              ) : (
+                                <Gamepad2 className="w-5 h-5 text-zinc-500 shrink-0" />
+                              )}
+                              <span className="text-xs text-zinc-300 truncate">
+                                Host: <strong className="text-white">{activeRoom.gameTitle}</strong>
+                              </span>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const hostGame = allGames.find((g) => g.id === activeRoom.gameId);
+                                if (hostGame) handleSelectGuestGame(hostGame);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-400/30 text-[11px] font-bold transition shrink-0 cursor-pointer"
+                            >
+                              Match Host
+                            </button>
                           </div>
                         )}
 
@@ -1914,6 +1948,38 @@ export function MultiplayerModal({
                     )}
                   </div>
                 )}
+
+                {/* Selected Game Banner */}
+                <div className="flex items-center gap-4 p-3.5 rounded-xl bg-zinc-950 border border-white/10 mb-4">
+                  {activeRoom.gameCoverUrl || selectedGameObj?.media.artworkFront ? (
+                    <img
+                      src={
+                        activeRoom.gameCoverUrl ||
+                        selectedGameObj?.media.artworkFront ||
+                        ""
+                      }
+                      alt={activeRoom.gameTitle || "Selected Game"}
+                      className="w-14 h-14 rounded-lg object-cover border border-white/10 shrink-0 bg-zinc-900"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0">
+                      <Gamepad2 className="w-6 h-6 text-zinc-600" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-red-600 text-white">
+                        {isLinkMode ? "P1 Cartridge" : getSystemMeta(activeRoom.systemId).shortLabel}
+                      </span>
+                      <span className="text-xs font-mono text-zinc-400">
+                        Core: {activeRoom.emulatorCore}
+                      </span>
+                    </div>
+                    <div className="text-base font-black text-white truncate mt-0.5">
+                      {activeRoom.gameTitle || "No game selected yet — pick a ROM below"}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Host Controls for changing Console Emulator and Game */}
                 {myRole === "host" ? (
@@ -2655,6 +2721,191 @@ export function MultiplayerModal({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Dedicated Cartridge & Console Selection Modal for Player 2 in Link Mode */}
+        {isSelectingGuestGame && isLinkMode && myRole === "guest" && activeRoom && activeRoom.status !== "playing" && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
+            <div className="relative w-full max-w-2xl bg-zinc-950 border border-indigo-500/40 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+              {/* Modal Header */}
+              <div className="px-5 py-4 bg-zinc-900/95 border-b border-white/10 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400">
+                    <Cable className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                      <span>Choose Your Handheld &amp; Cartridge</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-600 text-white">
+                        Player 2
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Virtual Link Cable Handheld 2 • Host is playing <strong className="text-white">{activeRoom.gameTitle || "a game"}</strong> on <strong className="text-white">{getSystemMeta(activeRoom.systemId).name}</strong>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSelectingGuestGame(false)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
+                  title="Close Cartridge Selection"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-5 flex-1 flex flex-col gap-4 overflow-y-auto">
+                {/* Handheld Core Switcher */}
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-indigo-300 mb-2">
+                    1. Select Handheld Console Variant
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {allowedGuestSystems.map((sysId) => {
+                      const meta = getSystemMeta(sysId);
+                      const isSelected =
+                        (selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).toLowerCase() ===
+                        sysId.toLowerCase();
+                      const count = allGames.filter((g) => g.system.toLowerCase() === sysId.toLowerCase()).length;
+                      return (
+                        <button
+                          key={sysId}
+                          type="button"
+                          onClick={() => setSelectedGuestSystemId(sysId)}
+                          className={`p-2.5 sm:p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center gap-1 ${
+                            isSelected
+                              ? "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/50"
+                              : "bg-zinc-900/90 border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-850"
+                          }`}
+                        >
+                          <span className="text-xs sm:text-sm font-black">{meta.shortLabel}</span>
+                          <span className="text-[10px] sm:text-[11px] font-medium opacity-80 truncate max-w-full">
+                            {meta.name}
+                          </span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-black/30 opacity-75">
+                            {count} games
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Quick Option: Match Host's Game */}
+                {activeRoom.gameId && (
+                  <div className="p-3 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {activeRoom.gameCoverUrl ? (
+                        <img
+                          src={activeRoom.gameCoverUrl}
+                          alt={activeRoom.gameTitle || ""}
+                          className="w-9 h-9 rounded object-cover shrink-0"
+                        />
+                      ) : (
+                        <Gamepad2 className="w-6 h-6 text-zinc-500 shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase">Match Host's Game</div>
+                        <div className="text-xs font-bold text-white truncate">{activeRoom.gameTitle}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const hostGame = allGames.find((g) => g.id === activeRoom.gameId);
+                        if (hostGame) {
+                          handleSelectGuestGame(hostGame);
+                          setIsSelectingGuestGame(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shrink-0 transition cursor-pointer shadow shadow-indigo-600/30"
+                    >
+                      Play Same Game
+                    </button>
+                  </div>
+                )}
+
+                {/* Search */}
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-indigo-300 mb-1.5">
+                    2. Choose Cartridge from {getSystemMeta(selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).shortLabel} Library ({guestSystemGames.length} available)
+                  </label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={guestGameSearchQuery}
+                      onChange={(e) => setGuestGameSearchQuery(e.target.value)}
+                      placeholder={`Search ${getSystemMeta(selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).shortLabel} cartridges...`}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Cartridge List */}
+                <div className="flex-1 min-h-[220px] max-h-[300px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
+                  {guestSystemGames.map((g) => {
+                    const isSelected =
+                      (activeRoom.guestGameId || activeRoom.gameId) === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => {
+                          handleSelectGuestGame(g);
+                          setIsSelectingGuestGame(false);
+                        }}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          isSelected
+                            ? "bg-indigo-600/30 border-indigo-400 text-white shadow-md shadow-indigo-600/20 ring-1 ring-indigo-400"
+                            : "bg-zinc-900/90 hover:bg-zinc-800 border-white/10 text-zinc-300"
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                          {g.media.artworkFront ? (
+                            <img
+                              src={g.media.artworkFront}
+                              alt={g.displayTitle}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Gamepad2 className="w-5 h-5 text-zinc-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold truncate text-white">
+                            {g.displayTitle}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                            {getSystemMeta(g.system).shortLabel} Cartridge
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-indigo-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-3 bg-zinc-900/95 border-t border-white/10 flex items-center justify-between shrink-0">
+                <span className="text-[11px] text-zinc-400 truncate max-w-[240px] sm:max-w-none">
+                  Selected: <strong className="text-white">{activeRoom.guestGameTitle || activeRoom.gameTitle || "None"}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSelectingGuestGame(false)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer shadow shadow-indigo-600/30"
+                >
+                  Confirm Cartridge ✓
+                </button>
+              </div>
             </div>
           </div>
         )}

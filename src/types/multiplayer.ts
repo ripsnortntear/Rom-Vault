@@ -145,17 +145,18 @@ export function isLinkCableSystem(systemId: string | null | undefined): boolean 
 
 /**
  * Returns allowed link cable systems for a guest given the host's system.
- * Game Boy (gb) and Game Boy Color (gbc) can cross-link.
- * Game Boy Advance (gba) links with Game Boy Advance (gba).
+ * All Game Boy handheld variants (Game Boy, Game Boy Color, and Game Boy Advance)
+ * are compatible link-cable ready handheld cores.
  */
 export function getLinkCableAllowedSystems(hostSystemId: string | null | undefined): string[] {
   if (!hostSystemId) return [];
   const norm = hostSystemId.toLowerCase().trim();
-  if (norm === "gb" || norm === "gbc") {
-    return ["gb", "gbc"];
-  }
-  if (norm === "gba") {
-    return ["gba"];
+  if (norm === "gb" || norm === "gbc" || norm === "gba") {
+    const cores = ["gb", "gbc", "gba"];
+    if (cores.includes(norm)) {
+      return [norm, ...cores.filter((c) => c !== norm)];
+    }
+    return cores;
   }
   return [];
 }

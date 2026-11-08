@@ -94,9 +94,9 @@ describe("Game Boy / GBC Link Cable Multiplayer Unit Tests", () => {
     });
 
     it("resolves allowed guest link-cable emulators appropriately", () => {
-      expect(getLinkCableAllowedSystems("gb")).toEqual(["gb", "gbc"]);
-      expect(getLinkCableAllowedSystems("gbc")).toEqual(["gb", "gbc"]);
-      expect(getLinkCableAllowedSystems("gba")).toEqual(["gba"]);
+      expect(getLinkCableAllowedSystems("gb")).toEqual(["gb", "gbc", "gba"]);
+      expect(getLinkCableAllowedSystems("gbc")).toEqual(["gbc", "gb", "gba"]);
+      expect(getLinkCableAllowedSystems("gba")).toEqual(["gba", "gb", "gbc"]);
       expect(getLinkCableAllowedSystems("snes")).toEqual([]);
     });
 
@@ -194,6 +194,41 @@ describe("Game Boy / GBC Link Cable Multiplayer Unit Tests", () => {
           gameTitle: "Pokemon - Yellow Version",
         })
       ).rejects.toThrow("Only the joined guest can choose their link cable cartridge.");
+    });
+
+    it("allows guest to choose GBA, GBC, or GB cartridge in a GBA room", async () => {
+      const gbaRoomRow = {
+        ...baseGbRoomRow,
+        system_id: "gba",
+        emulator_core: "mgba",
+        game_id: "gba__Pokemon FireRed",
+        game_title: "Pokemon - FireRed Version (USA)",
+      };
+
+      const updatedRow = {
+        ...gbaRoomRow,
+        guest_system_id: "gba",
+        guest_game_id: "gba__Pokemon LeafGreen",
+        guest_game_title: "Pokemon - LeafGreen Version (USA)",
+        guest_game_file_name: "Pokemon - LeafGreen Version (USA).gba",
+      };
+
+      mockDbQuery
+        .mockResolvedValueOnce([gbaRoomRow])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([updatedRow]);
+
+      const room = await selectGuestRoomGame({
+        roomId: "GB-LINK-1",
+        guestId: "trainer-blue",
+        systemId: "gba",
+        gameId: "gba__Pokemon LeafGreen",
+        gameTitle: "Pokemon - LeafGreen Version (USA)",
+        gameFileName: "Pokemon - LeafGreen Version (USA).gba",
+      });
+
+      expect(room.guestSystemId).toBe("gba");
+      expect(room.guestGameId).toBe("gba__Pokemon LeafGreen");
     });
 
     it("rejects guest game selection if emulator is not compatible for link cable play with host's system", async () => {
