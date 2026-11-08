@@ -251,17 +251,27 @@ function scanSystem(system: string): SystemScanResult {
   }
 
   const artworkFrontMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "artwork_front"));
+  const box2dMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "box2d"));
   const artwork3dMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "artwork_3d"));
+  const box3dMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "box3d"));
   const logoMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "logo"));
+  const marqueeMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "marquee"));
   const mediumFrontMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "medium_front"));
+  const cartridgesMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "cartridges"));
   const mediumDiscMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "medium_disc"));
   const screenshotMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "screenshot"));
+  const thumbnailsMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "thumbnails"));
   const screenTitleMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "screentitle"));
+  const titlesMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "titles"));
   const fanartMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "fanart"));
+  const fanartsMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "fanarts"));
   const bezelDayMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "bezel_day"));
   const bezelNightMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "bezel_night"));
   const storyMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "story"));
   const videoMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "video"));
+  const videosMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "videos"));
+  const boxbackMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "boxback"));
+  const manualsMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "manuals"));
   const storyDir = path.join(/*turbopackIgnore: true*/ artworkDir, "story");
 
   const romEntries = fs
@@ -329,18 +339,95 @@ function scanSystem(system: string): SystemScanResult {
       regionCounts[region] = (regionCounts[region] ?? 0) + 1;
     }
 
-    const artworkFrontFile = artworkFrontMap.get(`${lowerBase}.png`) ?? artworkFrontMap.get(lowerBase);
-    const artwork3dFile = artwork3dMap.get(`${lowerBase}.png`) ?? artwork3dMap.get(lowerBase);
-    const logoFile = logoMap.get(`${lowerBase}.png`) ?? logoMap.get(lowerBase);
-    const mediumFrontFile = mediumFrontMap.get(`${lowerBase}.png`) ?? mediumFrontMap.get(lowerBase);
+    const artworkFrontFile =
+      artworkFrontMap.get(`${lowerBase}.png`) ??
+      artworkFrontMap.get(lowerBase) ??
+      box2dMap.get(`${lowerBase}.png`) ??
+      box2dMap.get(lowerBase);
+    const frontCat =
+      artworkFrontMap.get(`${lowerBase}.png`) ?? artworkFrontMap.get(lowerBase)
+        ? "artwork_front"
+        : "box2d";
+
+    const artwork3dFile =
+      artwork3dMap.get(`${lowerBase}.png`) ??
+      artwork3dMap.get(lowerBase) ??
+      box3dMap.get(`${lowerBase}.png`) ??
+      box3dMap.get(lowerBase);
+    const box3dCat =
+      artwork3dMap.get(`${lowerBase}.png`) ?? artwork3dMap.get(lowerBase)
+        ? "artwork_3d"
+        : "box3d";
+
+    const logoFile =
+      logoMap.get(`${lowerBase}.png`) ??
+      logoMap.get(lowerBase) ??
+      marqueeMap.get(`${lowerBase}.png`) ??
+      marqueeMap.get(lowerBase);
+    const logoCat =
+      logoMap.get(`${lowerBase}.png`) ?? logoMap.get(lowerBase)
+        ? "logo"
+        : "marquee";
+
+    const mediumFrontFile =
+      mediumFrontMap.get(`${lowerBase}.png`) ??
+      mediumFrontMap.get(lowerBase) ??
+      cartridgesMap.get(`${lowerBase}.png`) ??
+      cartridgesMap.get(lowerBase);
+    const mediumCat =
+      mediumFrontMap.get(`${lowerBase}.png`) ?? mediumFrontMap.get(lowerBase)
+        ? "medium_front"
+        : "cartridges";
+
     const mediumDiscFile = mediumDiscMap.get(`${lowerBase}.png`) ?? mediumDiscMap.get(lowerBase);
-    const screenshotFile = screenshotMap.get(`${lowerBase}.png`) ?? screenshotMap.get(lowerBase);
-    const screenTitleFile = screenTitleMap.get(`${lowerBase}.png`) ?? screenTitleMap.get(lowerBase);
-    const fanartFile = fanartMap.get(`${lowerBase}.png`) ?? fanartMap.get(lowerBase);
+
+    const screenshotFile =
+      screenshotMap.get(`${lowerBase}.png`) ??
+      screenshotMap.get(lowerBase) ??
+      thumbnailsMap.get(`${lowerBase}.png`) ??
+      thumbnailsMap.get(lowerBase);
+    const screenshotCat =
+      screenshotMap.get(`${lowerBase}.png`) ?? screenshotMap.get(lowerBase)
+        ? "screenshot"
+        : "thumbnails";
+
+    const screenTitleFile =
+      screenTitleMap.get(`${lowerBase}.png`) ??
+      screenTitleMap.get(lowerBase) ??
+      titlesMap.get(`${lowerBase}.png`) ??
+      titlesMap.get(lowerBase);
+    const titleCat =
+      screenTitleMap.get(`${lowerBase}.png`) ?? screenTitleMap.get(lowerBase)
+        ? "screentitle"
+        : "titles";
+
+    const fanartFile =
+      fanartMap.get(`${lowerBase}.png`) ??
+      fanartMap.get(lowerBase) ??
+      fanartsMap.get(`${lowerBase}.png`) ??
+      fanartsMap.get(lowerBase);
+    const fanartCat =
+      fanartMap.get(`${lowerBase}.png`) ?? fanartMap.get(lowerBase)
+        ? "fanart"
+        : "fanarts";
+
     const bezelDayFile = bezelDayMap.get(`${lowerBase}.png`) ?? bezelDayMap.get(lowerBase);
     const bezelNightFile = bezelNightMap.get(`${lowerBase}.png`) ?? bezelNightMap.get(lowerBase);
     const storyFile = storyMap.get(`${lowerBase}.txt`) ?? storyMap.get(lowerBase);
-    const videoFile = videoMap.get(`${lowerBase}.mp4`) ?? videoMap.get(lowerBase);
+
+    const videoFile =
+      videoMap.get(`${lowerBase}.mp4`) ??
+      videoMap.get(lowerBase) ??
+      videosMap.get(`${lowerBase}.mp4`) ??
+      videosMap.get(lowerBase);
+    const videoCat =
+      videoMap.get(`${lowerBase}.mp4`) ?? videoMap.get(lowerBase)
+        ? "video"
+        : "videos";
+
+    const boxbackFile = boxbackMap.get(`${lowerBase}.png`) ?? boxbackMap.get(lowerBase);
+    const manualFile = manualsMap.get(`${lowerBase}.pdf`) ?? manualsMap.get(lowerBase);
+    const marqueeSpecificFile = marqueeMap.get(`${lowerBase}.png`) ?? marqueeMap.get(lowerBase);
 
     if (videoFile) {
       withVideoCount += 1;
@@ -384,28 +471,31 @@ function scanSystem(system: string): SystemScanResult {
       media: {
         rom: buildMediaUrl("roms", romFileName, system),
         artworkFront: artworkFrontFile
-          ? buildMediaUrl("artwork_front", artworkFrontFile, system)
+          ? buildMediaUrl(frontCat, artworkFrontFile, system)
           : null,
         artwork3d: artwork3dFile
-          ? buildMediaUrl("artwork_3d", artwork3dFile, system)
+          ? buildMediaUrl(box3dCat, artwork3dFile, system)
           : null,
-        logo: logoFile ? buildMediaUrl("logo", logoFile, system) : null,
+        logo: logoFile ? buildMediaUrl(logoCat, logoFile, system) : null,
         mediumFront: mediumFrontFile
-          ? buildMediaUrl("medium_front", mediumFrontFile, system)
+          ? buildMediaUrl(mediumCat, mediumFrontFile, system)
           : null,
         mediumDisc: mediumDiscFile
           ? buildMediaUrl("medium_disc", mediumDiscFile, system)
           : null,
         screenshot: screenshotFile
-          ? buildMediaUrl("screenshot", screenshotFile, system)
+          ? buildMediaUrl(screenshotCat, screenshotFile, system)
           : null,
         screenTitle: screenTitleFile
-          ? buildMediaUrl("screentitle", screenTitleFile, system)
+          ? buildMediaUrl(titleCat, screenTitleFile, system)
           : null,
-        fanart: fanartFile ? buildMediaUrl("fanart", fanartFile, system) : null,
+        fanart: fanartFile ? buildMediaUrl(fanartCat, fanartFile, system) : null,
         bezelDay: bezelDayFile ? buildMediaUrl("bezel_day", bezelDayFile, system) : null,
         bezelNight: bezelNightFile ? buildMediaUrl("bezel_night", bezelNightFile, system) : null,
-        video: videoFile ? buildMediaUrl("video", videoFile, system) : null,
+        video: videoFile ? buildMediaUrl(videoCat, videoFile, system) : null,
+        boxback: boxbackFile ? buildMediaUrl("boxback", boxbackFile, system) : null,
+        manual: manualFile ? buildMediaUrl("manuals", manualFile, system) : null,
+        marquee: marqueeSpecificFile ? buildMediaUrl("marquee", marqueeSpecificFile, system) : null,
       },
     };
   });
@@ -526,6 +616,9 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
         for (const game of allGames) {
           const meta = metaMap.get(game.id) ?? metaMap.get(safeDecodeURIComponent(game.id));
           if (meta) {
+            if (meta.cleanTitle && (game.system === "mame" || game.displayTitle === game.baseName)) {
+              game.displayTitle = meta.cleanTitle;
+            }
             if (meta.year) game.year = meta.year;
             if (meta.developer) game.developer = meta.developer;
             if (meta.publisher) game.publisher = meta.publisher;

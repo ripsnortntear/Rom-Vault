@@ -116,6 +116,7 @@ export const SUPPORTED_MULTIPLAYER_SYSTEMS: ReadonlyArray<SupportedMultiplayerSy
   { id: "genesis", label: "Sega Genesis / Mega Drive", core: "genesis_plus_gx (Libretro)" },
   { id: "n64", label: "Nintendo 64 (N64)", core: "mupen64plus_next (Libretro)" },
   { id: "psx", label: "Sony PlayStation (PS1)", core: "pcsx_rearmed (Libretro)" },
+  { id: "mame", label: "Arcade (MAME)", core: "mame2003_plus (Libretro)" },
   { id: "gba", label: "Game Boy Advance (GBA)", core: "mgba (Libretro)" },
   { id: "gbc", label: "Game Boy Color (GBC)", core: "gambatte (Libretro)" },
   { id: "gb", label: "Game Boy (GB)", core: "gambatte (Libretro)" },

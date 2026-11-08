@@ -187,6 +187,17 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     playable: true,
     romExtensions: [".zip", ".iso", ".chd", ".cso", ".bin", ".gz"],
   },
+  mame: {
+    id: "mame",
+    name: "Arcade (MAME)",
+    shortLabel: "MAME",
+    company: "Other",
+    badgeColor: "bg-red-700",
+    colorHex: "#b91c1c",
+    ejsCore: "mame",
+    playable: true,
+    romExtensions: [".zip", ".chd", ".7z"],
+  },
 };
 
 export function getSystemMeta(systemId: string): SystemMeta {
@@ -216,6 +227,7 @@ export function normalizeSystem(system: string | null | undefined): string {
   if (lower === "playstation2") return "ps2";
   if (lower === "gc") return "gamecube";
   if (lower === "dc") return "dreamcast";
+  if (lower === "arcade" || lower === "mame") return "mame";
   return lower;
 }
 

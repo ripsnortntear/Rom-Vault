@@ -45,6 +45,7 @@ describe("Device System Emulation Compatibility", () => {
       expect(isDesktopOnlySystem("sms")).toBe(false);
       expect(isDesktopOnlySystem("sgg")).toBe(false);
       expect(isDesktopOnlySystem("psx")).toBe(false);
+      expect(isDesktopOnlySystem("mame")).toBe(false);
     });
 
     it("handles null or empty inputs gracefully", () => {
@@ -75,10 +76,11 @@ describe("Device System Emulation Compatibility", () => {
       expect(isSystemPlayableOnDevice("sms", true)).toBe(true);
       expect(isSystemPlayableOnDevice("sgg", true)).toBe(true);
       expect(isSystemPlayableOnDevice("psx", true)).toBe(true);
+      expect(isSystemPlayableOnDevice("mame", true)).toBe(true);
     });
 
-    it("allows all 16 systems to be played in browser on desktop", () => {
-      const all16 = [
+    it("allows all systems to be played in browser on desktop", () => {
+      const allSystems = [
         "nes",
         "snes",
         "n64",
@@ -95,8 +97,9 @@ describe("Device System Emulation Compatibility", () => {
         "dreamcast",
         "psx",
         "ps2",
+        "mame",
       ];
-      for (const sys of all16) {
+      for (const sys of allSystems) {
         expect(isSystemPlayableOnDevice(sys, false)).toBe(true);
       }
     });
@@ -110,6 +113,10 @@ describe("Device System Emulation Compatibility", () => {
       expect(normalizeSystem("gc")).toBe("gamecube");
       expect(normalizeSystem("PS1")).toBe("psx");
       expect(normalizeSystem("playstation")).toBe("psx");
+      expect(normalizeSystem("mame")).toBe("mame");
+      expect(normalizeSystem("MAME")).toBe("mame");
+      expect(normalizeSystem("Arcade")).toBe("mame");
+      expect(normalizeSystem("arcade")).toBe("mame");
     });
   });
 });

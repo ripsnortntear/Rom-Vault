@@ -89,6 +89,8 @@ export function resolveSafeMediaPath(
   system = "nes"
 ): string | null {
   try {
+    if (!isValidMediaCategory(category)) return null;
+
     const sanitizedName = path.basename(fileName);
     if (
       !sanitizedName ||
@@ -102,19 +104,57 @@ export function resolveSafeMediaPath(
     }
 
     const norm = normalizeSystem(system);
-    const baseDir =
-      category === "roms"
-        ? getRomsDirectory(norm)
-        : path.join(/*turbopackIgnore: true*/ getArtworkDirectory(norm), category);
-
-    const resolvedBase = path.resolve(baseDir);
-    const resolvedTarget = path.resolve(/*turbopackIgnore: true*/ resolvedBase, sanitizedName);
-
-    if (!resolvedTarget.startsWith(resolvedBase + path.sep)) {
+    if (!norm || !/^[a-zA-Z0-9_-]+$/.test(norm)) {
       return null;
     }
 
-    return resolvedTarget;
+    if (category === "roms") {
+      const baseDir = getRomsDirectory(norm);
+      const resolvedBase = path.resolve(baseDir);
+      const resolvedTarget = path.resolve(/*turbopackIgnore: true*/ resolvedBase, sanitizedName);
+      if (!resolvedTarget.startsWith(resolvedBase + path.sep)) {
+        return null;
+      }
+      return resolvedTarget;
+    }
+
+    const artDir = getArtworkDirectory(norm);
+    const categoryAliases: Record<string, string[]> = {
+      artwork_front: ["artwork_front", "box2d"],
+      box2d: ["box2d", "artwork_front"],
+      artwork_3d: ["artwork_3d", "box3d"],
+      logo: ["logo", "marquee"],
+      marquee: ["marquee", "logo"],
+      medium_front: ["medium_front", "cartridges"],
+      cartridges: ["cartridges", "medium_front"],
+      screenshot: ["screenshot", "thumbnails"],
+      thumbnails: ["thumbnails", "screenshot"],
+      screentitle: ["screentitle", "titles"],
+      titles: ["titles", "screentitle"],
+      fanart: ["fanart", "fanarts"],
+      fanarts: ["fanarts", "fanart"],
+      video: ["video", "videos"],
+      videos: ["videos", "video"],
+      boxback: ["boxback"],
+      manuals: ["manuals"],
+    };
+
+    const searchCategories = categoryAliases[category] || [category];
+    for (const cat of searchCategories) {
+      const baseDir = path.join(/*turbopackIgnore: true*/ artDir, cat);
+      const resolvedBase = path.resolve(baseDir);
+      const resolvedTarget = path.resolve(/*turbopackIgnore: true*/ resolvedBase, sanitizedName);
+      if (resolvedTarget.startsWith(resolvedBase + path.sep) && fs.existsSync(resolvedTarget)) {
+        return resolvedTarget;
+      }
+    }
+
+    const defaultBase = path.resolve(path.join(/*turbopackIgnore: true*/ artDir, category));
+    const defaultTarget = path.resolve(/*turbopackIgnore: true*/ defaultBase, sanitizedName);
+    if (!defaultTarget.startsWith(defaultBase + path.sep)) {
+      return null;
+    }
+    return defaultTarget;
   } catch (error) {
     console.error("[paths] Failed to resolve safe media path:", {
       category,

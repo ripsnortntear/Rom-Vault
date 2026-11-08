@@ -4,16 +4,25 @@ export type MediaCategory =
   | "roms"
   | "artwork_3d"
   | "artwork_front"
+  | "box2d"
+  | "boxback"
   | "logo"
+  | "marquee"
   | "medium_front"
+  | "cartridges"
   | "medium_disc"
   | "screenshot"
+  | "thumbnails"
   | "screentitle"
+  | "titles"
   | "fanart"
+  | "fanarts"
+  | "manuals"
   | "bezel_day"
   | "bezel_night"
   | "story"
-  | "video";
+  | "video"
+  | "videos";
 
 export type CoverArtStyle =
   | "artwork_front"
@@ -35,6 +44,9 @@ export interface GameMediaUrls {
   bezelDay: string | null;
   bezelNight: string | null;
   video: string | null;
+  boxback?: string | null;
+  manual?: string | null;
+  marquee?: string | null;
 }
 
 export interface AdditionalDisc {

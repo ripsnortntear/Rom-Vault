@@ -733,32 +733,38 @@ async function runAudit() {
     if (romFiles.length === 0) continue;
     totalVaultRoms += romFiles.length;
 
-    const loadArtFolder = (subName) => {
-      const full = path.join(artDir, subName);
-      if (!fs.existsSync(full)) return { files: [], byBase: new Map() };
-      const files = fs
-        .readdirSync(full, { withFileTypes: true })
-        .filter((e) => e.isFile() && !e.name.startsWith("."))
-        .map((e) => e.name);
-
+    const loadArtFolder = (subNames) => {
+      const names = Array.isArray(subNames) ? subNames : [subNames];
+      let files = [];
       const byBase = new Map();
-      for (const f of files) {
-        const extIdx = f.lastIndexOf(".");
-        const b = extIdx > 0 ? f.slice(0, extIdx) : f;
-        byBase.set(b.toLowerCase(), f);
+      for (const subName of names) {
+        const full = path.join(artDir, subName);
+        if (!fs.existsSync(full)) continue;
+        const subFiles = fs
+          .readdirSync(full, { withFileTypes: true })
+          .filter((e) => e.isFile() && !e.name.startsWith("."))
+          .map((e) => e.name);
+        files.push(...subFiles);
+        for (const f of subFiles) {
+          const extIdx = f.lastIndexOf(".");
+          const b = extIdx > 0 ? f.slice(0, extIdx) : f;
+          if (!byBase.has(b.toLowerCase())) {
+            byBase.set(b.toLowerCase(), f);
+          }
+        }
       }
       return { files, byBase };
     };
 
     const artFolders = {
-      boxart: loadArtFolder("artwork_front"),
-      boxart3d: loadArtFolder("artwork_3d"),
-      screenshots: loadArtFolder("screenshot"),
-      titlescreens: loadArtFolder("screentitle"),
-      logos: loadArtFolder("logo"),
-      discOrCart: loadArtFolder(sysConf.isDisc ? "medium_disc" : "medium_front"),
+      boxart: loadArtFolder(["artwork_front", "box2d"]),
+      boxart3d: loadArtFolder(["artwork_3d", "box3d"]),
+      screenshots: loadArtFolder(["screenshot", "thumbnails"]),
+      titlescreens: loadArtFolder(["screentitle", "titles"]),
+      logos: loadArtFolder(["logo", "marquee"]),
+      discOrCart: loadArtFolder(sysConf.isDisc ? ["medium_disc"] : ["medium_front", "cartridges"]),
       stories: loadArtFolder("story"),
-      videos: loadArtFolder("video"),
+      videos: loadArtFolder(["video", "videos"]),
     };
 
     const matchedFiles = {
@@ -1415,31 +1421,37 @@ async function main() {
       const artDir = path.join(STORAGE_ROOT, sys, "artwork");
       const needs = {};
 
-      if (targets.boxart && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "artwork_front"), baseName))) {
+      const hasAsset = (subFolders, extList) => {
+        const folders = Array.isArray(subFolders) ? subFolders : [subFolders];
+        return folders.some((f) => fileExistsWithAnyExt(path.join(artDir, f), baseName, extList));
+      };
+
+      if (targets.boxart && (forceAll || !hasAsset(["artwork_front", "box2d"]))) {
         needs.boxart = true;
       }
-      if (targets.boxart3d && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "artwork_3d"), baseName))) {
+      if (targets.boxart3d && (forceAll || !hasAsset(["artwork_3d", "box3d"]))) {
         needs.boxart3d = true;
       }
-      if (targets.screenshots && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "screenshot"), baseName))) {
+      if (targets.screenshots && (forceAll || !hasAsset(["screenshot", "thumbnails"]))) {
         needs.screenshots = true;
       }
-      if (targets.titlescreens && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "screentitle"), baseName))) {
+      if (targets.titlescreens && (forceAll || !hasAsset(["screentitle", "titles"]))) {
         needs.titlescreens = true;
       }
       if (targets.discOrCart) {
         const subFolder = sysConf.isDisc ? "medium_disc" : "medium_front";
-        if (forceAll || !fileExistsWithAnyExt(path.join(artDir, subFolder), baseName)) {
+        const checkFolders = sysConf.isDisc ? ["medium_disc"] : ["medium_front", "cartridges"];
+        if (forceAll || !hasAsset(checkFolders)) {
           needs.discOrCart = subFolder;
         }
       }
-      if (targets.logos && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "logo"), baseName))) {
+      if (targets.logos && (forceAll || !hasAsset(["logo", "marquee"]))) {
         needs.logos = true;
       }
-      if (targets.stories && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "story"), baseName, [".txt"]))) {
+      if (targets.stories && (forceAll || !hasAsset(["story"], [".txt"]))) {
         needs.stories = true;
       }
-      if (targets.videos && (forceAll || !fileExistsWithAnyExt(path.join(artDir, "video"), baseName, [".mp4"]))) {
+      if (targets.videos && (forceAll || !hasAsset(["video", "videos"], [".mp4"]))) {
         needs.videos = true;
       }
 
