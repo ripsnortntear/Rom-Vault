@@ -120,8 +120,9 @@ export function resolveSafeMediaPath(
 
     const artDir = getArtworkDirectory(norm);
     const categoryAliases: Record<string, string[]> = {
-      artwork_front: ["artwork_front", "box2d"],
-      box2d: ["box2d", "artwork_front"],
+      artwork_front: ["artwork_front", "box2d", "images"],
+      box2d: ["box2d", "images", "artwork_front"],
+      images: ["images", "box2d", "artwork_front"],
       artwork_3d: ["artwork_3d", "box3d"],
       logo: ["logo", "marquee"],
       marquee: ["marquee", "logo"],

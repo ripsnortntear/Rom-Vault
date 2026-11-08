@@ -757,7 +757,7 @@ async function runAudit() {
     };
 
     const artFolders = {
-      boxart: loadArtFolder(["artwork_front", "box2d"]),
+      boxart: loadArtFolder(["artwork_front", "box2d", "images"]),
       boxart3d: loadArtFolder(["artwork_3d", "box3d"]),
       screenshots: loadArtFolder(["screenshot", "thumbnails"]),
       titlescreens: loadArtFolder(["screentitle", "titles"]),
@@ -1426,7 +1426,7 @@ async function main() {
         return folders.some((f) => fileExistsWithAnyExt(path.join(artDir, f), baseName, extList));
       };
 
-      if (targets.boxart && (forceAll || !hasAsset(["artwork_front", "box2d"]))) {
+      if (targets.boxart && (forceAll || !hasAsset(["artwork_front", "box2d", "images"]))) {
         needs.boxart = true;
       }
       if (targets.boxart3d && (forceAll || !hasAsset(["artwork_3d", "box3d"]))) {

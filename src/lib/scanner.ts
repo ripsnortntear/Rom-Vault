@@ -252,6 +252,7 @@ function scanSystem(system: string): SystemScanResult {
 
   const artworkFrontMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "artwork_front"));
   const box2dMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "box2d"));
+  const imagesMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "images"));
   const artwork3dMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "artwork_3d"));
   const box3dMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "box3d"));
   const logoMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "logo"));
@@ -343,11 +344,15 @@ function scanSystem(system: string): SystemScanResult {
       artworkFrontMap.get(`${lowerBase}.png`) ??
       artworkFrontMap.get(lowerBase) ??
       box2dMap.get(`${lowerBase}.png`) ??
-      box2dMap.get(lowerBase);
+      box2dMap.get(lowerBase) ??
+      imagesMap.get(`${lowerBase}.png`) ??
+      imagesMap.get(lowerBase);
     const frontCat =
       artworkFrontMap.get(`${lowerBase}.png`) ?? artworkFrontMap.get(lowerBase)
         ? "artwork_front"
-        : "box2d";
+        : box2dMap.get(`${lowerBase}.png`) ?? box2dMap.get(lowerBase)
+          ? "box2d"
+          : "images";
 
     const artwork3dFile =
       artwork3dMap.get(`${lowerBase}.png`) ??

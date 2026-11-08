@@ -5,6 +5,7 @@ export type MediaCategory =
   | "artwork_3d"
   | "artwork_front"
   | "box2d"
+  | "images"
   | "boxback"
   | "logo"
   | "marquee"
