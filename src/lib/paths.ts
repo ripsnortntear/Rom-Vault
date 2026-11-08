@@ -7,7 +7,6 @@ export { normalizeSystem };
 
 export const BASE_PATH = "/roms";
 export const DEFAULT_STORAGE_ROOT = "/mnt/storage/oldsmarchaos.com/roms";
-export const LEGACY_STORAGE_ROOT = "/mnt/storage/roms";
 
 export function getWorkspaceRoot(): string {
   const cwd = process.cwd();
@@ -27,19 +26,6 @@ export function getStorageRoot(): string {
         if (files.length > 0) return custom;
       } catch {}
     }
-  }
-
-  // Primary: /mnt/storage/oldsmarchaos.com/roms (if populated)
-  if (fs.existsSync(DEFAULT_STORAGE_ROOT)) {
-    try {
-      const files = fs.readdirSync(DEFAULT_STORAGE_ROOT);
-      if (files.length > 0) return DEFAULT_STORAGE_ROOT;
-    } catch {}
-  }
-
-  // Seamless fallback during migration: /mnt/storage/roms
-  if (fs.existsSync(LEGACY_STORAGE_ROOT)) {
-    return LEGACY_STORAGE_ROOT;
   }
 
   return DEFAULT_STORAGE_ROOT;

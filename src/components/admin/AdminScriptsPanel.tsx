@@ -854,13 +854,13 @@ export function AdminScriptsPanel() {
               <span>Filesystem ROM Library Scanner</span>
             </h2>
             <p className="text-xs text-zinc-400 mt-1">
-              Scans <code>/mnt/storage/roms</code> to index new ROMs, update multi-disc hierarchies, and broadcast newly indexed titles to the community shoutbox.
+              Scans <code>/mnt/storage/oldsmarchaos.com/roms</code> to index new ROMs, update multi-disc hierarchies, and broadcast newly indexed titles to the community shoutbox.
             </p>
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-white/10">
             <span className="text-[11px] text-zinc-500">
-              Performs rapid non-blocking filesystem walk across all 15 retro platforms.
+              Performs rapid non-blocking filesystem walk across all 16 retro platforms.
             </span>
             <button
               type="button"

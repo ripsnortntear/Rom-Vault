@@ -360,7 +360,11 @@ export async function deleteUserMemoryCard(userId: string, cardId: string): Prom
  * Resolves the card's file path on disk, migrating legacy storage paths automatically.
  */
 export function resolveActualCardPath(card: UserMemoryCard): string {
-  if (card.file_path && fs.existsSync(card.file_path)) {
+  if (
+    card.file_path &&
+    card.file_path.startsWith(getStorageRoot()) &&
+    fs.existsSync(card.file_path)
+  ) {
     return card.file_path;
   }
 

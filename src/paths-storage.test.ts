@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getStorageRoot, DEFAULT_STORAGE_ROOT, LEGACY_STORAGE_ROOT, safeDecodeURIComponent, resolveSafeMediaPath } from "./lib/paths";
-import fs from "fs";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { getStorageRoot, DEFAULT_STORAGE_ROOT, safeDecodeURIComponent, resolveSafeMediaPath } from "./lib/paths";
 
-describe("Storage Root Resolution & Migration Fallback", () => {
+describe("Storage Root Resolution", () => {
   const origEnv = process.env.STORAGE_ROOT;
 
   beforeEach(() => {
@@ -17,15 +16,13 @@ describe("Storage Root Resolution & Migration Fallback", () => {
     }
   });
 
-  it("defines new storage root as /mnt/storage/oldsmarchaos.com/roms", () => {
+  it("defines storage root as /mnt/storage/oldsmarchaos.com/roms", () => {
     expect(DEFAULT_STORAGE_ROOT).toBe("/mnt/storage/oldsmarchaos.com/roms");
-    expect(LEGACY_STORAGE_ROOT).toBe("/mnt/storage/roms");
   });
 
-  it("resolves to existing populated path or falls back safely", () => {
+  it("resolves to /mnt/storage/oldsmarchaos.com/roms by default", () => {
     const root = getStorageRoot();
-    expect(root).toBeDefined();
-    expect([DEFAULT_STORAGE_ROOT, LEGACY_STORAGE_ROOT]).toContain(root);
+    expect(root).toBe(DEFAULT_STORAGE_ROOT);
   });
 
   it("safely handles URI decoding without throwing on malformed or special characters", () => {

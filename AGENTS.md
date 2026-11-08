@@ -15,7 +15,7 @@ ROM Vault (https://your-domain.com/roms) is a high-performance web-based retro g
 - Frontend: Next.js 16 App Router, React 19, Tailwind CSS, Lucide icons, Framer Motion.
 - Backend Service: Node.js 26 service running under systemd (retro-gaming.service on port 39254), reverse-proxied behind Apache/Nginx at /roms.
 - Database: MariaDB (rom_vault) managed via connection pooling in `src/lib/db.ts` for user accounts, sessions, user-scoped virtual memory cards, and persistent IGDB cache (`game_metadata`).
-- Filesystem & Storage: Storage pool at `/mnt/storage/roms/` (game ROMs, CHD archives, multi-layer artwork, MP4 previews) and `/storage/saves/` (raw binary virtual memory cards).
+- Filesystem & Storage: Storage pool at `/mnt/storage/oldsmarchaos.com/roms/` (game ROMs, CHD archives, multi-layer artwork, MP4 previews) and `/mnt/storage/oldsmarchaos.com/roms/saves/` (raw binary virtual memory cards).
 
 ## 2. Before You Write Code
 - Read version-matched docs in `node_modules/next/dist/docs/` (`01-app/03-api-reference/`) before calling unverified APIs; strictly obey deprecation notices.
@@ -73,7 +73,7 @@ With `cacheComponents: true` active:
 
 ## 7. ROM Streaming, Authentication & Route Handlers
 Route Handlers (`src/app/api/**/route.ts`): Reserved exclusively for non-UI data exchange:
-- HTTP 206 Partial Content: High-frequency byte-range streaming for disc images (`.chd`, `.iso`) and ROM binaries from `/mnt/storage/roms/`.
+- HTTP 206 Partial Content: High-frequency byte-range streaming for disc images (`.chd`, `.iso`) and ROM binaries from `/mnt/storage/oldsmarchaos.com/roms/`.
 - Memory Card Binary Endpoints: Raw `.mcr`, `.ps2`, and `.srm` import and export downloads.
 - Memory Card Specifications:
   - PS1 (DuckStation / RetroArch): 131,072 bytes (128 KB) `.mcr`, initialized with `0x00`.
@@ -144,7 +144,7 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 
 ## 14. Privacy, Generalized Documentation & Placeholders
 - Generalized Links & Domains: All documentation, wikis, `.env.example`, and deployment configuration templates must use standard RFC 2606 generalized domains (e.g., `https://your-domain.example.com`, `https://roms.example.com`) and generic email addresses (`admin@example.com`).
-- Placeholder Callout Required: Any README, setup guide, or wiki file detailing installation steps MUST include a prominent notice informing users that all hostnames, storage paths (`/mnt/storage/roms`), and passwords are generalized templates.
+- Placeholder Callout Required: Any README, setup guide, or wiki file detailing installation steps MUST include a prominent notice informing users that all hostnames, storage paths (`/mnt/storage/oldsmarchaos.com/roms`), and passwords are generalized templates.
 - Zero Revealing Information: Never commit personal access tokens, specific internal network IPs, real user emails, or production secrets to tracked documentation or repository code.
 
 ## 15. Proactive Remediation & Autonomous Execution Invariant

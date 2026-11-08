@@ -9,8 +9,8 @@ export interface SystemBiosInfo {
 
 /**
  * Searches for an available BIOS file for a given system in both:
- * 1. /mnt/storage/roms/{system}/bios/
- * 2. /mnt/storage/roms/{system}/roms/
+ * 1. /mnt/storage/oldsmarchaos.com/roms/{system}/bios/
+ * 2. /mnt/storage/oldsmarchaos.com/roms/{system}/roms/
  */
 export function findSystemBios(system: string, requestedFileName?: string): SystemBiosInfo | null {
   const norm = normalizeSystem(system);
