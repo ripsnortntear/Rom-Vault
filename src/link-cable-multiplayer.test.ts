@@ -25,6 +25,7 @@ vi.mock("./lib/db", () => ({
 
 import {
   isLinkCableSystem,
+  getLinkCableAllowedSystems,
   getMultiplayerModeForSystem,
   type LinkCablePacket,
 } from "./types/multiplayer";
@@ -75,11 +76,13 @@ describe("Game Boy / GBC Link Cable Multiplayer Unit Tests", () => {
   };
 
   describe("System Identification & Mode Resolution", () => {
-    it("recognizes Game Boy (gb) and Game Boy Color (gbc) as Link Cable systems", () => {
+    it("recognizes all Game Boy variants (gb, gbc, gba) as Link Cable systems", () => {
       expect(isLinkCableSystem("gb")).toBe(true);
       expect(isLinkCableSystem("gbc")).toBe(true);
+      expect(isLinkCableSystem("gba")).toBe(true);
       expect(isLinkCableSystem("GB")).toBe(true);
       expect(isLinkCableSystem("GBC")).toBe(true);
+      expect(isLinkCableSystem("GBA")).toBe(true);
     });
 
     it("distinguishes classic couch multiplayer consoles from Link Cable handhelds", () => {
@@ -90,9 +93,17 @@ describe("Game Boy / GBC Link Cable Multiplayer Unit Tests", () => {
       expect(isLinkCableSystem("psx")).toBe(false);
     });
 
+    it("resolves allowed guest link-cable emulators appropriately", () => {
+      expect(getLinkCableAllowedSystems("gb")).toEqual(["gb", "gbc"]);
+      expect(getLinkCableAllowedSystems("gbc")).toEqual(["gb", "gbc"]);
+      expect(getLinkCableAllowedSystems("gba")).toEqual(["gba"]);
+      expect(getLinkCableAllowedSystems("snes")).toEqual([]);
+    });
+
     it("maps system IDs to appropriate MultiplayerMode", () => {
       expect(getMultiplayerModeForSystem("gb")).toBe("link-cable");
       expect(getMultiplayerModeForSystem("gbc")).toBe("link-cable");
+      expect(getMultiplayerModeForSystem("gba")).toBe("link-cable");
       expect(getMultiplayerModeForSystem("snes")).toBe("couch");
       expect(getMultiplayerModeForSystem("genesis")).toBe("couch");
     });
@@ -183,6 +194,20 @@ describe("Game Boy / GBC Link Cable Multiplayer Unit Tests", () => {
           gameTitle: "Pokemon - Yellow Version",
         })
       ).rejects.toThrow("Only the joined guest can choose their link cable cartridge.");
+    });
+
+    it("rejects guest game selection if emulator is not compatible for link cable play with host's system", async () => {
+      mockDbQuery.mockResolvedValueOnce([baseGbRoomRow]);
+
+      await expect(
+        selectGuestRoomGame({
+          roomId: "GB-LINK-1",
+          guestId: "trainer-blue",
+          systemId: "snes",
+          gameId: "snes__Super Mario World",
+          gameTitle: "Super Mario World",
+        })
+      ).rejects.toThrow(/not compatible for link cable play/);
     });
   });
 

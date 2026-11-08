@@ -13,6 +13,7 @@ import {
   UNSUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
   isLinkCableSystem,
+  getLinkCableAllowedSystems,
   getMultiplayerModeForSystem,
   LinkCablePacket,
 } from "@/types/multiplayer";
@@ -22,6 +23,7 @@ export {
   UNSUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
   isLinkCableSystem,
+  getLinkCableAllowedSystems,
   getMultiplayerModeForSystem,
 };
 export type { SupportedMultiplayerSystem, LinkCablePacket };
@@ -35,6 +37,7 @@ interface RoomRow {
   game_title: string | null;
   game_file_name: string | null;
   game_cover_url: string | null;
+  guest_system_id?: string | null;
   guest_game_id?: string | null;
   guest_game_title?: string | null;
   guest_game_file_name?: string | null;
@@ -128,6 +131,7 @@ export async function ensureMultiplayerInitialized(): Promise<void> {
 
     // Self-healing columns for existing databases
     try {
+      await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_system_id VARCHAR(32) NULL");
       await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_id VARCHAR(255) NULL");
       await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_title VARCHAR(255) NULL");
       await execute("ALTER TABLE multiplayer_rooms ADD COLUMN IF NOT EXISTS guest_game_file_name VARCHAR(255) NULL");
@@ -188,6 +192,7 @@ function mapRowToRoom(row: RoomRow): MultiplayerRoom {
     gameTitle: row.game_title,
     gameFileName: row.game_file_name,
     gameCoverUrl: row.game_cover_url,
+    guestSystemId: row.guest_system_id || row.system_id,
     guestGameId: row.guest_game_id || row.game_id,
     guestGameTitle: row.guest_game_title || row.game_title,
     guestGameFileName: row.guest_game_file_name || row.game_file_name,
@@ -548,6 +553,7 @@ export async function selectRoomGame(input: {
 export async function selectGuestRoomGame(input: {
   roomId: string;
   guestId: string;
+  systemId?: string | null;
   gameId: string;
   gameTitle: string;
   gameFileName?: string | null;
@@ -567,12 +573,19 @@ export async function selectGuestRoomGame(input: {
     throw new Error("Custom guest game selection is only supported in Link Cable rooms.");
   }
 
+  const guestSys = (input.systemId || existing.guestSystemId || existing.systemId).toLowerCase().trim();
+  const allowed = getLinkCableAllowedSystems(existing.systemId);
+  if (allowed.length > 0 && !allowed.includes(guestSys)) {
+    throw new Error(`Handheld emulator '${guestSys}' is not compatible for link cable play with '${existing.systemId}'.`);
+  }
+
   await execute(
     `UPDATE multiplayer_rooms
-     SET guest_game_id = ?, guest_game_title = ?, guest_game_file_name = ?, guest_game_cover_url = ?,
+     SET guest_system_id = ?, guest_game_id = ?, guest_game_title = ?, guest_game_file_name = ?, guest_game_cover_url = ?,
          guest_ready = 0, guest_last_seen = NOW()
      WHERE id = ?`,
     [
+      guestSys,
       input.gameId,
       input.gameTitle,
       input.gameFileName || null,
@@ -581,12 +594,14 @@ export async function selectGuestRoomGame(input: {
     ]
   );
 
+  const sysMeta = getSystemMeta(guestSys);
+
   await addRoomChatMessage({
     roomId: normalizedId,
     senderId: "system",
     senderName: "Link Cable System",
     senderRole: "system",
-    message: `${existing.guest.displayName} connected cartridge: ${input.gameTitle}. Ready up to link!`,
+    message: `${existing.guest.displayName} connected [${sysMeta.shortLabel}] cartridge: ${input.gameTitle}. Ready up to link!`,
   });
 
   const updated = await getRoomById(normalizedId);

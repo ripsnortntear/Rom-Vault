@@ -121,6 +121,7 @@ export async function PATCH(
       const room = await selectGuestRoomGame({
         roomId,
         guestId: playerId,
+        systemId: typeof body.systemId === "string" ? body.systemId : undefined,
         gameId: typeof body.gameId === "string" ? body.gameId : "",
         gameTitle: typeof body.gameTitle === "string" ? body.gameTitle : "",
         gameFileName: typeof body.gameFileName === "string" ? body.gameFileName : null,

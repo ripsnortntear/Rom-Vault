@@ -62,6 +62,7 @@ export interface MultiplayerRoom {
   gameTitle: string | null;
   gameFileName: string | null;
   gameCoverUrl: string | null;
+  guestSystemId?: string | null;
   guestGameId?: string | null;
   guestGameTitle?: string | null;
   guestGameFileName?: string | null;
@@ -132,14 +133,31 @@ export function isSupportedMultiplayerSystem(systemId: string | null | undefined
 }
 
 /**
- * Game Boy (GB) and Game Boy Color (GBC) utilize the Virtual Link Cable protocol
- * allowing two separate Game Boy emulator instances (each with their own ROM and save file)
+ * Game Boy handheld systems (GB, GBC, GBA) utilize the Virtual Link Cable protocol
+ * allowing two separate handheld emulator instances (each with their own ROM and save file)
  * to communicate over WebRTC serial link cable packets.
  */
 export function isLinkCableSystem(systemId: string | null | undefined): boolean {
   if (!systemId) return false;
   const norm = systemId.toLowerCase().trim();
-  return norm === "gb" || norm === "gbc";
+  return norm === "gb" || norm === "gbc" || norm === "gba";
+}
+
+/**
+ * Returns allowed link cable systems for a guest given the host's system.
+ * Game Boy (gb) and Game Boy Color (gbc) can cross-link.
+ * Game Boy Advance (gba) links with Game Boy Advance (gba).
+ */
+export function getLinkCableAllowedSystems(hostSystemId: string | null | undefined): string[] {
+  if (!hostSystemId) return [];
+  const norm = hostSystemId.toLowerCase().trim();
+  if (norm === "gb" || norm === "gbc") {
+    return ["gb", "gbc"];
+  }
+  if (norm === "gba") {
+    return ["gba"];
+  }
+  return [];
 }
 
 export function getMultiplayerModeForSystem(systemId: string | null | undefined): MultiplayerMode {

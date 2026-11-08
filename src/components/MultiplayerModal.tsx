@@ -35,6 +35,7 @@ import {
   SUPPORTED_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
   isLinkCableSystem,
+  getLinkCableAllowedSystems,
   LinkCablePacket,
 } from "@/types/multiplayer";
 import { KNOWN_SYSTEMS, getSystemMeta } from "@/lib/systems";
@@ -184,13 +185,39 @@ export function MultiplayerModal({
   const lastChatCountRef = useRef<number>(0);
   const pressedKeysRef = useRef<Set<string>>(new Set());
 
-  // Game Boy & Game Boy Color Link Cable mode state
+  // Game Boy (GB / GBC / GBA) Link Cable mode state
   const [linkPipExpanded, setLinkPipExpanded] = useState<boolean>(false);
   const [linkPacketsCount, setLinkPacketsCount] = useState<number>(0);
-  const [isSelectingGuestGame, setIsSelectingGuestGame] = useState<boolean>(false);
+  const [isSelectingGuestGame, setIsSelectingGuestGame] = useState<boolean>(true);
   const [guestGameSearchQuery, setGuestGameSearchQuery] = useState<string>("");
+  const [selectedGuestSystemId, setSelectedGuestSystemId] = useState<string>("");
+  const [mobileLobbyTab, setMobileLobbyTab] = useState<"setup" | "chat">("setup");
 
   const isLinkMode = Boolean(activeRoom && isLinkCableSystem(activeRoom.systemId));
+
+  const allowedGuestSystems = useMemo(() => {
+    if (!activeRoom) return [];
+    return getLinkCableAllowedSystems(activeRoom.systemId);
+  }, [activeRoom?.systemId]);
+
+  // Keep guest system in sync with allowed systems when entering a link-cable room
+  useEffect(() => {
+    if (activeRoom && isLinkCableSystem(activeRoom.systemId)) {
+      const allowed = getLinkCableAllowedSystems(activeRoom.systemId);
+      if (activeRoom.guestSystemId && allowed.includes(activeRoom.guestSystemId.toLowerCase())) {
+        setSelectedGuestSystemId(activeRoom.guestSystemId.toLowerCase());
+      } else if (allowed.length > 0) {
+        setSelectedGuestSystemId((prev) => (allowed.includes(prev.toLowerCase()) ? prev.toLowerCase() : allowed[0]));
+      }
+    }
+  }, [activeRoom?.systemId, activeRoom?.guestSystemId]);
+
+  // Automatically trigger cartridge selection when entering a link-cable room as guest
+  useEffect(() => {
+    if (activeRoom && isLinkCableSystem(activeRoom.systemId) && myRole === "guest") {
+      setIsSelectingGuestGame(true);
+    }
+  }, [activeRoom?.id, activeRoom?.systemId, myRole]);
 
   // Filter playable games for the selected console emulator
   const systemGames = useMemo(() => {
@@ -216,8 +243,9 @@ export function MultiplayerModal({
   const guestSystemGames = useMemo(() => {
     if (!activeRoom) return [];
     const q = guestGameSearchQuery.trim().toLowerCase();
+    const targetSys = selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId;
     return allGames
-      .filter((g) => g.system.toLowerCase() === activeRoom.systemId.toLowerCase())
+      .filter((g) => g.system.toLowerCase() === targetSys.toLowerCase())
       .filter((g) => {
         if (!q) return true;
         return (
@@ -225,8 +253,8 @@ export function MultiplayerModal({
           g.baseName.toLowerCase().includes(q)
         );
       })
-      .slice(0, 120);
-  }, [allGames, activeRoom?.systemId, guestGameSearchQuery]);
+      .slice(0, 150);
+  }, [allGames, activeRoom, selectedGuestSystemId, guestGameSearchQuery]);
 
   const guestSelectedGameObj = useMemo(() => {
     if (!activeRoom) return null;
@@ -949,6 +977,7 @@ export function MultiplayerModal({
           body: JSON.stringify({
             action: "select_guest_game",
             playerId: clientId,
+            systemId: game.system.toLowerCase(),
             gameId: game.id,
             gameTitle: game.displayTitle || game.baseName,
             gameFileName: game.romFileName,
@@ -1438,60 +1467,79 @@ export function MultiplayerModal({
 
         {/* VIEW 2: PRE-GAME LOBBY (GAME & EMULATOR SELECTION, CHAT, READY-UP, AND "GO!" BUTTON) */}
         {activeRoom && activeRoom.status !== "playing" && (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-6 overflow-y-auto">
-            {/* Left / Center (7 cols): Players Ready Deck + Host Emulator & Game Selector */}
-            <div className="lg:col-span-7 flex flex-col gap-5 overflow-y-auto pr-1">
-              {/* Dual Controller Player Slots */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Player 1 (Host) Card */}
-                <div
-                  className={`p-4 rounded-2xl border transition ${
-                    activeRoom.host.isReady
-                      ? "bg-emerald-950/30 border-emerald-500/50 shadow-lg shadow-emerald-900/20"
-                      : "bg-zinc-900/70 border-white/10"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded bg-red-600/20 border border-red-500/40 text-[10px] font-black uppercase tracking-wider text-red-300">
-                      Controller Port 1 • Host
-                    </span>
-                    {activeRoom.host.isReady ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400">
-                        <CheckCircle2 className="w-4 h-4" /> READY
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400">
-                        <Circle className="w-3.5 h-3.5" /> Not Ready
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-base font-black text-white truncate">
-                    {activeRoom.host.displayName}
-                    {myRole === "host" && (
-                      <span className="ml-2 text-[11px] font-normal text-zinc-400">(You)</span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-zinc-400 mt-1">
-                    {isLinkMode
-                      ? "Selects Game Boy system • Runs Player 1 handheld instance"
-                      : "Selects target emulator & ROM • Runs primary Libretro core"}
-                  </p>
-                </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Mobile Tab Switcher */}
+            <div className="lg:hidden shrink-0 flex items-center gap-2 px-4 py-2.5 bg-zinc-950 border-b border-white/10">
+              <button
+                type="button"
+                onClick={() => setMobileLobbyTab("setup")}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+                  mobileLobbyTab === "setup"
+                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30"
+                    : "bg-zinc-900 text-zinc-400 hover:text-white"
+                }`}
+              >
+                <Gamepad2 className="w-4 h-4" />
+                <span>1. Game Setup</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileLobbyTab("chat")}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer relative ${
+                  mobileLobbyTab === "chat"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
+                    : "bg-zinc-900 text-zinc-400 hover:text-white"
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>2. Room Chat ({chatMessages.length})</span>
+                {chatMessages.length > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                )}
+              </button>
+            </div>
 
-                {/* Player 2 (Guest) Card */}
-                <div
-                  className={`p-4 rounded-2xl border transition ${
-                    activeRoom.guest?.isReady
-                      ? "bg-emerald-950/30 border-emerald-500/50 shadow-lg shadow-emerald-900/20"
-                      : "bg-zinc-900/70 border-white/10"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded bg-indigo-600/20 border border-indigo-500/40 text-[10px] font-black uppercase tracking-wider text-indigo-300">
-                      {isLinkMode ? "Link Port 2 • Challenger" : "Controller Port 2 • Challenger"}
-                    </span>
-                    {activeRoom.guest ? (
-                      activeRoom.guest.isReady ? (
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-6 overflow-y-auto">
+              {/* Left / Center (7 cols): Players Ready Deck + Host Emulator & Game Selector */}
+              <div className={`lg:col-span-7 flex flex-col gap-5 overflow-y-auto pr-1 ${mobileLobbyTab === "setup" ? "flex" : "hidden lg:flex"}`}>
+                {/* Dual Controller Player Slots */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Player 1 (Host) Card */}
+                  <div
+                    className={`p-4 rounded-2xl border transition ${
+                      activeRoom.host.isReady
+                        ? "bg-emerald-950/30 border-emerald-500/50 shadow-lg shadow-emerald-900/20"
+                        : "bg-zinc-900/70 border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="px-2 py-0.5 rounded bg-red-600/20 border border-red-500/40 text-[10px] font-black uppercase tracking-wider text-red-300">
+                        Controller Port 1 • Host
+                      </span>
+                      {myRole === "host" ? (
+                        <button
+                          type="button"
+                          onClick={handleToggleReady}
+                          disabled={isMutatingRoom}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer shadow ${
+                            activeRoom.host.isReady
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 ring-1 ring-emerald-400"
+                              : "bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black shadow-amber-500/30 ring-2 ring-amber-300 animate-pulse"
+                          }`}
+                        >
+                          {activeRoom.host.isReady ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>READY ✓</span>
+                            </>
+                          ) : (
+                            <>
+                              <Circle className="w-3.5 h-3.5 fill-black/20" />
+                              <span>READY UP!</span>
+                            </>
+                          )}
+                        </button>
+                      ) : activeRoom.host.isReady ? (
                         <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400">
                           <CheckCircle2 className="w-4 h-4" /> READY
                         </span>
@@ -1499,13 +1547,72 @@ export function MultiplayerModal({
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400">
                           <Circle className="w-3.5 h-3.5" /> Not Ready
                         </span>
-                      )
-                    ) : (
-                      <span className="text-xs text-amber-400 animate-pulse font-semibold">
-                        Waiting for P2...
-                      </span>
-                    )}
+                      )}
+                    </div>
+                    <div className="text-base font-black text-white truncate">
+                      {activeRoom.host.displayName}
+                      {myRole === "host" && (
+                        <span className="ml-2 text-[11px] font-normal text-zinc-400">(You)</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-1">
+                      {isLinkMode
+                        ? "Selects Game Boy system • Runs Player 1 handheld instance"
+                        : "Selects target emulator & ROM • Runs primary Libretro core"}
+                    </p>
                   </div>
+
+                  {/* Player 2 (Guest) Card */}
+                  <div
+                    className={`p-4 rounded-2xl border transition ${
+                      activeRoom.guest?.isReady
+                        ? "bg-emerald-950/30 border-emerald-500/50 shadow-lg shadow-emerald-900/20"
+                        : "bg-zinc-900/70 border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="px-2 py-0.5 rounded bg-indigo-600/20 border border-indigo-500/40 text-[10px] font-black uppercase tracking-wider text-indigo-300">
+                        {isLinkMode ? "Link Port 2 • Challenger" : "Controller Port 2 • Challenger"}
+                      </span>
+                      {activeRoom.guest ? (
+                        myRole === "guest" ? (
+                          <button
+                            type="button"
+                            onClick={handleToggleReady}
+                            disabled={isMutatingRoom}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer shadow ${
+                              activeRoom.guest.isReady
+                                ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 ring-1 ring-emerald-400"
+                                : "bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black shadow-amber-500/30 ring-2 ring-amber-300 animate-pulse"
+                            }`}
+                          >
+                            {activeRoom.guest.isReady ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>READY ✓</span>
+                              </>
+                            ) : (
+                              <>
+                                <Circle className="w-3.5 h-3.5 fill-black/20" />
+                                <span>READY UP!</span>
+                              </>
+                            )}
+                          </button>
+                        ) : activeRoom.guest.isReady ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400">
+                            <CheckCircle2 className="w-4 h-4" /> READY
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400">
+                            <Circle className="w-3.5 h-3.5" /> Not Ready
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-xs text-amber-400 animate-pulse font-semibold">
+                          Waiting for P2...
+                        </span>
+                      )}
+                    </div>
                   {activeRoom.guest ? (
                     <>
                       <div className="text-base font-black text-white truncate">
@@ -1598,25 +1705,23 @@ export function MultiplayerModal({
                   </div>
                 </div>
 
-                {/* Player 2 Cartridge Banner & Selector for Link Cable Mode */}
+                {/* Link Cable Mode: Cartridge & Emulator Selector for Player 2 */}
                 {isLinkMode && (
-                  <div className="p-3.5 rounded-xl bg-zinc-950 border border-indigo-500/30 mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                        <Cable className="w-3.5 h-3.5" /> P2 Cartridge (Challenger)
+                  <div className="p-4 rounded-xl bg-zinc-950 border border-indigo-500/40 mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                        <Cable className="w-4 h-4" />
+                        <span>{myRole === "guest" ? "2. Your Link Cable Handheld & Cartridge" : "Player 2 Handheld Cartridge"}</span>
                       </span>
                       {myRole === "guest" && (
-                        <button
-                          type="button"
-                          onClick={() => setIsSelectingGuestGame((v) => !v)}
-                          className="text-xs font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline"
-                        >
-                          {isSelectingGuestGame ? "Done Choosing" : "Change My Cartridge"}
-                        </button>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                          Independent Handheld
+                        </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    {/* Active P2 Cartridge Display */}
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/90 border border-white/10 mb-3">
                       {activeRoom.guestGameCoverUrl || guestSelectedGameObj?.media.artworkFront ? (
                         <img
                           src={
@@ -1633,31 +1738,73 @@ export function MultiplayerModal({
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-white truncate">
-                          {activeRoom.guestGameTitle || activeRoom.gameTitle || "Matching Host Game"}
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-indigo-600 text-white">
+                            {getSystemMeta(selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).shortLabel}
+                          </span>
+                          <span className="text-sm font-bold text-white truncate">
+                            {activeRoom.guestGameTitle || activeRoom.gameTitle || "Choose a Cartridge Below"}
+                          </span>
                         </div>
-                        <p className="text-[11px] text-zinc-400">
-                          {activeRoom.guestGameTitle
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {myRole === "guest"
+                            ? activeRoom.guestGameTitle
+                              ? "✓ Cartridge locked in. You can choose any different game below anytime."
+                              : "Choose any cartridge below from the library to play over the link cable."
+                            : activeRoom.guestGameTitle
                             ? "Custom cartridge chosen by Player 2"
-                            : "Matching Host cartridge (Player 2 can click 'Change My Cartridge' to pick a different ROM)"}
+                            : "Matching Host cartridge (Player 2 can pick their own ROM below)"}
                         </p>
                       </div>
                     </div>
 
-                    {/* Guest Cartridge Selector Accordion */}
-                    {isSelectingGuestGame && myRole === "guest" && (
-                      <div className="mt-3 pt-3 border-t border-white/10 flex flex-col gap-2">
+                    {/* Guest Cartridge & Emulator Selector */}
+                    {myRole === "guest" && (
+                      <div className="pt-3 border-t border-white/10 flex flex-col gap-3">
+                        {/* If multiple link-cable ready emulators (e.g. GB and GBC), show emulator switcher */}
+                        {allowedGuestSystems.length > 1 && (
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                              Link-Cable Handheld Core:
+                            </label>
+                            <div className="flex items-center gap-2">
+                              {allowedGuestSystems.map((sysId) => {
+                                const isCurrentSys =
+                                  (selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).toLowerCase() ===
+                                  sysId.toLowerCase();
+                                const meta = getSystemMeta(sysId);
+                                return (
+                                  <button
+                                    key={sysId}
+                                    type="button"
+                                    onClick={() => setSelectedGuestSystemId(sysId)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                                      isCurrentSys
+                                        ? "bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-600/30"
+                                        : "bg-zinc-900 border-white/10 text-zinc-400 hover:text-white"
+                                    }`}
+                                  >
+                                    <Cable className="w-3.5 h-3.5" />
+                                    <span>{meta.name} ({meta.shortLabel})</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="relative">
                           <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                           <input
                             type="text"
                             value={guestGameSearchQuery}
                             onChange={(e) => setGuestGameSearchQuery(e.target.value)}
-                            placeholder="Search Game Boy cartridges..."
-                            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white focus:outline-none focus:border-indigo-500/60"
+                            placeholder={`Search ${getSystemMeta(selectedGuestSystemId || activeRoom.guestSystemId || activeRoom.systemId).shortLabel} cartridges (${guestSystemGames.length} available)...`}
+                            className="w-full pl-8 pr-3 py-2 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white focus:outline-none focus:border-indigo-500/60"
                           />
                         </div>
-                        <div className="max-h-[160px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 pr-1">
+
+                        <div className="max-h-[220px] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
                           {guestSystemGames.map((g) => {
                             const isSelected =
                               (activeRoom.guestGameId || activeRoom.gameId) === g.id;
@@ -1666,13 +1813,13 @@ export function MultiplayerModal({
                                 key={g.id}
                                 type="button"
                                 onClick={() => handleSelectGuestGame(g)}
-                                className={`flex items-center gap-2 p-1.5 rounded-lg border text-left transition cursor-pointer ${
+                                className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition cursor-pointer ${
                                   isSelected
-                                    ? "bg-indigo-600/30 border-indigo-400 text-white"
+                                    ? "bg-indigo-600/30 border-indigo-400 text-white shadow-md shadow-indigo-600/20"
                                     : "bg-zinc-900/80 hover:bg-zinc-800 border-white/10 text-zinc-300"
                                 }`}
                               >
-                                <div className="w-6 h-6 rounded bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                                <div className="w-8 h-8 rounded bg-zinc-800 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
                                   {g.media.artworkFront ? (
                                     <img
                                       src={g.media.artworkFront}
@@ -1680,14 +1827,14 @@ export function MultiplayerModal({
                                       className="w-full h-full object-cover"
                                     />
                                   ) : (
-                                    <Gamepad2 className="w-3 h-3 text-zinc-500" />
+                                    <Gamepad2 className="w-4 h-4 text-zinc-500" />
                                   )}
                                 </div>
                                 <span className="text-xs font-semibold truncate flex-1">
                                   {g.displayTitle}
                                 </span>
                                 {isSelected && (
-                                  <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                  <Check className="w-4 h-4 text-indigo-400 shrink-0" />
                                 )}
                               </button>
                             );
@@ -1780,32 +1927,40 @@ export function MultiplayerModal({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-xl bg-zinc-950/60 border border-white/5 text-xs text-zinc-400">
-                    Waiting for Host (<strong className="text-white">{activeRoom.host.displayName}</strong>) to finalize the console emulator and game selection. Toggle <strong className="text-emerald-400">Ready Up</strong> below when you are ready to play!
-                  </div>
+                  !isLinkMode && (
+                    <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 text-xs text-zinc-300 mb-2">
+                      <div className="flex items-center gap-2 mb-1 text-sm font-bold text-white">
+                        <Gamepad2 className="w-4 h-4 text-emerald-400" />
+                        <span>2-Player Co-op / VS Room</span>
+                      </div>
+                      <p className="text-zinc-400 leading-relaxed">
+                        Host (<strong className="text-white">{activeRoom.host.displayName}</strong>) selected <strong className="text-white">{activeRoom.gameTitle || "a game"}</strong> on <strong className="text-white">{getSystemMeta(activeRoom.systemId).name}</strong>. You are assigned to Controller Port 2. Hit <strong className="text-amber-400">READY UP</strong> below when you are ready to play!
+                      </p>
+                    </div>
+                  )
                 )}
 
-                {/* Ready-Up & "GO!" Action Bar */}
-                <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+                {/* Ready-Up & "GO!" Action Bar (Sticky at bottom of setup deck) */}
+                <div className="sticky bottom-0 z-20 mt-5 pt-4 pb-2 bg-zinc-950/95 backdrop-blur-md border-t border-white/15 flex flex-wrap items-center justify-between gap-4">
                   <button
                     type="button"
                     onClick={handleToggleReady}
                     disabled={isMutatingRoom}
-                    className={`flex-1 min-w-[180px] py-3.5 px-6 rounded-xl font-black text-sm tracking-wide transition flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                    className={`flex-1 min-w-[200px] py-4 px-6 rounded-2xl font-black text-sm sm:text-base tracking-wide transition-all flex items-center justify-center gap-3 cursor-pointer shadow-2xl ${
                       amIReady
-                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
-                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-white/15"
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-2 border-emerald-400 shadow-emerald-600/40 ring-4 ring-emerald-500/20 hover:scale-[1.02] active:scale-[0.98]"
+                        : "bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-black border-2 border-amber-300 shadow-amber-500/40 ring-4 ring-amber-500/20 animate-pulse hover:scale-[1.02] active:scale-[0.98]"
                     }`}
                   >
                     {amIReady ? (
                       <>
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span>READY ✓ (Click to Unready)</span>
+                        <CheckCircle2 className="w-6 h-6" />
+                        <span>YOU ARE READY ✓ (Click to Unready)</span>
                       </>
                     ) : (
                       <>
-                        <Circle className="w-5 h-5" />
-                        <span>READY UP!</span>
+                        <Gamepad2 className="w-6 h-6 fill-black/20" />
+                        <span>CLICK TO READY UP!</span>
                       </>
                     )}
                   </button>
@@ -1815,38 +1970,51 @@ export function MultiplayerModal({
                       type="button"
                       onClick={handleLaunchSession}
                       disabled={!activeRoom.canStart || isMutatingRoom}
-                      className={`flex-1 min-w-[220px] py-3.5 px-8 rounded-xl font-black text-sm uppercase tracking-wider transition flex items-center justify-center gap-2 ${
+                      className={`flex-1 min-w-[220px] py-4 px-8 rounded-2xl font-black text-sm sm:text-base uppercase tracking-wider transition-all flex items-center justify-center gap-3 ${
                         activeRoom.canStart
-                          ? "bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 hover:brightness-110 text-white shadow-xl shadow-emerald-500/30 animate-pulse cursor-pointer"
+                          ? "bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 hover:brightness-110 text-white shadow-2xl shadow-emerald-500/40 ring-4 ring-emerald-500/20 animate-pulse cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                           : "bg-zinc-900 text-zinc-500 border border-white/10 cursor-not-allowed"
                       }`}
                     >
-                      <Play className="w-5 h-5 fill-current" />
+                      <Play className="w-6 h-6 fill-current" />
                       <span>
                         {activeRoom.canStart
                           ? "GO! Launch 2P Session"
                           : !activeRoom.guest
                           ? "Waiting for Player 2..."
-                          : "Waiting for Both Ready..."}
+                          : !activeRoom.host.isReady
+                          ? "You must Ready Up first"
+                          : "Waiting for Player 2 to Ready Up..."}
                       </span>
                     </button>
                   ) : (
-                    <div className="flex-1 min-w-[200px] py-3 px-4 rounded-xl bg-zinc-950 border border-white/10 text-center text-xs font-bold text-zinc-300">
+                    <button
+                      type="button"
+                      onClick={handleToggleReady}
+                      disabled={isMutatingRoom}
+                      className={`flex-1 min-w-[200px] py-4 px-5 rounded-2xl border-2 text-center text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        activeRoom.canStart
+                          ? "bg-emerald-950/80 border-emerald-400 text-emerald-300 animate-pulse hover:bg-emerald-900 shadow-lg shadow-emerald-900/30"
+                          : amIReady
+                          ? "bg-zinc-900/80 border-white/10 text-zinc-300 hover:bg-zinc-800"
+                          : "bg-amber-950/40 border-amber-500/40 hover:bg-amber-900/40 text-amber-300 shadow-lg shadow-amber-900/20 animate-pulse"
+                      }`}
+                    >
                       {activeRoom.canStart ? (
-                        <span className="text-emerald-400 animate-pulse">
-                          🚀 Both Players Ready! Waiting for Host to hit GO...
-                        </span>
+                        <span>🚀 Both Players Ready! Waiting for Host to hit GO...</span>
+                      ) : amIReady ? (
+                        <span>⏳ You are Ready! Waiting for Host to Ready Up...</span>
                       ) : (
-                        <span>Both players must Ready Up to activate GO</span>
+                        <span>👉 Tap here or click Ready Up to lock in!</span>
                       )}
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Right Column (5 cols): Built-in Lobby Chat */}
-            <div className="lg:col-span-5 flex flex-col bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden h-[520px] lg:h-auto">
+            <div className={`lg:col-span-5 flex flex-col bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden h-[520px] lg:h-auto ${mobileLobbyTab === "chat" ? "flex" : "hidden lg:flex"}`}>
               <div className="px-4 py-3 bg-zinc-950/80 border-b border-white/10 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-emerald-400" />
@@ -1857,6 +2025,34 @@ export function MultiplayerModal({
                 <span className="text-[11px] text-zinc-400">
                   Real-time room comms
                 </span>
+              </div>
+
+              {/* Ready Status Bar inside Chat */}
+              <div className="px-4 py-2 bg-zinc-950/95 border-b border-white/10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-zinc-400 font-bold">Your Status:</span>
+                  {amIReady ? (
+                    <span className="text-emerald-400 font-black flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> READY
+                    </span>
+                  ) : (
+                    <span className="text-amber-400 font-black flex items-center gap-1 animate-pulse">
+                      <Circle className="w-3.5 h-3.5" /> NOT READY
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleReady}
+                  disabled={isMutatingRoom}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase transition cursor-pointer shadow ${
+                    amIReady
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                      : "bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black shadow-amber-500/30 ring-2 ring-amber-300 animate-pulse"
+                  }`}
+                >
+                  {amIReady ? "Unready" : "Ready Up Now"}
+                </button>
               </div>
 
               <div
@@ -1936,6 +2132,7 @@ export function MultiplayerModal({
               </form>
             </div>
           </div>
+        </div>
         )}
 
         {/* VIEW 3: SYNCHRONIZED 2-PLAYER LIBRETRO SESSION */}
