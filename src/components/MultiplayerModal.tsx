@@ -26,6 +26,7 @@ import {
   Cable,
   Minimize2,
   Maximize2,
+  ArrowLeft,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
 import {
@@ -171,7 +172,6 @@ export function MultiplayerModal({
   const [activeP2Buttons, setActiveP2Buttons] = useState<Record<number, boolean>>({});
   const [latestRelayFrame, setLatestRelayFrame] = useState<string | null>(null);
   const [isGuestMuted, setIsGuestMuted] = useState<boolean>(false);
-  const [showInGameChat, setShowInGameChat] = useState<boolean>(true);
 
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLInputElement | null>(null);
@@ -186,6 +186,7 @@ export function MultiplayerModal({
   const pressedKeysRef = useRef<Set<string>>(new Set());
 
   // Game Boy (GB / GBC / GBA) Link Cable mode state
+  const [linkPipVisible, setLinkPipVisible] = useState<boolean>(true);
   const [linkPipExpanded, setLinkPipExpanded] = useState<boolean>(false);
   const [linkPacketsCount, setLinkPacketsCount] = useState<number>(0);
   const [isSelectingGuestGame, setIsSelectingGuestGame] = useState<boolean>(true);
@@ -1155,6 +1156,7 @@ export function MultiplayerModal({
 
   if (!isOpen) return null;
 
+  const isPlaying = Boolean(activeRoom && activeRoom.status === "playing");
   const amIReady =
     activeRoom &&
     (myRole === "host"
@@ -1162,94 +1164,127 @@ export function MultiplayerModal({
       : Boolean(activeRoom.guest?.isReady));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4">
-      <div className="relative w-full md:w-[98vw] max-w-[99vw] 2xl:max-w-[1920px] h-[95vh] sm:h-[96vh] bg-zinc-950 border border-white/15 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md ${
+        isPlaying ? "p-0 sm:p-2" : "p-2 sm:p-4"
+      }`}
+    >
+      <div
+        className={`relative w-full md:w-[98vw] max-w-[99vw] 2xl:max-w-[1920px] bg-zinc-950 flex flex-col overflow-hidden ${
+          isPlaying
+            ? "h-full sm:h-[97vh] rounded-none sm:rounded-2xl border-0 sm:border border-white/15 shadow-2xl"
+            : "h-[95vh] sm:h-[96vh] rounded-2xl border border-white/15 shadow-2xl"
+        }`}
+      >
         {/* Top Modal Header */}
-        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 bg-zinc-900/90 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-600/25">
-              <Users className="w-5 h-5 text-white" />
+        {activeRoom && activeRoom.status === "playing" ? (
+          <div className="shrink-0 flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 bg-zinc-950/95 border-b border-white/10 z-30">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <span className="shrink-0 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {activeRoom.systemId.toUpperCase()}
+              </span>
+              <h2 className="text-xs sm:text-sm font-bold text-white truncate max-w-[140px] xs:max-w-[200px] sm:max-w-md">
+                {isLinkMode && myRole === "guest"
+                  ? (activeRoom.guestGameTitle || activeRoom.gameTitle)
+                  : activeRoom.gameTitle}
+              </h2>
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-white/10 shrink-0">
+                {myRole === "host" ? "Player 1 (Host)" : "Player 2 (Challenger)"}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-sm sm:text-base font-black tracking-tight text-white uppercase">
-                  2-Player Retro Multiplayer Arena
-                </h2>
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  Unified Libretro Netplay
-                </span>
-                {activeRoom && (
-                  <button
-                    type="button"
-                    onClick={handleCopyRoomCode}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-xs font-mono font-bold text-amber-300 transition cursor-pointer"
-                    title="Copy Room Code"
-                  >
-                    <span>{activeRoom.id}</span>
-                    {copiedRoomCode ? (
-                      <Check className="w-3 h-3 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-zinc-400" />
-                    )}
-                  </button>
-                )}
-              </div>
-              <p className="text-[11px] text-zinc-400">
-                {activeRoom
-                  ? activeRoom.status === "playing"
-                    ? `Live 2P Session • Port 1: ${activeRoom.host.displayName} • Port 2: ${activeRoom.guest?.displayName || "Player 2"}`
-                    : `Room Lobby: "${activeRoom.name}" • Select an emulator & game, chat, and both Ready Up to launch!`
-                  : "Create a custom room as Host (Port 1) or join an open room as Challenger (Port 2)."}
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            {activeRoom && activeRoom.status === "playing" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowInGameChat((prev) => !prev)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                    showInGameChat
-                      ? "bg-indigo-600/25 border-indigo-500/40 text-indigo-200"
-                      : "bg-zinc-800 border-white/10 text-zinc-300"
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Room Chat</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReturnToLobby}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition cursor-pointer"
-                >
-                  <span>Back to Lobby</span>
-                </button>
-              </>
-            )}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleReturnToLobby}
+                className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition cursor-pointer"
+                title="Leave emulator and go back to room lobby"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Room</span>
+              </button>
 
-            {activeRoom && (
               <button
                 type="button"
                 onClick={handleLeaveRoom}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 transition cursor-pointer"
+                className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 transition cursor-pointer"
+                title="Disconnect and leave the room"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Leave Room</span>
+                <span className="hidden xs:inline">Leave Room</span>
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
-              title="Close Multiplayer Window"
-            >
-              <X className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-lg sm:rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-3.5 bg-zinc-900/90 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-600/25">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-sm sm:text-base font-black tracking-tight text-white uppercase">
+                    2-Player Retro Multiplayer Arena
+                  </h2>
+                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Unified Libretro Netplay
+                  </span>
+                  {activeRoom && (
+                    <button
+                      type="button"
+                      onClick={handleCopyRoomCode}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-xs font-mono font-bold text-amber-300 transition cursor-pointer"
+                      title="Copy Room Code"
+                    >
+                      <span>{activeRoom.id}</span>
+                      {copiedRoomCode ? (
+                        <Check className="w-3 h-3 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-zinc-400" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  {activeRoom
+                    ? `Room Lobby: "${activeRoom.name}" • Select an emulator & game, chat, and both Ready Up to launch!`
+                    : "Create a custom room as Host (Port 1) or join an open room as Challenger (Port 2)."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {activeRoom && (
+                <button
+                  type="button"
+                  onClick={handleLeaveRoom}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 transition cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Leave Room</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
+                title="Close Multiplayer Window"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {errorBanner && (
           <div className="shrink-0 px-6 py-2.5 bg-red-950/80 border-b border-red-500/30 text-xs text-red-200 flex items-center justify-between">
@@ -2137,94 +2172,71 @@ export function MultiplayerModal({
 
         {/* VIEW 3: SYNCHRONIZED 2-PLAYER LIBRETRO SESSION */}
         {activeRoom && activeRoom.status === "playing" && (
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-black">
+          <div className="flex-1 flex flex-col overflow-hidden bg-black w-full h-full">
             {/* Shared Unified Libretro Screen Area */}
-            <div className="flex-1 flex flex-col relative bg-black overflow-hidden">
-              {/* Synchronized Status Bar */}
-              <div className="shrink-0 px-4 py-2 bg-zinc-950/90 border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-3">
-                  {isLinkMode ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold">
-                      <Cable className="w-3.5 h-3.5" />
-                      Virtual Link Cable Active ({linkPacketsCount} packets)
-                    </span>
+            <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden w-full h-full">
+              {isLinkMode ? (
+                <div className="relative w-full h-full bg-black flex items-center justify-center">
+                  {myRole === "host" && activeRoom.gameId ? (
+                    <iframe
+                      ref={hostIframeRef}
+                      src={`/roms/play/${encodeURIComponent(activeRoom.gameId)}?autostart=1&multiplayer=link-host`}
+                      title={activeRoom.gameTitle || "Host Game Boy"}
+                      className="w-full h-full border-0"
+                      allow="autoplay; fullscreen; gamepad"
+                    />
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
-                      <Wifi className="w-3.5 h-3.5" />
-                      {connectionState === "webrtc-live"
-                        ? "WebRTC P2P Stream Active"
-                        : "Synchronized Relay Stream Active"}
-                    </span>
+                    <iframe
+                      ref={guestIframeRef}
+                      src={`/roms/play/${encodeURIComponent(activeRoom.guestGameId || activeRoom.gameId || "")}?autostart=1&multiplayer=link-guest`}
+                      title={activeRoom.guestGameTitle || activeRoom.gameTitle || "Guest Game Boy"}
+                      className="w-full h-full border-0"
+                      allow="autoplay; fullscreen; gamepad"
+                    />
                   )}
-                  <span className="text-zinc-300 font-semibold">
-                    <strong className="text-red-400">P1 ({activeRoom.host.displayName}):</strong>{" "}
-                    {activeRoom.gameTitle}
-                  </span>
-                  <span className="text-zinc-300 font-semibold">
-                    <strong className="text-indigo-400">P2 ({activeRoom.guest?.displayName || "Player 2"}):</strong>{" "}
-                    {isLinkMode ? (activeRoom.guestGameTitle || activeRoom.gameTitle) : "Controller Port 2"}
-                  </span>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-[11px] text-zinc-400">
-                    Controls: Arrows = D-Pad • Z = A • X = B • Enter = Start • Shift = Select
-                  </span>
-                </div>
-              </div>
-
-              {/* Game Viewport: Link Cable Mode renders independent handhelds with Cable Cam PIP; Couch mode renders unified host + guest stream */}
-              <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
-                {isLinkMode ? (
-                  <div className="relative w-full h-full bg-black flex items-center justify-center">
-                    {myRole === "host" && activeRoom.gameId ? (
-                      <iframe
-                        ref={hostIframeRef}
-                        src={`/roms/play/${encodeURIComponent(activeRoom.gameId)}?autostart=1&multiplayer=link-host`}
-                        title={activeRoom.gameTitle || "Host Game Boy"}
-                        className="w-full h-full border-0"
-                        allow="autoplay; fullscreen; gamepad"
-                      />
-                    ) : (
-                      <iframe
-                        ref={guestIframeRef}
-                        src={`/roms/play/${encodeURIComponent(activeRoom.guestGameId || activeRoom.gameId || "")}?autostart=1&multiplayer=link-guest`}
-                        title={activeRoom.guestGameTitle || activeRoom.gameTitle || "Guest Game Boy"}
-                        className="w-full h-full border-0"
-                        allow="autoplay; fullscreen; gamepad"
-                      />
-                    )}
-
-                    {/* Floating Picture-in-Picture "Cable Cam" showing partner's Game Boy */}
+                  {/* Floating Picture-in-Picture "Cable Cam" showing partner's Game Boy */}
+                  {linkPipVisible ? (
                     <div
-                      className={`absolute top-4 right-4 z-20 rounded-xl overflow-hidden border border-white/20 bg-zinc-950/95 shadow-2xl transition-all duration-300 ${
-                        linkPipExpanded ? "w-80 h-72" : "w-48 h-44"
+                      className={`absolute top-3 right-3 z-20 rounded-xl overflow-hidden border border-white/20 bg-zinc-950/95 shadow-2xl transition-all duration-300 ${
+                        linkPipExpanded
+                          ? "w-64 h-56 sm:w-80 sm:h-72"
+                          : "w-32 h-28 sm:w-48 sm:h-44"
                       }`}
                     >
-                      <div className="px-2.5 py-1.5 bg-zinc-900 border-b border-white/10 flex items-center justify-between text-[11px] font-bold text-white select-none">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <Cable className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <div className="px-2 py-1 bg-zinc-900 border-b border-white/10 flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-white select-none">
+                        <div className="flex items-center gap-1 truncate">
+                          <Cable className="w-3 h-3 text-indigo-400 shrink-0" />
                           <span className="truncate">
                             {myRole === "host"
                               ? `${activeRoom.guest?.displayName || "Player 2"}'s Screen`
                               : `${activeRoom.host.displayName}'s Screen`}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setLinkPipExpanded((v) => !v)}
-                          className="p-1 hover:bg-white/10 rounded text-zinc-300 hover:text-white cursor-pointer"
-                          title={linkPipExpanded ? "Minimize" : "Expand"}
-                        >
-                          {linkPipExpanded ? (
-                            <Minimize2 className="w-3.5 h-3.5" />
-                          ) : (
-                            <Maximize2 className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setLinkPipExpanded((v) => !v)}
+                            className="p-1 hover:bg-white/10 rounded text-zinc-300 hover:text-white cursor-pointer"
+                            title={linkPipExpanded ? "Minimize" : "Expand"}
+                          >
+                            {linkPipExpanded ? (
+                              <Minimize2 className="w-3 h-3" />
+                            ) : (
+                              <Maximize2 className="w-3 h-3" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLinkPipVisible(false)}
+                            className="p-1 hover:bg-white/10 rounded text-zinc-400 hover:text-white cursor-pointer"
+                            title="Hide Cable Cam"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="relative w-full h-[calc(100%-28px)] bg-black flex items-center justify-center">
+                      <div className="relative w-full h-[calc(100%-24px)] bg-black flex items-center justify-center">
                         <video
                           ref={peerVideoRef}
                           playsInline
@@ -2234,18 +2246,30 @@ export function MultiplayerModal({
                         />
                       </div>
                     </div>
-                  </div>
-                ) : myRole === "host" && activeRoom.gameId ? (
-                  <iframe
-                    ref={hostIframeRef}
-                    src={`/roms/play/${encodeURIComponent(activeRoom.gameId)}?autostart=1&multiplayer=host`}
-                    title={activeRoom.gameTitle || "Unified 2-Player Emulator"}
-                    className="w-full h-full border-0"
-                    allow="autoplay; fullscreen; gamepad"
-                  />
-                ) : (
-                  <div className="relative w-full h-full flex flex-col items-center justify-center bg-black">
-                    {/* WebRTC Live Stream Video */}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLinkPipVisible(true)}
+                      className="absolute top-3 right-3 z-20 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-indigo-500/40 text-[10px] font-bold text-indigo-300 shadow-lg backdrop-blur-sm cursor-pointer"
+                      title="Show partner's Game Boy screen"
+                    >
+                      <Cable className="w-3 h-3 text-indigo-400" />
+                      <span>Cable Cam</span>
+                    </button>
+                  )}
+                </div>
+              ) : myRole === "host" && activeRoom.gameId ? (
+                <iframe
+                  ref={hostIframeRef}
+                  src={`/roms/play/${encodeURIComponent(activeRoom.gameId)}?autostart=1&multiplayer=host`}
+                  title={activeRoom.gameTitle || "Unified 2-Player Emulator"}
+                  className="w-full h-full border-0"
+                  allow="autoplay; fullscreen; gamepad"
+                />
+              ) : (
+                <div className="relative w-full h-full flex flex-col items-center justify-center bg-black">
+                  {/* WebRTC Live Stream Video */}
+                  <div className="flex-1 w-full min-h-0 relative flex items-center justify-center bg-black overflow-hidden">
                     <video
                       ref={guestVideoRef}
                       playsInline
@@ -2290,182 +2314,113 @@ export function MultiplayerModal({
                         <Volume2 className="w-4 h-4 text-emerald-400" />
                       )}
                     </button>
+                  </div>
 
-                    {/* Interactive Player 2 Controller Deck (Bottom Bar for Touch/Mouse + Visual Feedback) */}
-                    <div className="w-full shrink-0 bg-zinc-950/95 border-t border-white/10 px-4 py-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] flex flex-wrap items-center justify-between gap-4">
-                      {/* D-Pad */}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 mr-2">
-                          P2 D-Pad
-                        </span>
-                        {[
-                          { label: "◀", idx: 6 },
-                          { label: "▲", idx: 4 },
-                          { label: "▼", idx: 5 },
-                          { label: "▶", idx: 7 },
-                        ].map((btn) => (
-                          <button
-                            key={btn.idx}
-                            type="button"
-                            onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
-                            onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
-                            onMouseLeave={() => sendGuestControllerInput(btn.idx, false)}
-                            onTouchStart={(e) => {
-                              e.preventDefault();
-                              sendGuestControllerInput(btn.idx, true);
-                            }}
-                            onTouchEnd={(e) => {
-                              e.preventDefault();
-                              sendGuestControllerInput(btn.idx, false);
-                            }}
-                            className={`w-9 h-9 rounded-lg font-bold text-xs border transition select-none cursor-pointer ${
-                              activeP2Buttons[btn.idx]
-                                ? "bg-indigo-600 text-white border-indigo-400 scale-95"
-                                : "bg-zinc-900 text-zinc-200 border-white/10 hover:bg-zinc-800"
-                            }`}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
+                  {/* Interactive Player 2 Controller Deck (Bottom Bar for Touch/Mouse + Visual Feedback) */}
+                  <div className="w-full shrink-0 bg-zinc-950 border-t border-white/10 px-2 sm:px-4 py-2 sm:py-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] flex items-center justify-between gap-2 overflow-x-auto">
+                    {/* D-Pad */}
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      <span className="hidden md:inline text-[10px] font-black uppercase tracking-wider text-indigo-400 mr-1">
+                        P2 D-Pad
+                      </span>
+                      {[
+                        { label: "◀", idx: 6 },
+                        { label: "▲", idx: 4 },
+                        { label: "▼", idx: 5 },
+                        { label: "▶", idx: 7 },
+                      ].map((btn) => (
+                        <button
+                          key={btn.idx}
+                          type="button"
+                          onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
+                          onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
+                          onMouseLeave={() => sendGuestControllerInput(btn.idx, false)}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            sendGuestControllerInput(btn.idx, true);
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            sendGuestControllerInput(btn.idx, false);
+                          }}
+                          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-bold text-xs border transition select-none cursor-pointer flex items-center justify-center ${
+                            activeP2Buttons[btn.idx]
+                              ? "bg-indigo-600 text-white border-indigo-400 scale-95"
+                              : "bg-zinc-900 text-zinc-200 border-white/10 hover:bg-zinc-800 active:bg-zinc-700"
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
 
-                      {/* Select / Start */}
-                      <div className="flex items-center gap-2">
-                        {[
-                          { label: "SELECT", idx: 2 },
-                          { label: "START", idx: 3 },
-                        ].map((btn) => (
-                          <button
-                            key={btn.idx}
-                            type="button"
-                            onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
-                            onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
-                            onTouchStart={(e) => {
-                              e.preventDefault();
-                              sendGuestControllerInput(btn.idx, true);
-                            }}
-                            onTouchEnd={(e) => {
-                              e.preventDefault();
-                              sendGuestControllerInput(btn.idx, false);
-                            }}
-                            className={`px-3 py-1.5 rounded-lg font-black text-[10px] tracking-wider border transition select-none cursor-pointer ${
-                              activeP2Buttons[btn.idx]
-                                ? "bg-amber-500 text-black border-amber-300"
-                                : "bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800"
-                            }`}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
+                    {/* Select / Start */}
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                      {[
+                        { label: "SELECT", idx: 2 },
+                        { label: "START", idx: 3 },
+                      ].map((btn) => (
+                        <button
+                          key={btn.idx}
+                          type="button"
+                          onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
+                          onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            sendGuestControllerInput(btn.idx, true);
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            sendGuestControllerInput(btn.idx, false);
+                          }}
+                          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-black text-[9px] sm:text-[10px] tracking-wider border transition select-none cursor-pointer ${
+                            activeP2Buttons[btn.idx]
+                              ? "bg-amber-500 text-black border-amber-300 scale-95"
+                              : "bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800 active:bg-zinc-700"
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
 
-                      {/* Action Buttons (A, B, X, Y, L, R) */}
-                      <div className="flex items-center gap-1.5">
-                        {[
-                          { label: "Y", idx: 1 },
-                          { label: "X", idx: 9 },
-                          { label: "B", idx: 0 },
-                          { label: "A", idx: 8 },
-                          { label: "L", idx: 10 },
-                          { label: "R", idx: 11 },
-                        ].map((btn) => (
-                          <button
-                            key={btn.idx}
-                            type="button"
-                            onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
-                            onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
-                            onTouchStart={(e) => {
-                              e.preventDefault();
-                              sendGuestControllerInput(btn.idx, true);
-                            }}
-                            onTouchEnd={(e) => {
-                              e.preventDefault();
-                              sendGuestControllerInput(btn.idx, false);
-                            }}
-                            className={`w-9 h-9 rounded-full font-black text-xs border transition select-none cursor-pointer ${
-                              activeP2Buttons[btn.idx]
-                                ? "bg-emerald-500 text-black border-emerald-300 scale-95"
-                                : "bg-zinc-900 text-white border-white/15 hover:bg-zinc-800"
-                            }`}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
+                    {/* Action Buttons (A, B, X, Y, L, R) */}
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                      {[
+                        { label: "Y", idx: 1 },
+                        { label: "X", idx: 9 },
+                        { label: "B", idx: 0 },
+                        { label: "A", idx: 8 },
+                        { label: "L", idx: 10 },
+                        { label: "R", idx: 11 },
+                      ].map((btn) => (
+                        <button
+                          key={btn.idx}
+                          type="button"
+                          onMouseDown={() => sendGuestControllerInput(btn.idx, true)}
+                          onMouseUp={() => sendGuestControllerInput(btn.idx, false)}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            sendGuestControllerInput(btn.idx, true);
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            sendGuestControllerInput(btn.idx, false);
+                          }}
+                          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full font-black text-xs border transition select-none cursor-pointer flex items-center justify-center ${
+                            activeP2Buttons[btn.idx]
+                              ? "bg-emerald-500 text-black border-emerald-300 scale-95"
+                              : "bg-zinc-900 text-white border-white/15 hover:bg-zinc-800 active:bg-zinc-700"
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-
-            {/* Collapsible In-Game Side Chat */}
-            {showInGameChat && (
-              <div className="w-full lg:w-[340px] shrink-0 bg-zinc-950 border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col h-[240px] lg:h-full">
-                <div className="px-3.5 py-2.5 bg-zinc-900/90 border-b border-white/10 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-white">
-                    In-Game Room Chat
-                  </span>
-                  <span className="text-[10px] text-emerald-400 font-semibold">
-                    2P Connected
-                  </span>
-                </div>
-
-                <div
-                  ref={chatContainerRef}
-                  className="flex-1 overflow-y-auto p-3 space-y-2"
-                >
-                  {chatMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`p-2 rounded-lg text-xs ${
-                        msg.senderRole === "system"
-                          ? "bg-indigo-950/40 text-indigo-200 border border-indigo-500/20"
-                          : "bg-zinc-900/90 text-zinc-200"
-                      }`}
-                    >
-                      {msg.senderRole !== "system" && (
-                        <span className="font-bold text-emerald-400 mr-1.5">
-                          {msg.senderName}:
-                        </span>
-                      )}
-                      <span>{msg.message}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    submitRoomChat();
-                  }}
-                  className="p-2.5 bg-zinc-900 border-t border-white/10 flex items-center gap-1.5"
-                >
-                  <input
-                    ref={chatInputRef}
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        submitRoomChat();
-                      }
-                    }}
-                    placeholder="Chat while playing..."
-                    className="flex-1 px-3 py-2 rounded-lg bg-zinc-950 border border-white/10 text-xs text-white focus:outline-none focus:border-emerald-500/60"
-                  />
-                  <button
-                    type="submit"
-                    onMouseDown={(e) => e.preventDefault()}
-                    disabled={!chatInput.trim()}
-                    className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white transition cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              </div>
-            )}
           </div>
         )}
       </div>

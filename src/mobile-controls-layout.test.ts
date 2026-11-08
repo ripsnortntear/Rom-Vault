@@ -146,4 +146,25 @@ describe("Mobile Touch Control Layout & Safe Area Invariants", () => {
       '#mobile-emulator-container .ejs_popup_container:not([style*="display: none"])'
     );
   });
+
+  it("MultiplayerModal maximizes gameplay viewport by eliminating in-game chat and providing a streamlined header", () => {
+    const content = fs.readFileSync(multiplayerModalPath, "utf-8");
+
+    // Header during gameplay provides clean Return to Room, Leave Room, and Close
+    expect(content).toContain("Back to Room");
+    expect(content).toContain("Leave Room");
+    expect(content).toContain("handleReturnToLobby");
+
+    // In-game chat and status bars are excluded during active gameplay
+    expect(content).not.toContain("In-Game Room Chat");
+    expect(content).not.toContain("Chat while playing...");
+    expect(content).not.toContain("Controls: Arrows = D-Pad");
+
+    // P2 Couch video container uses flex-1 min-h-0 to avoid zoom / overflow
+    expect(content).toContain("flex-1 w-full min-h-0 relative flex items-center justify-center bg-black overflow-hidden");
+
+    // Cable Cam PIP supports toggle / minimization so it never blocks the emulator overlay
+    expect(content).toContain("linkPipVisible");
+    expect(content).toContain("Cable Cam");
+  });
 });
