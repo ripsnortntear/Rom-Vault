@@ -147,6 +147,28 @@ export function RetroLibraryClient({
   const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isFleetMenuOpen, setIsFleetMenuOpen] = useState<boolean>(false);
+  const fleetMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isFleetMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fleetMenuRef.current && !fleetMenuRef.current.contains(e.target as Node)) {
+        setIsFleetMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsFleetMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFleetMenuOpen]);
 
   useEffect(() => {
     if (!isMoreMenuOpen) return;
@@ -904,6 +926,192 @@ export function RetroLibraryClient({
                       </a>
                     )}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Fleet Services Mega Menu Pill */}
+            <div ref={fleetMenuRef} className="relative inline-block shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsFleetMenuOpen((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold border transition cursor-pointer select-none ${
+                  isFleetMenuOpen
+                    ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-lg shadow-cyan-950/60"
+                    : "bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                }`}
+                title="Fleet Services & Docker Containers"
+                aria-expanded={isFleetMenuOpen}
+              >
+                <span>🚀</span>
+                <span className="hidden sm:inline">Fleet Services</span>
+                <span className="sm:hidden">Fleet</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-cyan-400 transition-transform duration-200 ${
+                    isFleetMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {isFleetMenuOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-zinc-950/98 border border-cyan-500/30 shadow-2xl backdrop-blur-2xl p-4 z-50 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                    <span className="text-xs font-black tracking-wider uppercase text-cyan-400 flex items-center gap-1.5">
+                      <span>🚀</span> Fleet Services
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400">OLDSMARCHAOS SSO</span>
+                  </div>
+
+                  {/* Mega Menu Grid */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {/* Media & Torrents */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media</div>
+                      <a
+                        href="/jellyfin/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">📺</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">Jellyfin</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Streaming</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/tor/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">📥</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">qBittorrent</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">VPN Client</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/filebot/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">📁</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">FileBot</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Renamer</div>
+                        </div>
+                      </a>
+                    </div>
+
+                    {/* Home & Inventory */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Home & Tools</div>
+                      <a
+                        href="/grocy/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">🥗</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">Grocy</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">ERP & Pantry</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/barcodebuddy/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">🏷️</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">BarcodeBuddy</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Scanner</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/homebox/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">📦</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">Homebox</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Inventory</div>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Systems & Portals */}
+                  <div className="pt-2 border-t border-white/10 space-y-1 text-xs">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Systems & Portals</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <a
+                        href="/git/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">🦊</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">GitLab</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Code & CI</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/ai/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">🤖</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">DecompAI</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Ghidra AI</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/charm/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">🔧</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">CHARM</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Car Manuals</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/tools"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">⚡</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">Video Tools</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">FFmpeg Suite</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/minecraft"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">⛏️</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">Minecraft</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Purpur 1.21</div>
+                        </div>
+                      </a>
+                      <a
+                        href="/"
+                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                      >
+                        <span className="text-sm">🏠</span>
+                        <div>
+                          <div className="font-bold text-[11px] leading-tight">Oldsmar Home</div>
+                          <div className="text-[9px] text-zinc-400 leading-tight">Main Portal</div>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+
+                  {currentUser?.role === "admin" && (
+                    <div className="pt-2 border-t border-white/10">
+                      <a
+                        href="/operations"
+                        className="flex items-center justify-center gap-2 py-1.5 px-3 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 font-bold text-xs transition"
+                      >
+                        <span>🛡️</span> Nexus Operations Command
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

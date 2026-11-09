@@ -315,7 +315,7 @@ export async function setSessionCookie(
     httpOnly: true,
     secure: isHttps || process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
-    path: "/roms",
+    path: "/",
     expires,
   };
 
@@ -331,7 +331,15 @@ export async function setSessionCookie(
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await getCookieStore();
   const isHttps = process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") ?? false;
-  const cookieOptions = {
+  const cookieOptionsRoot = {
+    httpOnly: true,
+    secure: isHttps || process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    expires: new Date(0),
+    maxAge: 0,
+  };
+  const cookieOptionsRoms = {
     httpOnly: true,
     secure: isHttps || process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
@@ -340,7 +348,10 @@ export async function clearSessionCookie(): Promise<void> {
     maxAge: 0,
   };
 
-  cookieStore.set(SESSION_COOKIE_NAME, "", cookieOptions);
-  cookieStore.set("session_token", "", cookieOptions);
-  cookieStore.set("rom_vault_session", "", cookieOptions);
+  cookieStore.set(SESSION_COOKIE_NAME, "", cookieOptionsRoot);
+  cookieStore.set("session_token", "", cookieOptionsRoot);
+  cookieStore.set("rom_vault_session", "", cookieOptionsRoot);
+  cookieStore.set(SESSION_COOKIE_NAME, "", cookieOptionsRoms);
+  cookieStore.set("session_token", "", cookieOptionsRoms);
+  cookieStore.set("rom_vault_session", "", cookieOptionsRoms);
 }

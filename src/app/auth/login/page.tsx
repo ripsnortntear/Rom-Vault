@@ -45,12 +45,9 @@ function LoginForm(): React.ReactElement {
       }
 
       // Successful login -> perform top-level navigation to ensure fresh session state
-      setSuccessMessage("Authentication successful! Redirecting to ROM Vault...");
+      setSuccessMessage("Authentication successful! Redirecting...");
       const redirectParam = searchParams.get("redirect");
       let target = redirectParam || "/roms";
-      if (!target.startsWith("/roms")) {
-        target = `/roms${target.startsWith("/") ? "" : "/"}${target}`;
-      }
       if (target.includes("/auth")) {
         target = "/roms";
       }
