@@ -376,15 +376,20 @@ function scanSystem(system: string): SystemScanResult {
         }
       }
       const lower = entry.name.toLowerCase();
+      const ext = path.extname(lower);
       if (
         lower.startsWith(".") ||
+        lower.startsWith("gamelist") ||
+        lower.includes(".bak") ||
+        lower.endsWith(".old") ||
         lower.endsWith(".m3u") ||
         lower.endsWith(".xml") ||
         lower.endsWith(".txt") ||
         lower.endsWith(".json") ||
         lower.endsWith(".dat") ||
         lower.endsWith(".db") ||
-        lower.endsWith(".ini")
+        lower.endsWith(".ini") ||
+        !/^\.(zip|7z|chd|iso|bin|cue|rvz|nes|sfc|smc|gb|gbc|gba|z64|n64|v64|md|gen|32x|sms|gg|pbp|cso|gdi|cdi|wad|gcm|nds|rom|a26|pce|ngp|ngc|ws|wsc)$/i.test(ext)
       ) {
         return false;
       }

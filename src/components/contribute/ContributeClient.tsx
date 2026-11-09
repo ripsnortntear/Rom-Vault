@@ -827,7 +827,7 @@ export function ContributeClient({
                         </span>
                         {game.system === "mame" && (
                           <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-white/10 text-[10px] font-mono text-zinc-400">
-                            {game.baseName}.zip
+                            {game.romFileName}
                           </span>
                         )}
                       </div>

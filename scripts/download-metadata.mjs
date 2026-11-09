@@ -1410,7 +1410,14 @@ async function main() {
       .filter((ent) => {
         if (!ent.isFile()) return false;
         const l = ent.name.toLowerCase();
-        return !l.startsWith(".") && !l.endsWith(".xml") && !l.endsWith(".txt") && !l.endsWith(".json") && !l.endsWith(".dat") && !l.endsWith(".db") && !l.endsWith(".ini") && !l.endsWith(".m3u");
+        const ext = path.extname(l);
+        return (
+          !l.startsWith(".") &&
+          !l.startsWith("gamelist") &&
+          !l.includes(".bak") &&
+          !l.endsWith(".old") &&
+          /^\.(zip|7z|chd|iso|bin|cue|rvz|nes|sfc|smc|gb|gbc|gba|z64|n64|v64|md|gen|32x|sms|gg|pbp|cso|gdi|cdi|wad|gcm|nds|rom|a26|pce|ngp|ngc|ws|wsc)$/i.test(ext)
+        );
       });
 
     for (const file of files) {
