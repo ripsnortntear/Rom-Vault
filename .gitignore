@@ -24,7 +24,7 @@
 .DS_Store
 *.pem
 audit-report*.txt
-contributions/
+/contributions/
 .metadata_cache.json*
 Screenshot*.png
 
