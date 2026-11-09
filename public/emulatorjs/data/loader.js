@@ -79,6 +79,8 @@
         await loadStyle("emulator.min.css");
     }
     const config = {};
+    const isMameCore = window.EJS_core === "mame" || window.EJS_core === "arcade" || window.EJS_core === "mame2003_plus";
+    const defaultExt = isMameCore ? ".zip" : ".chd";
     let resolvedGameUrl = window.EJS_gameUrl;
     if (typeof resolvedGameUrl === "string") {
         try {
@@ -87,7 +89,7 @@
             if (fileParam) {
                 config.gamePath = fileParam;
             } else if (window.EJS_gameName) {
-                config.gamePath = window.EJS_gameName + ".chd";
+                config.gamePath = window.EJS_gameName + defaultExt;
             }
         } catch(e) {}
     }
@@ -185,12 +187,16 @@
             const urlObj = new URL(window.EJS_gameUrl, window.location.origin);
             const targetFile = urlObj.searchParams.get("file") 
                 || window.EJS_gamePath 
-                || (window.EJS_gameName ? window.EJS_gameName + ".chd" : null);
+                || (window.EJS_gameName ? window.EJS_gameName + defaultExt : null);
             if (targetFile) {
-                window.EJS_emulator.fileName = decodeURIComponent(targetFile);
+                const decodedFile = typeof window._ejsUnroll === "function"
+                    ? window._ejsUnroll(targetFile)
+                    : decodeURIComponent(targetFile);
+                window.EJS_emulator.fileName = decodedFile;
                 if (window.EJS_emulator.config) {
                     window.EJS_emulator.config.disableCue = true;
-                    window.EJS_emulator.config.fileName = decodeURIComponent(targetFile);
+                    window.EJS_emulator.config.fileName = decodedFile;
+                    window.EJS_emulator.config.gamePath = decodedFile;
                 }
                 console.log("[loader.js] Enforced emulator fileName:", window.EJS_emulator.fileName);
             }

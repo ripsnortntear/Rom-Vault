@@ -103,11 +103,13 @@ function resolveRomFilePath(
         "sega32x",
         "sms",
         "sgg",
+        "sgb",
+        "mame",
       ];
 
   // Strategy 1: Explicit fileParam resolution
   if (fileParam) {
-    const cleanFile = path.basename(fileParam);
+    const cleanFile = path.basename(safeDecodeURIComponent(fileParam));
     for (const sys of systemsToCheck) {
       const romsDir = path.join(STORAGE_ROOT, sys, "roms");
       if (!fs.existsSync(romsDir)) continue;

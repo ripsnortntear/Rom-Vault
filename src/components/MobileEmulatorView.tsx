@@ -880,11 +880,15 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
         const discNum = activeDisc ? activeDisc.discNumber : undefined;
         const discQuery = discNum ? `?disc=${discNum}` : "";
 
-        const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanGameId)}/stream${discQuery}`;
         const rawFileName = activeDisc ? activeDisc.fileName : game.romFileName;
-        const cleanFileName = (
-          rawFileName ? deepDecode(rawFileName).trim() : game.title + ".chd"
-        ).replace(/\.(bin|cue|zip)$/i, ".chd");
+        const fallbackExt = game.system === "mame" ? ".zip" : ".chd";
+        const decodedRawName = rawFileName
+          ? deepDecode(rawFileName).trim()
+          : `${cleanGameId.includes("__") ? cleanGameId.split("__").slice(1).join("__") : game.title}${fallbackExt}`;
+        const cleanFileName = isPs1
+          ? decodedRawName.replace(/\.(bin|cue|zip)$/i, ".chd")
+          : decodedRawName;
+        const streamUrl = `/roms/api/roms/${encodeURIComponent(cleanGameId)}/stream/${encodeURIComponent(cleanFileName)}${discQuery}`;
 
         const baseWithoutExt = cleanFileName.replace(
           /\.(chd|rvz|iso|bin|cue|zip|7z|sfc|smc|nes|z64|v64|n64|gba|gbc|gb)$/i,
