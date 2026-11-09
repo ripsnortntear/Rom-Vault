@@ -15,6 +15,7 @@ import {
   Users,
   MoreHorizontal,
   ChevronDown,
+  UploadCloud,
 } from "lucide-react";
 import type { CoverArtStyle, GameItem, LibraryStats } from "@/types/game";
 import { HeroSpotlight } from "@/components/HeroSpotlight";
@@ -689,6 +690,16 @@ export function RetroLibraryClient({
               <span>Leaderboards</span>
             </a>
 
+            {/* 5b. Asset Contribution Center (>= lg: 1024px) */}
+            <a
+              href="/roms/contribute"
+              className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition cursor-pointer shrink-0"
+              title="Help Complete Missing Game Assets"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Contribute</span>
+            </a>
+
             {/* 6. Admin Link (if admin, >= xl: 1280px) */}
             {currentUser?.role === "admin" && (
               <a
@@ -788,6 +799,23 @@ export function RetroLibraryClient({
                         <div className="text-white font-bold text-xs">Community Leaderboards</div>
                         <div className="text-[10px] text-zinc-400 truncate">
                           Hall of fame high scores &amp; records
+                        </div>
+                      </div>
+                    </a>
+
+                    {/* Contribute Assets (< lg) */}
+                    <a
+                      href="/roms/contribute"
+                      onClick={() => setIsMoreMenuOpen(false)}
+                      className="lg:hidden w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold text-zinc-200 hover:text-white hover:bg-white/10 transition cursor-pointer text-left"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                        <UploadCloud className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white font-bold text-xs">Contribute Assets</div>
+                        <div className="text-[10px] text-zinc-400 truncate">
+                          Help upload missing box art, screenshots &amp; videos
                         </div>
                       </div>
                     </a>

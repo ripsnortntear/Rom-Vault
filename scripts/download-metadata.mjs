@@ -726,7 +726,11 @@ async function runAudit() {
 
     const romFiles = fs
       .readdirSync(romsDir, { withFileTypes: true })
-      .filter((e) => e.isFile() && !e.name.startsWith("."))
+      .filter((e) => {
+        if (!e.isFile()) return false;
+        const l = e.name.toLowerCase();
+        return !l.startsWith(".") && !l.endsWith(".xml") && !l.endsWith(".txt") && !l.endsWith(".json") && !l.endsWith(".dat") && !l.endsWith(".db") && !l.endsWith(".ini") && !l.endsWith(".m3u");
+      })
       .map((e) => e.name)
       .sort((a, b) => a.localeCompare(b));
 
@@ -757,9 +761,9 @@ async function runAudit() {
     };
 
     const artFolders = {
-      boxart: loadArtFolder(["artwork_front", "box2d", "images"]),
-      boxart3d: loadArtFolder(["artwork_3d", "box3d"]),
-      screenshots: loadArtFolder(["screenshot", "thumbnails"]),
+      boxart: loadArtFolder(["artwork_front", "box2d"]),
+      boxart3d: loadArtFolder(["artwork_3d", "box3d", "thumbnails"]),
+      screenshots: loadArtFolder(["screenshot", "images"]),
       titlescreens: loadArtFolder(["screentitle", "titles"]),
       logos: loadArtFolder(["logo", "marquee"]),
       discOrCart: loadArtFolder(sysConf.isDisc ? ["medium_disc"] : ["medium_front", "cartridges"]),
@@ -1403,7 +1407,11 @@ async function main() {
 
     const files = fs
       .readdirSync(romsDir, { withFileTypes: true })
-      .filter((ent) => ent.isFile() && !ent.name.startsWith("."));
+      .filter((ent) => {
+        if (!ent.isFile()) return false;
+        const l = ent.name.toLowerCase();
+        return !l.startsWith(".") && !l.endsWith(".xml") && !l.endsWith(".txt") && !l.endsWith(".json") && !l.endsWith(".dat") && !l.endsWith(".db") && !l.endsWith(".ini") && !l.endsWith(".m3u");
+      });
 
     for (const file of files) {
       const extIdx = file.name.lastIndexOf(".");
@@ -1426,13 +1434,13 @@ async function main() {
         return folders.some((f) => fileExistsWithAnyExt(path.join(artDir, f), baseName, extList));
       };
 
-      if (targets.boxart && (forceAll || !hasAsset(["artwork_front", "box2d", "images"]))) {
+      if (targets.boxart && (forceAll || !hasAsset(["artwork_front", "box2d"]))) {
         needs.boxart = true;
       }
-      if (targets.boxart3d && (forceAll || !hasAsset(["artwork_3d", "box3d"]))) {
+      if (targets.boxart3d && (forceAll || !hasAsset(["artwork_3d", "box3d", "thumbnails"]))) {
         needs.boxart3d = true;
       }
-      if (targets.screenshots && (forceAll || !hasAsset(["screenshot", "thumbnails"]))) {
+      if (targets.screenshots && (forceAll || !hasAsset(["screenshot", "images"]))) {
         needs.screenshots = true;
       }
       if (targets.titlescreens && (forceAll || !hasAsset(["screentitle", "titles"]))) {

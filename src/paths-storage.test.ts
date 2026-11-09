@@ -43,5 +43,13 @@ describe("Storage Root Resolution", () => {
 
     const traversalSystem = resolveSafeMediaPath("marquee", "pacman.png", "../../etc/passwd");
     expect(traversalSystem).toBeNull();
+
+    // Verify MAME box2d, thumbnails (3D box), and images (screenshot) alias resolutions
+    const box2dPath = resolveSafeMediaPath("artwork_front", "3countb.png", "mame");
+    expect(box2dPath).not.toBeNull();
+    const box3dPath = resolveSafeMediaPath("artwork_3d", "3countb.png", "mame");
+    expect(box3dPath).not.toBeNull();
+    const screenshotPath = resolveSafeMediaPath("screenshot", "3countb.png", "mame");
+    expect(screenshotPath).not.toBeNull();
   });
 });

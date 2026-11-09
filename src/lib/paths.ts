@@ -106,16 +106,17 @@ export function resolveSafeMediaPath(
 
     const artDir = getArtworkDirectory(norm);
     const categoryAliases: Record<string, string[]> = {
-      artwork_front: ["artwork_front", "box2d", "images"],
-      box2d: ["box2d", "images", "artwork_front"],
-      images: ["images", "box2d", "artwork_front"],
-      artwork_3d: ["artwork_3d", "box3d"],
+      artwork_front: ["artwork_front", "box2d"],
+      box2d: ["box2d", "artwork_front"],
+      artwork_3d: ["artwork_3d", "box3d", "thumbnails"],
+      box3d: ["box3d", "artwork_3d", "thumbnails"],
+      thumbnails: ["thumbnails", "artwork_3d", "box3d"],
       logo: ["logo", "marquee"],
       marquee: ["marquee", "logo"],
       medium_front: ["medium_front", "cartridges"],
       cartridges: ["cartridges", "medium_front"],
-      screenshot: ["screenshot", "thumbnails"],
-      thumbnails: ["thumbnails", "screenshot"],
+      screenshot: ["screenshot", "images"],
+      images: ["images", "screenshot"],
       screentitle: ["screentitle", "titles"],
       titles: ["titles", "screentitle"],
       fanart: ["fanart", "fanarts"],

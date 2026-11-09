@@ -191,6 +191,93 @@ function readDirectoryMap(dirPath: string): Map<string, string> {
   }
 }
 
+interface GamelistEntry {
+  name: string;
+  desc?: string | null;
+  developer?: string | null;
+  publisher?: string | null;
+  genres?: string[];
+  year?: number | null;
+  tags?: string[];
+}
+
+const gamelistCache = new Map<string, { mtimeMs: number; map: Map<string, GamelistEntry> }>();
+
+function decodeXmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_m, code) => String.fromCharCode(Number(code)))
+    .trim();
+}
+
+function extractXmlTag(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return m ? decodeXmlEntities(m[1]) : null;
+}
+
+function readGamelistXmlMap(romsDir: string): Map<string, GamelistEntry> {
+  try {
+    const xmlPath = path.join(/*turbopackIgnore: true*/ romsDir, "gamelist.xml");
+    if (!fs.existsSync(xmlPath)) {
+      return new Map<string, GamelistEntry>();
+    }
+    const stat = fs.statSync(xmlPath);
+    const cached = gamelistCache.get(xmlPath);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.map;
+    }
+
+    const xml = fs.readFileSync(xmlPath, "utf-8");
+    const blocks = xml.split("<game>").slice(1);
+    const map = new Map<string, GamelistEntry>();
+
+    for (const block of blocks) {
+      const rawPath = extractXmlTag(block, "path");
+      const rawName = extractXmlTag(block, "name");
+      if (!rawPath || !rawName) continue;
+
+      const base = rawPath
+        .replace(/^\.\//, "")
+        .replace(/\.[a-z0-9]+$/i, "")
+        .toLowerCase();
+
+      const desc = extractXmlTag(block, "desc");
+      const developer = extractXmlTag(block, "developer");
+      const publisher = extractXmlTag(block, "publisher");
+      const genreStr = extractXmlTag(block, "genre");
+      const genres = genreStr
+        ? genreStr.split(",").map((g) => g.trim()).filter(Boolean)
+        : undefined;
+      const relDate = extractXmlTag(block, "releasedate");
+      const yearMatch = relDate ? relDate.match(/^(\d{4})/) : null;
+      const year = yearMatch ? Number(yearMatch[1]) : null;
+      const family = extractXmlTag(block, "family");
+      const arcadeSys = extractXmlTag(block, "arcadesystemname");
+      const tags = [family, arcadeSys].filter((t): t is string => Boolean(t));
+
+      map.set(base, {
+        name: rawName,
+        desc,
+        developer,
+        publisher,
+        genres,
+        year,
+        tags,
+      });
+    }
+
+    gamelistCache.set(xmlPath, { mtimeMs: stat.mtimeMs, map });
+    return map;
+  } catch (err) {
+    console.warn("[scanner] Failed reading gamelist.xml:", err);
+    return new Map<string, GamelistEntry>();
+  }
+}
+
 function readStoryFile(storyDir: string, fileName: string): string {
   try {
     const storyPath = path.join(/*turbopackIgnore: true*/ storyDir, fileName);
@@ -274,6 +361,7 @@ function scanSystem(system: string): SystemScanResult {
   const boxbackMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "boxback"));
   const manualsMap = readDirectoryMap(path.join(/*turbopackIgnore: true*/ artworkDir, "manuals"));
   const storyDir = path.join(/*turbopackIgnore: true*/ artworkDir, "story");
+  const gamelistMap = readGamelistXmlMap(romsDir);
 
   const romEntries = fs
     .readdirSync(romsDir, { withFileTypes: true })
@@ -288,7 +376,18 @@ function scanSystem(system: string): SystemScanResult {
         }
       }
       const lower = entry.name.toLowerCase();
-      if (lower.startsWith(".") || lower.endsWith(".m3u")) return false;
+      if (
+        lower.startsWith(".") ||
+        lower.endsWith(".m3u") ||
+        lower.endsWith(".xml") ||
+        lower.endsWith(".txt") ||
+        lower.endsWith(".json") ||
+        lower.endsWith(".dat") ||
+        lower.endsWith(".db") ||
+        lower.endsWith(".ini")
+      ) {
+        return false;
+      }
       if (
         lower.includes("bios") &&
         (lower.endsWith(".bin") || lower.endsWith(".rom") || lower.endsWith(".dat"))
@@ -335,7 +434,13 @@ function scanSystem(system: string): SystemScanResult {
 
     totalSizeBytes += fileSizeBytes;
 
-    const parsed = parseRomBaseName(baseName);
+    const gamelistEntry = gamelistMap.get(lowerBase);
+    const parsed = parseRomBaseName(gamelistEntry?.name || baseName);
+    if (gamelistEntry?.tags && gamelistEntry.tags.length > 0) {
+      for (const t of gamelistEntry.tags) {
+        if (!parsed.tags.includes(t)) parsed.tags.push(t);
+      }
+    }
     for (const region of parsed.regions) {
       regionCounts[region] = (regionCounts[region] ?? 0) + 1;
     }
@@ -344,25 +449,25 @@ function scanSystem(system: string): SystemScanResult {
       artworkFrontMap.get(`${lowerBase}.png`) ??
       artworkFrontMap.get(lowerBase) ??
       box2dMap.get(`${lowerBase}.png`) ??
-      box2dMap.get(lowerBase) ??
-      imagesMap.get(`${lowerBase}.png`) ??
-      imagesMap.get(lowerBase);
+      box2dMap.get(lowerBase);
     const frontCat =
       artworkFrontMap.get(`${lowerBase}.png`) ?? artworkFrontMap.get(lowerBase)
         ? "artwork_front"
-        : box2dMap.get(`${lowerBase}.png`) ?? box2dMap.get(lowerBase)
-          ? "box2d"
-          : "images";
+        : "box2d";
 
     const artwork3dFile =
       artwork3dMap.get(`${lowerBase}.png`) ??
       artwork3dMap.get(lowerBase) ??
       box3dMap.get(`${lowerBase}.png`) ??
-      box3dMap.get(lowerBase);
+      box3dMap.get(lowerBase) ??
+      thumbnailsMap.get(`${lowerBase}.png`) ??
+      thumbnailsMap.get(lowerBase);
     const box3dCat =
       artwork3dMap.get(`${lowerBase}.png`) ?? artwork3dMap.get(lowerBase)
         ? "artwork_3d"
-        : "box3d";
+        : box3dMap.get(`${lowerBase}.png`) ?? box3dMap.get(lowerBase)
+          ? "box3d"
+          : "thumbnails";
 
     const logoFile =
       logoMap.get(`${lowerBase}.png`) ??
@@ -389,12 +494,12 @@ function scanSystem(system: string): SystemScanResult {
     const screenshotFile =
       screenshotMap.get(`${lowerBase}.png`) ??
       screenshotMap.get(lowerBase) ??
-      thumbnailsMap.get(`${lowerBase}.png`) ??
-      thumbnailsMap.get(lowerBase);
+      imagesMap.get(`${lowerBase}.png`) ??
+      imagesMap.get(lowerBase);
     const screenshotCat =
       screenshotMap.get(`${lowerBase}.png`) ?? screenshotMap.get(lowerBase)
         ? "screenshot"
-        : "thumbnails";
+        : "images";
 
     const screenTitleFile =
       screenTitleMap.get(`${lowerBase}.png`) ??
@@ -438,7 +543,9 @@ function scanSystem(system: string): SystemScanResult {
       withVideoCount += 1;
     }
 
-    const story = storyFile ? readStoryFile(storyDir, storyFile) : "";
+    const story =
+      (storyFile ? readStoryFile(storyDir, storyFile) : "") ||
+      (gamelistEntry?.desc ?? "");
     if (story.length > 0) {
       withStoryCount += 1;
     }
@@ -472,7 +579,10 @@ function scanSystem(system: string): SystemScanResult {
       fileSizeBytes,
       story,
       discs,
-      year: parsed.year ?? null,
+      year: gamelistEntry?.year ?? parsed.year ?? null,
+      developer: gamelistEntry?.developer ?? null,
+      publisher: gamelistEntry?.publisher ?? null,
+      genres: gamelistEntry?.genres ?? undefined,
       media: {
         rom: buildMediaUrl("roms", romFileName, system),
         artworkFront: artworkFrontFile
@@ -623,6 +733,9 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
           if (meta) {
             if (meta.cleanTitle && (game.system === "mame" || game.displayTitle === game.baseName)) {
               game.displayTitle = meta.cleanTitle;
+              game.sortTitle = meta.cleanTitle;
+              const firstChar = meta.cleanTitle.charAt(0).toUpperCase();
+              game.firstLetter = /^[A-Z]$/.test(firstChar) ? firstChar : "#";
             }
             if (meta.year) game.year = meta.year;
             if (meta.developer) game.developer = meta.developer;
