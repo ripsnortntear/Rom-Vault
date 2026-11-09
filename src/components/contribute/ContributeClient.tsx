@@ -264,7 +264,7 @@ export function ContributeClient({
     );
   };
 
-  // Available systems in library
+  // Available systems in library that still have missing assets to complete
   const availableSystems = useMemo(() => {
     const counts = new Map<string, { total: number; incomplete: number }>();
     for (const g of games) {
@@ -274,6 +274,7 @@ export function ContributeClient({
       counts.set(g.system, cur);
     }
     return Array.from(counts.entries())
+      .filter(([, stat]) => stat.incomplete > 0)
       .map(([sysId, stat]) => ({
         id: sysId,
         meta: KNOWN_SYSTEMS[sysId] || {
@@ -286,6 +287,11 @@ export function ContributeClient({
       }))
       .sort((a, b) => a.meta.shortLabel.localeCompare(b.meta.shortLabel));
   }, [games]);
+
+  const totalIncompleteAllSystems = useMemo(
+    () => availableSystems.reduce((sum, sys) => sum + sys.incomplete, 0),
+    [availableSystems]
+  );
 
   // System-scoped summary statistics
   const systemScopedStats = useMemo(() => {
@@ -953,8 +959,11 @@ export function ContributeClient({
             >
               <Layers className="w-3.5 h-3.5" />
               <span>All Systems</span>
-              <span className="px-1.5 py-0.5 rounded-md bg-black/30 text-[10px] font-mono">
-                {games.length.toLocaleString()}
+              <span
+                className="px-1.5 py-0.5 rounded-md bg-black/30 text-[10px] font-mono"
+                title={`${totalIncompleteAllSystems.toLocaleString()} total games missing assets`}
+              >
+                {totalIncompleteAllSystems.toLocaleString()}
               </span>
             </button>
 
