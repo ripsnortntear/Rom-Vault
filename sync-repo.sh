@@ -38,6 +38,9 @@ if [[ "$REBUILD" == true ]]; then
   echo "=========================================="
   echo " [Build] Testing Next.js Turbopack Build"
   echo "=========================================="
+  if [[ -d ".next" ]]; then
+    sudo chown -R "$(id -u):$(id -g)" .next 2>/dev/null || true
+  fi
   npm run build
   echo "[✓] Build passed cleanly! Proceeding to commit and push..."
 

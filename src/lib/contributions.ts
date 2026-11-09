@@ -182,10 +182,10 @@ export function getPointsForCategory(category: ContributionCategory): number {
 }
 
 export function getContributionsStagingDir(): string {
-  return path.join(/*turbopackIgnore: true*/ getStorageRoot(), ".contributions", "pending");
+  return `${getStorageRoot()}/.contributions/pending`;
 }
 
-function resolveTargetDirectory(system: string, category: ContributionCategory): string {
+export function resolveTargetDirectory(system: string, category: ContributionCategory): string {
   const artRoot = getArtworkDirectory(system);
   const candidates: Record<ContributionCategory, string[]> = {
     artwork_front: ["artwork_front", "box2d"],
@@ -202,13 +202,13 @@ function resolveTargetDirectory(system: string, category: ContributionCategory):
 
   const dirs = candidates[category] || ["artwork_front"];
   for (const sub of dirs) {
-    const full = path.join(/*turbopackIgnore: true*/ artRoot, sub);
+    const full = `${artRoot}/${sub}`;
     if (fs.existsSync(full)) {
       return full;
     }
   }
 
-  const primary = path.join(/*turbopackIgnore: true*/ artRoot, dirs[0]);
+  const primary = `${artRoot}/${dirs[0]}`;
   fs.mkdirSync(primary, { recursive: true });
   return primary;
 }
@@ -321,7 +321,7 @@ export async function submitAssetContribution(params: {
     const token = crypto.randomBytes(12).toString("hex");
     const safeExt = params.fileExt.startsWith(".") ? params.fileExt : `.${params.fileExt}`;
     stagedFilename = `${normSys}_${Date.now()}_${token}${safeExt}`;
-    const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, stagedFilename);
+    const stagedPath = `${stagingDir}/${stagedFilename}`;
     await fsp.writeFile(stagedPath, params.buffer);
     fileSize = params.buffer.length;
   } else if (params.category === "video" && params.sourceUrl) {
@@ -355,7 +355,7 @@ export async function submitAssetContribution(params: {
   // If this is a YouTube video link submission, kick off non-blocking background extraction into staging
   if (params.category === "video" && params.sourceUrl && stagedFilename) {
     const stagingDir = getContributionsStagingDir();
-    const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, stagedFilename);
+    const stagedPath = `${stagingDir}/${stagedFilename}`;
     void downloadYoutubePreviewToStaging(res.insertId, params.sourceUrl, stagedPath);
   }
 
@@ -541,13 +541,13 @@ export async function approveAssetContribution(
     if (!text) {
       return { ok: false, error: "Story text is empty." };
     }
-    const targetFile = path.join(/*turbopackIgnore: true*/ targetDir, `${item.baseName}.txt`);
+    const targetFile = `${targetDir}/${item.baseName}.txt`;
     await fsp.writeFile(targetFile, `${text}\n`, "utf-8");
 
     try {
       const gameId = `${item.system}__${encodeURIComponent(item.baseName)}`;
       await execute(
-        `INSERT INTO game_metadata (game_id, system, clean_title, summary, is_fetched)
+        `INSERT INTO game_metadata (id, system, clean_title, summary, is_fetched)
          VALUES (?, ?, ?, ?, 1)
          ON DUPLICATE KEY UPDATE summary = VALUES(summary), is_fetched = 1`,
         [gameId, item.system, item.gameTitle || item.baseName, text]
@@ -560,7 +560,7 @@ export async function approveAssetContribution(
       return { ok: false, error: "Staged file reference is missing for this submission." };
     }
     const stagingDir = getContributionsStagingDir();
-    const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, path.basename(item.stagedFilename));
+    const stagedPath = `${stagingDir}/${path.basename(item.stagedFilename)}`;
 
     // If this is a YouTube video and the background download hasn't finished yet, complete it now
     if (!fs.existsSync(stagedPath) && item.category === "video" && item.sourceUrl) {
@@ -582,12 +582,12 @@ export async function approveAssetContribution(
     }
 
     const safeExt = item.fileExt.startsWith(".") ? item.fileExt : `.${item.fileExt}`;
-    const targetFile = path.join(/*turbopackIgnore: true*/ targetDir, `${item.baseName}${safeExt}`);
+    const targetFile = `${targetDir}/${item.baseName}${safeExt}`;
 
     // Remove conflicting extensions for the same baseName in targetDir so the newly approved asset takes precedence
     for (const oldExt of [".png", ".jpg", ".jpeg", ".webp", ".mp4"]) {
       if (oldExt !== safeExt) {
-        const oldPath = path.join(/*turbopackIgnore: true*/ targetDir, `${item.baseName}${oldExt}`);
+        const oldPath = `${targetDir}/${item.baseName}${oldExt}`;
         if (fs.existsSync(oldPath)) {
           try {
             await fsp.unlink(oldPath);
@@ -641,7 +641,7 @@ export async function rejectAssetContribution(
 
   if (item.stagedFilename) {
     const stagingDir = getContributionsStagingDir();
-    const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, path.basename(item.stagedFilename));
+    const stagedPath = `${stagingDir}/${path.basename(item.stagedFilename)}`;
     if (fs.existsSync(stagedPath)) {
       try {
         await fsp.unlink(stagedPath);
