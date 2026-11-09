@@ -6,29 +6,81 @@ import {
   MessageSquare,
   Trash2,
   ExternalLink,
-  ShieldAlert,
   Search,
-  Filter,
+  UploadCloud,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Film,
+  Image as ImageIcon,
+  FileText,
+  Eye,
+  X,
 } from "lucide-react";
-import { moderateDeleteCommentAction, moderateDeleteScoreAction } from "@/app/actions/admin";
-import { getSafeHttpUrl } from "@/lib/security";
+import {
+  moderateDeleteCommentAction,
+  moderateDeleteScoreAction,
+  approveAssetContributionAction,
+  rejectAssetContributionAction,
+} from "@/app/actions/admin";
 import type { GameComment, GameHighScore } from "@/types/community";
+import type { AssetContributionItem, ContributionStatus } from "@/lib/contributions";
 
 interface AdminModerationClientProps {
   initialComments: GameComment[];
   initialScores: GameHighScore[];
+  initialContributions?: AssetContributionItem[];
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  artwork_front: "2D Box Art",
+  artwork_3d: "3D Box Art",
+  screenshot: "In-Game Screenshot",
+  screentitle: "Title Screen",
+  logo: "Logo / Marquee",
+  medium: "Cartridge / Disc Art",
+  video: "Gameplay Video (.mp4)",
+  story: "Story / Overview (.txt)",
+};
+
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 export function AdminModerationClient({
   initialComments,
   initialScores,
+  initialContributions = [],
 }: AdminModerationClientProps) {
-  const [activeTab, setActiveTab] = useState<"scores" | "comments">("scores");
+  const [activeTab, setActiveTab] = useState<"assets" | "scores" | "comments">("assets");
+  const [contributions, setContributions] = useState<AssetContributionItem[]>(initialContributions);
+  const [assetStatusFilter, setAssetStatusFilter] = useState<ContributionStatus | "all">("pending");
   const [comments, setComments] = useState<GameComment[]>(initialComments);
   const [scores, setScores] = useState<GameHighScore[]>(initialScores);
   const [searchTerm, setSearchTerm] = useState("");
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [previewModalItem, setPreviewModalItem] = useState<AssetContributionItem | null>(null);
+  const [rejectNoteById, setRejectNoteById] = useState<Record<number, string>>({});
   const [isPending, startTransition] = useTransition();
+
+  const pendingContributionsCount = contributions.filter((c) => c.status === "pending").length;
+
+  const filteredContributions = contributions.filter((c) => {
+    if (assetStatusFilter !== "all" && c.status !== assetStatusFilter) return false;
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      c.gameTitle.toLowerCase().includes(term) ||
+      c.baseName.toLowerCase().includes(term) ||
+      c.system.toLowerCase().includes(term) ||
+      c.username.toLowerCase().includes(term) ||
+      (c.displayName && c.displayName.toLowerCase().includes(term)) ||
+      (CATEGORY_LABELS[c.category] || c.category).toLowerCase().includes(term)
+    );
+  });
 
   const filteredScores = scores.filter((s) => {
     if (!searchTerm.trim()) return true;
@@ -51,15 +103,54 @@ export function AdminModerationClient({
     );
   });
 
+  const showToast = (type: "ok" | "err", text: string) => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  const handleApproveContribution = (submissionId: number) => {
+    startTransition(async () => {
+      const res = await approveAssetContributionAction(submissionId);
+      if (res.ok && res.item) {
+        setContributions((prev) =>
+          prev.map((c) => (c.id === submissionId ? res.item! : c))
+        );
+        if (previewModalItem?.id === submissionId) {
+          setPreviewModalItem(res.item);
+        }
+        showToast("ok", res.message || "Asset approved and published to the Vault!");
+      } else {
+        showToast("err", res.error || "Failed to approve asset.");
+      }
+    });
+  };
+
+  const handleRejectContribution = (submissionId: number) => {
+    const note = rejectNoteById[submissionId] || "";
+    startTransition(async () => {
+      const res = await rejectAssetContributionAction(submissionId, note);
+      if (res.ok && res.item) {
+        setContributions((prev) =>
+          prev.map((c) => (c.id === submissionId ? res.item! : c))
+        );
+        if (previewModalItem?.id === submissionId) {
+          setPreviewModalItem(null);
+        }
+        showToast("ok", res.message || "Asset submission rejected and deleted.");
+      } else {
+        showToast("err", res.error || "Failed to reject asset.");
+      }
+    });
+  };
+
   const handleDeleteComment = (commentId: number, gameId: string) => {
     startTransition(async () => {
       const res = await moderateDeleteCommentAction(commentId, gameId);
       if (res.ok) {
         setComments((prev) => prev.filter((c) => c.id !== commentId));
-        setFeedback("Comment removed from vault.");
-        setTimeout(() => setFeedback(null), 3000);
+        showToast("ok", "Comment removed from vault.");
       } else {
-        setFeedback(res.error || "Failed to delete comment.");
+        showToast("err", res.error || "Failed to delete comment.");
       }
     });
   };
@@ -69,10 +160,9 @@ export function AdminModerationClient({
       const res = await moderateDeleteScoreAction(scoreId, gameId);
       if (res.ok) {
         setScores((prev) => prev.filter((s) => s.id !== scoreId));
-        setFeedback("High score purged from leaderboard.");
-        setTimeout(() => setFeedback(null), 3000);
+        showToast("ok", "High score purged from leaderboard.");
       } else {
-        setFeedback(res.error || "Failed to purge score.");
+        showToast("err", res.error || "Failed to purge score.");
       }
     });
   };
@@ -80,12 +170,34 @@ export function AdminModerationClient({
   return (
     <div className="flex flex-col gap-6">
       {/* Tabs & Search */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2 bg-zinc-900 p-1 rounded-xl border border-white/10 w-full sm:w-auto">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2 bg-zinc-900 p-1 rounded-xl border border-white/10">
+          <button
+            type="button"
+            onClick={() => setActiveTab("assets")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+              activeTab === "assets"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Asset Uploads Queue</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                pendingContributionsCount > 0
+                  ? "bg-amber-400 text-black"
+                  : "bg-white/15 text-white"
+              }`}
+            >
+              {pendingContributionsCount} Pending
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab("scores")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex-1 sm:flex-none justify-center ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
               activeTab === "scores"
                 ? "bg-amber-500 text-black shadow-md shadow-amber-500/20"
                 : "text-zinc-400 hover:text-white"
@@ -98,7 +210,7 @@ export function AdminModerationClient({
           <button
             type="button"
             onClick={() => setActiveTab("comments")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex-1 sm:flex-none justify-center ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
               activeTab === "comments"
                 ? "bg-purple-600 text-white shadow-md shadow-purple-600/20"
                 : "text-zinc-400 hover:text-white"
@@ -109,11 +221,11 @@ export function AdminModerationClient({
           </button>
         </div>
 
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full lg:w-72">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder={`Filter ${activeTab}...`}
+            placeholder={`Search ${activeTab}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -122,8 +234,264 @@ export function AdminModerationClient({
       </div>
 
       {feedback && (
-        <div className="p-3 rounded-xl bg-emerald-950 border border-emerald-500/40 text-emerald-200 text-xs">
-          {feedback}
+        <div
+          className={`p-3 rounded-xl text-xs font-semibold border ${
+            feedback.type === "ok"
+              ? "bg-emerald-950 border-emerald-500/40 text-emerald-200"
+              : "bg-red-950 border-red-500/40 text-red-200"
+          }`}
+        >
+          {feedback.text}
+        </div>
+      )}
+
+      {/* Asset Uploads Moderation Tab */}
+      {activeTab === "assets" && (
+        <div className="flex flex-col gap-4">
+          {/* Status Filter Sub-Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950 border border-white/10 rounded-2xl p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  {
+                    key: "pending",
+                    label: "Pending Verification",
+                    count: contributions.filter((c) => c.status === "pending").length,
+                  },
+                  {
+                    key: "approved",
+                    label: "Approved & Live",
+                    count: contributions.filter((c) => c.status === "approved").length,
+                  },
+                  {
+                    key: "rejected",
+                    label: "Rejected",
+                    count: contributions.filter((c) => c.status === "rejected").length,
+                  },
+                  {
+                    key: "all",
+                    label: "All Submissions",
+                    count: contributions.length,
+                  },
+                ] as const
+              ).map((st) => (
+                <button
+                  key={st.key}
+                  type="button"
+                  onClick={() => setAssetStatusFilter(st.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 ${
+                    assetStatusFilter === st.key
+                      ? "bg-emerald-600/20 border-emerald-500/50 text-emerald-300"
+                      : "bg-zinc-900 border-white/10 text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  <span>{st.label}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-black/40 text-[10px] font-mono">
+                    {st.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <span className="text-[11px] text-zinc-400">
+              All community uploads are staged in quarantine until an administrator inspects and approves them.
+            </span>
+          </div>
+
+          {filteredContributions.length === 0 ? (
+            <div className="rounded-3xl border border-white/10 bg-zinc-950 p-12 text-center space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+              <div className="text-base font-bold text-white">
+                No {assetStatusFilter === "all" ? "" : assetStatusFilter} asset submissions found
+              </div>
+              <p className="text-xs text-zinc-400">
+                When community members upload missing box art, screenshots, videos, or stories on /contribute, they will appear here for visual verification before going live.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {filteredContributions.map((item) => {
+                const previewUrl = `/roms/api/admin/contributions/${item.id}/preview`;
+                const isVideo = item.category === "video";
+                const isStory = item.category === "story";
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-2xl bg-zinc-950 border p-4 flex flex-col justify-between gap-4 shadow-xl ${
+                      item.status === "pending"
+                        ? "border-amber-500/40"
+                        : item.status === "approved"
+                        ? "border-emerald-500/30"
+                        : "border-red-500/30 opacity-75"
+                    }`}
+                  >
+                    {/* Header Metadata */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded bg-red-600/20 border border-red-500/30 text-red-300 text-[10px] font-black uppercase">
+                            {item.system}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 text-[10px] font-bold">
+                            {CATEGORY_LABELS[item.category] || item.category}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-mono font-bold">
+                            +{item.points} pts
+                          </span>
+                        </div>
+
+                        {item.status === "pending" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            <Clock className="w-3 h-3" /> Pending
+                          </span>
+                        )}
+                        {item.status === "approved" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            <CheckCircle2 className="w-3 h-3" /> Approved
+                          </span>
+                        )}
+                        {item.status === "rejected" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40">
+                            <XCircle className="w-3 h-3" /> Rejected
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-black text-white truncate" title={item.gameTitle}>
+                          {item.gameTitle}
+                        </h3>
+                        <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-2">
+                          <span>ROM: {item.baseName}</span>
+                          <span>•</span>
+                          <span>{formatFileSize(item.fileSize)}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-zinc-400 flex items-center justify-between border-t border-white/5 pt-1.5">
+                        <span>
+                          Uploaded by{" "}
+                          <strong className="text-white">
+                            {item.displayName || item.username}
+                          </strong>
+                        </span>
+                        <span className="font-mono text-[10px] text-zinc-500">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Visual Inspection Preview Box */}
+                    <div className="relative rounded-xl bg-zinc-900 border border-white/10 overflow-hidden h-52 flex items-center justify-center">
+                      {isStory ? (
+                        <div className="p-3 w-full h-full overflow-y-auto text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed font-sans">
+                          {item.storyText || "No story text."}
+                        </div>
+                      ) : item.status === "pending" && item.stagedFilename ? (
+                        isVideo ? (
+                          <video
+                            src={previewUrl}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            className="w-full h-full object-contain bg-black"
+                          />
+                        ) : (
+                          <div
+                            onClick={() => setPreviewModalItem(item)}
+                            className="w-full h-full flex items-center justify-center p-2 cursor-zoom-in group relative"
+                          >
+                            <img
+                              src={previewUrl}
+                              alt={`${item.gameTitle} ${item.category}`}
+                              className="max-w-full max-h-full object-contain"
+                            />
+                            <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/75 border border-white/15 text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+                              <Eye className="w-3 h-3" /> Fullscreen Inspect
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-center p-4 text-xs text-zinc-500 space-y-1">
+                          {isVideo ? (
+                            <Film className="w-7 h-7 mx-auto text-zinc-600" />
+                          ) : isStory ? (
+                            <FileText className="w-7 h-7 mx-auto text-zinc-600" />
+                          ) : (
+                            <ImageIcon className="w-7 h-7 mx-auto text-zinc-600" />
+                          )}
+                          <div>
+                            {item.status === "approved"
+                              ? "Promoted to live Vault artwork directory"
+                              : "Staged file deleted after rejection"}
+                          </div>
+                          {item.reviewerUsername && (
+                            <div className="text-[10px] text-zinc-400">
+                              Reviewed by {item.reviewerUsername}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Controls */}
+                    {item.status === "pending" ? (
+                      <div className="space-y-2 pt-1">
+                        <input
+                          type="text"
+                          placeholder="Optional rejection reason..."
+                          value={rejectNoteById[item.id] || ""}
+                          onChange={(e) =>
+                            setRejectNoteById((prev) => ({
+                              ...prev,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500/50"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => handleApproveContribution(item.id)}
+                            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition cursor-pointer disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Approve (+{item.points})</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => handleRejectContribution(item.id)}
+                            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 transition cursor-pointer disabled:opacity-50"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Reject &amp; Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-zinc-400 flex items-center justify-between pt-1 border-t border-white/5">
+                        <span>
+                          {item.status === "approved" ? "Approved" : "Rejected"} by{" "}
+                          <strong className="text-zinc-200">
+                            {item.reviewerUsername || "Admin"}
+                          </strong>
+                        </span>
+                        {item.reviewNote && (
+                          <span className="text-red-300 truncate max-w-[180px]" title={item.reviewNote}>
+                            Note: {item.reviewNote}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -279,6 +647,75 @@ export function AdminModerationClient({
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Image Lightbox Modal for Admin Inspection */}
+      {previewModalItem && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setPreviewModalItem(null)}
+        >
+          <div
+            className="max-w-5xl w-full bg-zinc-950 border border-white/15 rounded-3xl overflow-hidden flex flex-col max-h-[92vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-red-600/20 text-red-300 text-[10px] font-black uppercase">
+                    {previewModalItem.system}
+                  </span>
+                  <span className="text-xs font-bold text-zinc-300">
+                    {CATEGORY_LABELS[previewModalItem.category] || previewModalItem.category}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    by <strong>{previewModalItem.displayName || previewModalItem.username}</strong>
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-white mt-0.5">
+                  {previewModalItem.gameTitle} ({previewModalItem.baseName})
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewModalItem(null)}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 flex-1 overflow-auto flex items-center justify-center bg-black">
+              <img
+                src={`/roms/api/admin/contributions/${previewModalItem.id}/preview`}
+                alt={previewModalItem.gameTitle}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+            </div>
+
+            {previewModalItem.status === "pending" && (
+              <div className="px-6 py-4 border-t border-white/10 bg-zinc-900/60 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => handleRejectContribution(previewModalItem.id)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 cursor-pointer"
+                >
+                  Reject &amp; Delete
+                </button>
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => handleApproveContribution(previewModalItem.id)}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 cursor-pointer"
+                >
+                  Approve &amp; Publish (+{previewModalItem.points} pts)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

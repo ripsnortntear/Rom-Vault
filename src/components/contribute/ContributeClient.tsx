@@ -20,8 +20,17 @@ import {
   ChevronRight,
   Layers,
   Award,
+  Trophy,
+  Clock,
+  ShieldCheck,
+  XCircle,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
+import type {
+  ContributorLeaderboardEntry,
+  PendingAssetSlot,
+  AssetContributionItem,
+} from "@/lib/contributions";
 import { KNOWN_SYSTEMS } from "@/lib/systems";
 
 export type AssetCategoryKey =
@@ -47,6 +56,7 @@ interface AssetCategoryDef {
   key: AssetCategoryKey;
   label: string;
   shortLabel: string;
+  points: number;
   accept: string;
   description: string;
   isAvailable: (game: GameItem) => boolean;
@@ -58,6 +68,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "artwork_front",
     label: "2D Box Art",
     shortLabel: "2D Box",
+    points: 15,
     accept: ".png,.jpg,.jpeg,.webp",
     description: "Front 2D box cover or arcade flyer (.png, .jpg, .webp)",
     isAvailable: (g) => Boolean(g.media.artworkFront),
@@ -67,6 +78,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "artwork_3d",
     label: "3D Box Art",
     shortLabel: "3D Box",
+    points: 15,
     accept: ".png,.jpg,.jpeg,.webp",
     description: "3D angled box art render (.png, .jpg, .webp)",
     isAvailable: (g) => Boolean(g.media.artwork3d),
@@ -76,6 +88,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "screenshot",
     label: "In-Game Screenshot",
     shortLabel: "Screenshot",
+    points: 10,
     accept: ".png,.jpg,.jpeg,.webp",
     description: "Action gameplay screenshot (.png, .jpg, .webp)",
     isAvailable: (g) => Boolean(g.media.screenshot),
@@ -85,6 +98,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "screentitle",
     label: "Title Screen",
     shortLabel: "Title Screen",
+    points: 10,
     accept: ".png,.jpg,.jpeg,.webp",
     description: "Game title screen capture (.png, .jpg, .webp)",
     isAvailable: (g) => Boolean(g.media.screenTitle),
@@ -94,6 +108,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "logo",
     label: "Logo / Marquee",
     shortLabel: "Logo",
+    points: 15,
     accept: ".png,.jpg,.jpeg,.webp",
     description: "Transparent clear logo or arcade marquee banner (.png, .webp)",
     isAvailable: (g) => Boolean(g.media.logo || g.media.marquee),
@@ -103,6 +118,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "medium",
     label: "Cartridge / Disc Art",
     shortLabel: "Cart/Disc",
+    points: 10,
     accept: ".png,.jpg,.jpeg,.webp",
     description: "Cartridge, CD/DVD disc scan, or arcade PCB plate (.png, .webp)",
     isAvailable: (g) => Boolean(g.media.mediumFront || g.media.mediumDisc),
@@ -112,6 +128,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "video",
     label: "Gameplay Video",
     shortLabel: "Video",
+    points: 25,
     accept: ".mp4",
     description: "Short gameplay preview clip (.mp4, up to 65 MB)",
     isAvailable: (g) => Boolean(g.media.video),
@@ -121,6 +138,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     key: "story",
     label: "Story / Overview",
     shortLabel: "Story",
+    points: 10,
     accept: ".txt",
     description: "Game synopsis, history, and description text",
     isAvailable: (g) => Boolean(g.story && g.story.trim().length > 0),
@@ -134,6 +152,9 @@ const PAGE_SIZE = 48;
 interface ContributeClientProps {
   initialGames: GameItem[];
   initialUser: Record<string, unknown> | null;
+  initialLeaderboard?: ContributorLeaderboardEntry[];
+  initialPendingSlots?: PendingAssetSlot[];
+  initialUserSubmissions?: AssetContributionItem[];
 }
 
 function getMissingCount(game: GameItem): number {
@@ -147,8 +168,22 @@ function getMissingCount(game: GameItem): number {
 export function ContributeClient({
   initialGames,
   initialUser,
+  initialLeaderboard = [],
+  initialPendingSlots = [],
+  initialUserSubmissions = [],
 }: ContributeClientProps): React.ReactElement {
-  const [games, setGames] = useState<GameItem[]>(initialGames);
+  const [games] = useState<GameItem[]>(initialGames);
+  const [leaderboard, setLeaderboard] =
+    useState<ContributorLeaderboardEntry[]>(initialLeaderboard);
+  const [pendingSlots, setPendingSlots] =
+    useState<PendingAssetSlot[]>(initialPendingSlots);
+  const [userSubmissions, setUserSubmissions] =
+    useState<AssetContributionItem[]>(initialUserSubmissions);
+  const [showLeaderboardPanel, setShowLeaderboardPanel] = useState<boolean>(true);
+  const [leaderboardTab, setLeaderboardTab] = useState<"rankings" | "my_uploads">(
+    "rankings"
+  );
+
   const [selectedSystem, setSelectedSystem] = useState<string>("all");
   const [missingFilter, setMissingFilter] = useState<MissingFilterType>("any_missing");
   const [sortBy, setSortBy] = useState<ContributeSortKey>("most_missing");
@@ -168,6 +203,28 @@ export function ContributeClient({
     message: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Fast O(1) lookup set for pending slots: `${system}__${baseName.toLowerCase()}__${category}`
+  const pendingSlotMap = useMemo(() => {
+    const map = new Map<string, PendingAssetSlot>();
+    for (const slot of pendingSlots) {
+      map.set(
+        `${slot.system.toLowerCase()}__${slot.baseName.toLowerCase()}__${slot.category}`,
+        slot
+      );
+    }
+    return map;
+  }, [pendingSlots]);
+
+  const getPendingSlot = (
+    system: string,
+    baseName: string,
+    category: AssetCategoryKey
+  ): PendingAssetSlot | undefined => {
+    return pendingSlotMap.get(
+      `${system.toLowerCase()}__${baseName.toLowerCase()}__${category}`
+    );
+  };
 
   // Available systems in library
   const availableSystems = useMemo(() => {
@@ -200,7 +257,7 @@ export function ContributeClient({
         : games.filter((g) => g.system === selectedSystem);
 
     const totalGames = scoped.length;
-    let totalAssetsPossible = totalGames * ASSET_CATEGORIES.length;
+    const totalAssetsPossible = totalGames * ASSET_CATEGORIES.length;
     let totalAssetsPresent = 0;
     let incompleteGames = 0;
 
@@ -358,6 +415,7 @@ export function ContributeClient({
       const formData = new FormData();
       formData.append("system", activeGame.system);
       formData.append("baseName", activeGame.baseName);
+      formData.append("gameTitle", activeGame.displayTitle);
       formData.append("assetType", activeCategory);
 
       if (activeCategory === "story") {
@@ -393,55 +451,64 @@ export function ContributeClient({
         return;
       }
 
-      // Update local state immediately so the user sees their contribution reflected
-      const updatedGame: GameItem = {
-        ...activeGame,
-        story: activeCategory === "story" ? data.story : activeGame.story,
-        media: {
-          ...activeGame.media,
-          artworkFront:
-            activeCategory === "artwork_front"
-              ? data.mediaUrl
-              : activeGame.media.artworkFront,
-          artwork3d:
-            activeCategory === "artwork_3d"
-              ? data.mediaUrl
-              : activeGame.media.artwork3d,
-          screenshot:
-            activeCategory === "screenshot"
-              ? data.mediaUrl
-              : activeGame.media.screenshot,
-          screenTitle:
-            activeCategory === "screentitle"
-              ? data.mediaUrl
-              : activeGame.media.screenTitle,
-          logo:
-            activeCategory === "logo" ? data.mediaUrl : activeGame.media.logo,
-          mediumFront:
-            activeCategory === "medium"
-              ? data.mediaUrl
-              : activeGame.media.mediumFront,
-          video:
-            activeCategory === "video" ? data.mediaUrl : activeGame.media.video,
-        },
+      // Add newly staged submission to pendingSlots & userSubmissions
+      const newSlot: PendingAssetSlot = {
+        system: activeGame.system,
+        baseName: activeGame.baseName,
+        category: activeCategory,
+        username: String(initialUser?.displayName || initialUser?.username || "You"),
+        createdAt: new Date().toISOString(),
       };
+      setPendingSlots((prev) => [newSlot, ...prev]);
 
-      setGames((prev) =>
-        prev.map((g) => (g.id === updatedGame.id ? updatedGame : g))
-      );
-      setActiveGame(updatedGame);
+      if (data.submission) {
+        setUserSubmissions((prev) => [data.submission, ...prev]);
+      }
+
+      // Update user's pending count on leaderboard
+      if (initialUser?.id) {
+        const uid = String(initialUser.id);
+        setLeaderboard((prev) => {
+          const exists = prev.some((e) => e.userId === uid);
+          if (exists) {
+            return prev.map((e) =>
+              e.userId === uid ? { ...e, pendingCount: e.pendingCount + 1 } : e
+            );
+          }
+          return [
+            ...prev,
+            {
+              rank: prev.length + 1,
+              userId: uid,
+              username: String(initialUser.username || "You"),
+              displayName: initialUser.displayName
+                ? String(initialUser.displayName)
+                : null,
+              avatarUrl: null,
+              totalPoints: 0,
+              approvedCount: 0,
+              pendingCount: 1,
+              imagesCount: 0,
+              videosCount: 0,
+              storiesCount: 0,
+              lastContributionAt: new Date().toISOString(),
+            },
+          ];
+        });
+      }
+
       setSelectedFile(null);
       if (previewObjectUrl) {
         URL.revokeObjectURL(previewObjectUrl);
         setPreviewObjectUrl(null);
       }
 
-      const catLabel =
-        ASSET_CATEGORIES.find((c) => c.key === activeCategory)?.label ||
-        activeCategory;
+      const catDef =
+        ASSET_CATEGORIES.find((c) => c.key === activeCategory) ||
+        ASSET_CATEGORIES[0];
       setUploadStatus({
         type: "success",
-        message: `${catLabel} saved! Thank you for contributing to the ROM Vault.`,
+        message: `${catDef.label} submitted for Admin Verification! Once approved, it will go live in the Vault and award +${catDef.points} pts on the Contributors Leaderboard.`,
       });
     } catch (err: any) {
       setUploadStatus({
@@ -479,13 +546,36 @@ export function ContributeClient({
                   Community Asset Contribution Center
                 </h1>
                 <p className="text-[11px] text-zinc-400 hidden sm:block">
-                  Help complete missing box art, screenshots, marquees, videos &amp; game stories across all platforms
+                  Upload missing box art, screenshots, marquees, videos &amp; game stories • Earn points on the Contributors Leaderboard
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowLeaderboardPanel((prev) => !prev)}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                showLeaderboardPanel
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                  : "bg-zinc-900 border-white/10 text-zinc-300 hover:text-white"
+              }`}
+            >
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span>Contributors Leaderboard</span>
+            </button>
+
+            {initialUser?.role === "admin" && (
+              <Link
+                href="/admin/moderation"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-xs font-bold text-red-300 transition"
+              >
+                <ShieldCheck className="w-4 h-4 text-red-400" />
+                <span>Verify Pending ({pendingSlots.length})</span>
+              </Link>
+            )}
+
             {initialUser ? (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 font-semibold">
                 <Award className="w-4 h-4 text-emerald-400" />
@@ -509,6 +599,209 @@ export function ContributeClient({
       </header>
 
       <main className="flex-1 max-w-[1800px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Community Asset Contributors Leaderboard & My Uploads Section */}
+        {showLeaderboardPanel && (
+          <section className="rounded-3xl bg-zinc-950/95 border border-amber-500/25 p-5 sm:p-6 shadow-2xl space-y-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                  <Trophy className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg sm:text-xl font-black text-white">
+                      Community Asset Contributors Hall of Fame
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      Admin Verified
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Every uploaded asset is reviewed by an administrator before going live. Approved uploads award points!
+                  </p>
+                </div>
+              </div>
+
+              {/* Point Values Legend & Tab Switcher */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 text-[11px] text-zinc-300">
+                  <span className="text-amber-400 font-bold">Video: +25 pts</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="text-emerald-400 font-bold">2D/3D Box &amp; Logo: +15 pts</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="text-blue-400 font-bold">Screens / Cart / Story: +10 pts</span>
+                </div>
+
+                {initialUser && (
+                  <div className="flex items-center bg-zinc-900 p-1 rounded-xl border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setLeaderboardTab("rankings")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        leaderboardTab === "rankings"
+                          ? "bg-amber-500 text-black"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      Top Contributors ({leaderboard.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeaderboardTab("my_uploads")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        leaderboardTab === "my_uploads"
+                          ? "bg-emerald-600 text-white"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      My Submissions ({userSubmissions.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {leaderboardTab === "rankings" ? (
+              leaderboard.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-zinc-900/50 border border-white/5 text-center space-y-2">
+                  <Trophy className="w-8 h-8 text-amber-400/60 mx-auto" />
+                  <div className="text-sm font-bold text-white">
+                    The Asset Contributors Leaderboard is Wide Open!
+                  </div>
+                  <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                    Be the first to upload missing box art, screenshots, videos, or game stories below to claim the #1 spot once verified by an admin.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-3">Rank</th>
+                        <th className="py-2.5 px-3">Contributor</th>
+                        <th className="py-2.5 px-3">Verified Score</th>
+                        <th className="py-2.5 px-3">Approved Assets</th>
+                        <th className="py-2.5 px-3">Breakdown (Art / Video / Story)</th>
+                        <th className="py-2.5 px-3">Pending Review</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 font-medium">
+                      {leaderboard.map((entry) => {
+                        const rankBadge =
+                          entry.rank === 1
+                            ? "bg-amber-400 text-black font-black"
+                            : entry.rank === 2
+                            ? "bg-zinc-300 text-black font-black"
+                            : entry.rank === 3
+                            ? "bg-amber-700 text-white font-black"
+                            : "bg-zinc-900 text-zinc-400 border border-white/10";
+
+                        return (
+                          <tr key={entry.userId} className="hover:bg-white/[0.02]">
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-[11px] font-mono ${rankBadge}`}
+                              >
+                                #{entry.rank}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-white">
+                              {entry.displayName || entry.username}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-black text-amber-400 text-sm">
+                              {entry.totalPoints.toLocaleString()} pts
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-[11px] font-bold">
+                                {entry.approvedCount} verified
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-300 font-mono text-[11px]">
+                              <span className="text-blue-300">{entry.imagesCount} Art</span>
+                              {" • "}
+                              <span className="text-purple-300">{entry.videosCount} Video</span>
+                              {" • "}
+                              <span className="text-zinc-300">{entry.storiesCount} Story</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {entry.pendingCount > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                                  <Clock className="w-3 h-3" /> {entry.pendingCount} in queue
+                                </span>
+                              ) : (
+                                <span className="text-zinc-600">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : userSubmissions.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-zinc-900/50 border border-white/5 text-center text-xs text-zinc-400">
+                You haven&apos;t submitted any assets yet. Click any game below to upload a missing asset!
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-2.5 px-3">Game</th>
+                      <th className="py-2.5 px-3">System</th>
+                      <th className="py-2.5 px-3">Asset Type</th>
+                      <th className="py-2.5 px-3">Points</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 font-medium">
+                    {userSubmissions.map((sub) => (
+                      <tr key={sub.id} className="hover:bg-white/[0.02]">
+                        <td className="py-2.5 px-3 font-bold text-white">
+                          {sub.gameTitle}
+                        </td>
+                        <td className="py-2.5 px-3 uppercase font-mono text-zinc-400 text-[11px]">
+                          {sub.system}
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-200">
+                          {ASSET_CATEGORIES.find((c) => c.key === sub.category)?.label ||
+                            sub.category}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-amber-400">
+                          +{sub.points} pts
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {sub.status === "pending" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              <Clock className="w-3 h-3" /> Pending Admin Verification
+                            </span>
+                          )}
+                          {sub.status === "approved" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                              <CheckCircle2 className="w-3 h-3" /> Approved &amp; Live
+                            </span>
+                          )}
+                          {sub.status === "rejected" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40">
+                              <XCircle className="w-3 h-3" /> Rejected
+                              {sub.reviewNote ? ` (${sub.reviewNote})` : ""}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-zinc-500">
+                          {new Date(sub.createdAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Completion Overview & Missing Breakdown Cards */}
         <section className="rounded-3xl bg-zinc-950/90 border border-white/10 p-5 sm:p-6 shadow-2xl space-y-5">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -548,7 +841,7 @@ export function ContributeClient({
           {/* Clickable Quick-Filter Cards by Missing Asset Category */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 pt-2">
             {ASSET_CATEGORIES.map((cat) => {
-              const count = systemScopedStats.missingByCat[cat.key];
+              const missingCount = systemScopedStats.missingByCat[cat.key];
               const isSelected = missingFilter === cat.key;
               return (
                 <button
@@ -558,24 +851,23 @@ export function ContributeClient({
                     setMissingFilter(isSelected ? "any_missing" : cat.key);
                     setCurrentPage(1);
                   }}
-                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
                     isSelected
-                      ? "bg-red-600/20 border-red-500 text-white shadow-lg shadow-red-600/15"
+                      ? "bg-red-600/20 border-red-500/60 text-white shadow-lg shadow-red-600/15"
                       : "bg-zinc-900/70 hover:bg-zinc-900 border-white/10 text-zinc-300"
                   }`}
                 >
-                  <span className="text-[11px] font-bold text-zinc-400 truncate">
-                    {cat.shortLabel}
-                  </span>
-                  <div className="flex items-baseline justify-between gap-1">
-                    <span
-                      className={`text-base font-black font-mono ${
-                        count === 0 ? "text-emerald-400" : "text-amber-400"
-                      }`}
-                    >
-                      {count.toLocaleString()}
+                  <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
+                    <span className="truncate">{cat.shortLabel}</span>
+                    <span className="text-[10px] font-mono text-amber-400">
+                      +{cat.points}p
                     </span>
-                    <span className="text-[10px] text-zinc-500">missing</span>
+                  </div>
+                  <div>
+                    <div className="text-lg font-black font-mono text-white">
+                      {missingCount.toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-zinc-400">missing</div>
                   </div>
                 </button>
               );
@@ -583,65 +875,68 @@ export function ContributeClient({
           </div>
         </section>
 
-        {/* System Filter Bar (Mirrors Main ROM Vault) */}
-        <section className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedSystem("all");
-              setCurrentPage(1);
-            }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition cursor-pointer flex items-center gap-2 ${
-              selectedSystem === "all"
-                ? "bg-red-600 text-white border-red-400 shadow-lg shadow-red-600/25"
-                : "bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>All Systems</span>
-            <span className="px-1.5 py-0.5 rounded-md bg-black/40 text-[10px] font-mono">
-              {games.length.toLocaleString()}
-            </span>
-          </button>
+        {/* System Filter Bar & Search / Dropdown Controls */}
+        <section className="rounded-3xl bg-zinc-950/90 border border-white/10 p-4 sm:p-5 space-y-4">
+          {/* System Pills (just like main ROM Vault) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSystem("all");
+                setCurrentPage(1);
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
+                selectedSystem === "all"
+                  ? "bg-red-600 text-white shadow-lg shadow-red-600/30"
+                  : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>All Systems</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-black/30 text-[10px] font-mono">
+                {games.length.toLocaleString()}
+              </span>
+            </button>
 
-          {availableSystems.map((sys) => {
-            const active = selectedSystem === sys.id;
-            return (
-              <button
-                key={sys.id}
-                type="button"
-                onClick={() => {
-                  setSelectedSystem(sys.id);
-                  setCurrentPage(1);
-                }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition cursor-pointer flex items-center gap-2 ${
-                  active
-                    ? "bg-red-600 text-white border-red-400 shadow-lg shadow-red-600/25"
-                    : "bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10"
-                }`}
-              >
-                <span>{sys.meta.shortLabel}</span>
-                <span
-                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
-                    sys.incomplete > 0
-                      ? "bg-amber-500/20 text-amber-300"
-                      : "bg-emerald-500/20 text-emerald-300"
+            {availableSystems.map((sys) => {
+              const active = selectedSystem === sys.id;
+              return (
+                <button
+                  key={sys.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSystem(sys.id);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
+                    active
+                      ? "bg-red-600 text-white shadow-lg shadow-red-600/30"
+                      : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10"
                   }`}
-                  title={`${sys.incomplete} games missing assets out of ${sys.total}`}
                 >
-                  {sys.incomplete.toLocaleString()}
-                </span>
-              </button>
-            );
-          })}
-        </section>
+                  <span>{sys.meta.shortLabel}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                      active
+                        ? "bg-black/30 text-white"
+                        : sys.incomplete > 0
+                        ? "bg-amber-500/20 text-amber-300"
+                        : "bg-emerald-500/20 text-emerald-300"
+                    }`}
+                    title={`${sys.incomplete} of ${sys.total} games missing assets`}
+                  >
+                    {sys.incomplete.toLocaleString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Search, Missing Type Dropdown, & Sort Bar */}
-        <section className="rounded-2xl bg-zinc-950/90 border border-white/10 p-4 flex flex-col gap-4">
+          {/* Search Input + Missing Type Dropdown + Sort Dropdown */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
-            {/* Search by Name or ROM code */}
+            {/* Search Box */}
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
@@ -649,7 +944,7 @@ export function ContributeClient({
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Search by game name or MAME ROM code (e.g. 3 Count Bout, 3countb, Mario)..."
+                placeholder="Search by game name or ROM filename (e.g. 3 Count Bout, 3countb, Mario)..."
                 className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500/60"
               />
               {searchQuery && (
@@ -661,14 +956,14 @@ export function ContributeClient({
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            {/* Dropdown Filter by Type of Missing Asset */}
+            {/* Missing Asset Type Dropdown */}
             <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-red-400 shrink-0 hidden sm:block" />
+              <Filter className="w-4 h-4 text-zinc-400 shrink-0 hidden sm:block" />
               <select
                 aria-label="Filter by missing asset type"
                 value={missingFilter}
@@ -679,14 +974,14 @@ export function ContributeClient({
                 className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-zinc-200 focus:outline-none focus:border-red-500/60 cursor-pointer"
               >
                 <option value="any_missing">Filter: Any Missing Asset (Incomplete)</option>
-                <option value="artwork_front">Missing: 2D Box Art</option>
-                <option value="artwork_3d">Missing: 3D Box Art</option>
-                <option value="screenshot">Missing: In-Game Screenshot</option>
-                <option value="screentitle">Missing: Title Screen</option>
-                <option value="logo">Missing: Logo / Marquee</option>
-                <option value="medium">Missing: Cartridge / Disc Art</option>
-                <option value="video">Missing: Gameplay Video (.mp4)</option>
-                <option value="story">Missing: Story / Overview (.txt)</option>
+                <option value="artwork_front">Missing: 2D Box Art (+15 pts)</option>
+                <option value="artwork_3d">Missing: 3D Box Art (+15 pts)</option>
+                <option value="screenshot">Missing: In-Game Screenshot (+10 pts)</option>
+                <option value="screentitle">Missing: Title Screen (+10 pts)</option>
+                <option value="logo">Missing: Logo / Marquee (+15 pts)</option>
+                <option value="medium">Missing: Cartridge / Disc Art (+10 pts)</option>
+                <option value="video">Missing: Gameplay Video (+25 pts)</option>
+                <option value="story">Missing: Story / Overview (+10 pts)</option>
                 <option value="all_games">Show All Games (Including 100% Complete)</option>
               </select>
             </div>
@@ -875,6 +1170,11 @@ export function ContributeClient({
                   <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-white/5">
                     {ASSET_CATEGORIES.map((cat) => {
                       const hasIt = cat.isAvailable(game);
+                      const pendingSlot = getPendingSlot(
+                        game.system,
+                        game.baseName,
+                        cat.key
+                      );
                       return (
                         <button
                           key={cat.key}
@@ -885,17 +1185,23 @@ export function ContributeClient({
                           }}
                           title={
                             hasIt
-                              ? `${cat.label}: Present (Click to view or replace)`
-                              : `${cat.label}: Missing (Click to upload)`
+                              ? `${cat.label}: Present`
+                              : pendingSlot
+                              ? `${cat.label}: Pending Admin Verification (Submitted by ${pendingSlot.username})`
+                              : `${cat.label}: Missing (+${cat.points} pts — Click to upload)`
                           }
                           className={`px-2 py-1 rounded-lg text-[10px] font-bold truncate flex items-center justify-center gap-1 border transition cursor-pointer ${
                             hasIt
                               ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/50"
+                              : pendingSlot
+                              ? "bg-blue-950/50 border-blue-400/40 text-blue-300 hover:bg-blue-900/50"
                               : "bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-red-600 hover:text-white hover:border-red-400"
                           }`}
                         >
                           {hasIt ? (
                             <CheckCircle2 className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
+                          ) : pendingSlot ? (
+                            <Clock className="w-2.5 h-2.5 shrink-0 text-blue-400" />
                           ) : (
                             <Upload className="w-2.5 h-2.5 shrink-0" />
                           )}
@@ -984,6 +1290,15 @@ export function ContributeClient({
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6">
+              {/* Moderation Notice */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-200">
+                <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  All uploaded submissions are inspected by an administrator before going live in the Vault. Once verified, you&apos;ll earn{" "}
+                  <strong>+{activeCategoryDef.points} pts</strong> on the Contributors Leaderboard!
+                </span>
+              </div>
+
               {/* Category Selector Tabs */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
@@ -992,6 +1307,11 @@ export function ContributeClient({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {ASSET_CATEGORIES.map((cat) => {
                     const hasIt = cat.isAvailable(activeGame);
+                    const pendingSlot = getPendingSlot(
+                      activeGame.system,
+                      activeGame.baseName,
+                      cat.key
+                    );
                     const isSelected = activeCategory === cat.key;
                     return (
                       <button
@@ -1012,11 +1332,18 @@ export function ContributeClient({
                             : "bg-zinc-900/80 hover:bg-zinc-900 border-white/10 text-zinc-300"
                         }`}
                       >
-                        <span className="text-xs font-bold truncate">
-                          {cat.label}
-                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate">
+                            {cat.label}
+                          </div>
+                          <div className="text-[10px] font-mono text-amber-400">
+                            +{cat.points} pts
+                          </div>
+                        </div>
                         {hasIt ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : pendingSlot ? (
+                          <Clock className="w-4 h-4 text-blue-400 shrink-0" />
                         ) : (
                           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                         )}
@@ -1042,22 +1369,40 @@ export function ContributeClient({
                           <ImageIcon className="w-4 h-4 text-red-400" />
                         )}
                         <span>{activeCategoryDef.label}</span>
+                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono">
+                          +{activeCategoryDef.points} pts
+                        </span>
                       </h3>
                       <p className="text-xs text-zinc-400">
                         {activeCategoryDef.description}
                       </p>
                     </div>
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                        activeCategoryDef.isAvailable(activeGame)
-                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                          : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                      }`}
-                    >
-                      {activeCategoryDef.isAvailable(activeGame)
-                        ? "Currently Present"
-                        : "Missing Asset"}
-                    </span>
+                    {(() => {
+                      const pendingSlot = getPendingSlot(
+                        activeGame.system,
+                        activeGame.baseName,
+                        activeCategory
+                      );
+                      if (activeCategoryDef.isAvailable(activeGame)) {
+                        return (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Currently Present
+                          </span>
+                        );
+                      }
+                      if (pendingSlot) {
+                        return (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            Pending Review ({pendingSlot.username})
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Missing Asset
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* Current Preview if Present */}
@@ -1135,7 +1480,7 @@ export function ContributeClient({
                             />
                           )}
                           <p className="text-xs font-bold text-emerald-400">
-                            {selectedFile?.name} (Ready to upload)
+                            {selectedFile?.name} (Ready to submit for verification)
                           </p>
                         </div>
                       ) : (
@@ -1145,7 +1490,7 @@ export function ContributeClient({
                             Click to choose a file or drag &amp; drop here
                           </p>
                           <p className="text-[11px] text-zinc-500">
-                            Accepted formats: {activeCategoryDef.accept} (Saved automatically as{" "}
+                            Accepted formats: {activeCategoryDef.accept} (Staged for admin verification as{" "}
                             <code className="text-zinc-300">
                               {activeGame.baseName}
                             </code>
@@ -1190,8 +1535,8 @@ export function ContributeClient({
                     <Upload className="w-4 h-4" />
                     <span>
                       {uploading
-                        ? "Uploading Asset..."
-                        : `Save ${activeCategoryDef.label}`}
+                        ? "Submitting for Verification..."
+                        : `Submit ${activeCategoryDef.label} (+${activeCategoryDef.points} pts)`}
                     </span>
                   </button>
                 </div>

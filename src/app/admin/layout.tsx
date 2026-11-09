@@ -17,6 +17,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/guards";
+import { getPendingContributionsCount } from "@/lib/contributions";
 
 export const metadata = {
   title: "ROM Vault Administration Portal",
@@ -27,7 +28,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const admin = await requireAdmin();
+  const [admin, pendingAssetsCount] = await Promise.all([
+    requireAdmin(),
+    getPendingContributionsCount(),
+  ]);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col md:flex-row">
@@ -87,10 +91,17 @@ export default async function AdminLayout({
 
           <Link
             href="/admin/moderation"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-zinc-300 hover:text-white transition"
+            className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-white/10 text-zinc-300 hover:text-white transition"
           >
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span>Scores &amp; Moderation</span>
+            <span className="flex items-center gap-3">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span>Assets &amp; Moderation</span>
+            </span>
+            {pendingAssetsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-black">
+                {pendingAssetsCount}
+              </span>
+            )}
           </Link>
 
           <Link

@@ -12,6 +12,10 @@ import {
   deleteComment,
   deleteHighScore,
 } from "@/lib/community";
+import {
+  approveAssetContribution,
+  rejectAssetContribution,
+} from "@/lib/contributions";
 import { generateSecureToken } from "@/lib/auth/crypto";
 
 export async function updateUserRoleAction(userId: string, role: "user" | "admin") {
@@ -159,5 +163,60 @@ export async function moderateDeleteScoreAction(scoreId: number, gameId?: string
   } catch (error: any) {
     console.error("[moderateDeleteScoreAction] Error:", error);
     return { ok: false, error: error.message || "Failed to remove high score." };
+  }
+}
+
+export async function approveAssetContributionAction(submissionId: number) {
+  try {
+    const admin = await requireAdmin();
+    const res = await approveAssetContribution(submissionId, admin.id, admin.username);
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Failed to approve asset contribution." };
+    }
+
+    try {
+      updateTag("library");
+      revalidateTag("library", "max");
+      updateTag("contributions");
+      revalidateTag("contributions", "max");
+    } catch {}
+
+    return {
+      ok: true,
+      item: res.item,
+      message: "Asset approved, published to the Vault, and points awarded to contributor!",
+    };
+  } catch (error: any) {
+    console.error("[approveAssetContributionAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to approve asset contribution." };
+  }
+}
+
+export async function rejectAssetContributionAction(submissionId: number, reviewNote?: string) {
+  try {
+    const admin = await requireAdmin();
+    const res = await rejectAssetContribution(
+      submissionId,
+      admin.id,
+      admin.username,
+      reviewNote
+    );
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Failed to reject asset contribution." };
+    }
+
+    try {
+      updateTag("contributions");
+      revalidateTag("contributions", "max");
+    } catch {}
+
+    return {
+      ok: true,
+      item: res.item,
+      message: "Asset submission rejected and staged file removed from disk.",
+    };
+  } catch (error: any) {
+    console.error("[rejectAssetContributionAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to reject asset contribution." };
   }
 }

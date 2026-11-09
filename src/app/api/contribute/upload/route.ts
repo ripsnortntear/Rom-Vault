@@ -2,25 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { getCurrentSession } from "@/lib/auth/session";
+import { getRomsDirectory, normalizeSystem } from "@/lib/paths";
 import {
-  getRomsDirectory,
-  getArtworkDirectory,
-  normalizeSystem,
-  buildMediaUrl,
-} from "@/lib/paths";
-import { scanGameLibrary } from "@/lib/scanner";
-import { execute } from "@/lib/db";
+  submitAssetContribution,
+  type ContributionCategory,
+} from "@/lib/contributions";
 
-const DISC_SYSTEMS = new Set(["psx", "ps2", "saturn", "dreamcast", "gamecube"]);
-
-const ALLOWED_ASSET_TYPES = new Set([
+const ALLOWED_ASSET_TYPES = new Set<ContributionCategory>([
   "artwork_front",
   "artwork_3d",
   "screenshot",
   "screentitle",
   "logo",
   "medium",
-  "fanart",
   "video",
   "story",
 ]);
@@ -72,7 +66,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const rawSystem = String(formData.get("system") || "").trim();
     const rawBaseName = String(formData.get("baseName") || "").trim();
-    const assetType = String(formData.get("assetType") || "").trim();
+    const rawGameTitle = String(formData.get("gameTitle") || "").trim();
+    const assetType = String(formData.get("assetType") || "").trim() as ContributionCategory;
 
     if (!rawSystem || !rawBaseName || !ALLOWED_ASSET_TYPES.has(assetType)) {
       return NextResponse.json(
@@ -107,6 +102,10 @@ export async function POST(request: NextRequest) {
 
     const romEntries = fs.readdirSync(romsDir);
     const matchingRom = romEntries.find((entry) => {
+      const lower = entry.toLowerCase();
+      if (lower.startsWith(".") || lower.startsWith("gamelist") || lower.includes(".bak") || lower.endsWith(".old")) {
+        return false;
+      }
       const extIdx = entry.lastIndexOf(".");
       const entryBase = extIdx > 0 ? entry.slice(0, extIdx) : entry;
       return entryBase.toLowerCase() === rawBaseName.toLowerCase();
@@ -124,9 +123,9 @@ export async function POST(request: NextRequest) {
         ? matchingRom.slice(0, matchingRom.lastIndexOf("."))
         : matchingRom;
 
-    const artworkDir = getArtworkDirectory(system);
+    const gameTitle = rawGameTitle || canonicalBaseName;
 
-    // Handle Story / Overview text contribution
+    // Handle Story / Overview text contribution (staged for admin review)
     if (assetType === "story") {
       let storyText = String(formData.get("storyText") || "").trim();
       const uploadedFile = formData.get("file");
@@ -152,30 +151,29 @@ export async function POST(request: NextRequest) {
         storyText = storyText.slice(0, 32000);
       }
 
-      const storyFolder = path.join(artworkDir, "story");
-      fs.mkdirSync(storyFolder, { recursive: true });
-      const targetPath = path.join(storyFolder, `${canonicalBaseName}.txt`);
-      fs.writeFileSync(targetPath, storyText, "utf-8");
-
-      const gameId = `${system}__${encodeURIComponent(canonicalBaseName)}`;
-      await execute(
-        `INSERT INTO game_metadata (id, system, clean_title, summary)
-         VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE summary = VALUES(summary)`,
-        [gameId, system, canonicalBaseName, storyText]
-      ).catch(() => {});
-
-      await scanGameLibrary(true).catch(() => {});
+      const submission = await submitAssetContribution({
+        userId: String(session.user.id),
+        username: String(session.user.username),
+        displayName: session.user.displayName ? String(session.user.displayName) : null,
+        system,
+        baseName: canonicalBaseName,
+        gameTitle,
+        category: "story",
+        fileExt: ".txt",
+        storyText,
+      });
 
       return NextResponse.json({
         ok: true,
+        status: "pending",
+        submission,
         assetType,
-        story: storyText,
+        points: submission.points,
         contributor: session.user.displayName || session.user.username,
       });
     }
 
-    // Handle Binary Image / Video upload
+    // Handle Binary Image / Video upload (staged for admin review)
     const fileField = formData.get("file");
     if (!fileField || typeof fileField !== "object" || !("arrayBuffer" in fileField)) {
       return NextResponse.json(
@@ -208,18 +206,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const subFolder = fs.existsSync(path.join(artworkDir, "videos")) ? "videos" : "video";
-      const targetDir = path.join(artworkDir, subFolder);
-      fs.mkdirSync(targetDir, { recursive: true });
-      const fileName = `${canonicalBaseName}.mp4`;
-      fs.writeFileSync(path.join(targetDir, fileName), buffer);
-
-      await scanGameLibrary(true).catch(() => {});
+      const submission = await submitAssetContribution({
+        userId: String(session.user.id),
+        username: String(session.user.username),
+        displayName: session.user.displayName ? String(session.user.displayName) : null,
+        system,
+        baseName: canonicalBaseName,
+        gameTitle,
+        category: "video",
+        fileExt: ".mp4",
+        buffer,
+      });
 
       return NextResponse.json({
         ok: true,
+        status: "pending",
+        submission,
         assetType,
-        mediaUrl: `${buildMediaUrl(subFolder, fileName, system)}&t=${Date.now()}`,
+        points: submission.points,
         contributor: session.user.displayName || session.user.username,
       });
     }
@@ -240,48 +244,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let subFolder = assetType;
-    if (assetType === "medium") {
-      if (DISC_SYSTEMS.has(system)) {
-        subFolder = "medium_disc";
-      } else {
-        subFolder = fs.existsSync(path.join(artworkDir, "cartridges"))
-          ? "cartridges"
-          : "medium_front";
-      }
-    } else if (assetType === "artwork_front") {
-      subFolder = fs.existsSync(path.join(artworkDir, "box2d")) ? "box2d" : "artwork_front";
-    } else if (assetType === "artwork_3d") {
-      subFolder = fs.existsSync(path.join(artworkDir, "thumbnails"))
-        ? "thumbnails"
-        : "artwork_3d";
-    } else if (assetType === "screenshot") {
-      subFolder = fs.existsSync(path.join(artworkDir, "images")) ? "images" : "screenshot";
-    } else if (assetType === "screentitle") {
-      subFolder = fs.existsSync(path.join(artworkDir, "titles")) ? "titles" : "screentitle";
-    } else if (assetType === "logo") {
-      subFolder = fs.existsSync(path.join(artworkDir, "marquee")) ? "marquee" : "logo";
-    } else if (assetType === "fanart") {
-      subFolder = fs.existsSync(path.join(artworkDir, "fanarts")) ? "fanarts" : "fanart";
-    }
-
-    const targetDir = path.join(artworkDir, subFolder);
-    fs.mkdirSync(targetDir, { recursive: true });
-    const fileName = `${canonicalBaseName}${ext}`;
-    fs.writeFileSync(path.join(targetDir, fileName), buffer);
-
-    await scanGameLibrary(true).catch(() => {});
+    const submission = await submitAssetContribution({
+      userId: String(session.user.id),
+      username: String(session.user.username),
+      displayName: session.user.displayName ? String(session.user.displayName) : null,
+      system,
+      baseName: canonicalBaseName,
+      gameTitle,
+      category: assetType,
+      fileExt: ext,
+      buffer,
+    });
 
     return NextResponse.json({
       ok: true,
+      status: "pending",
+      submission,
       assetType,
-      mediaUrl: `${buildMediaUrl(subFolder, fileName, system)}&t=${Date.now()}`,
+      points: submission.points,
       contributor: session.user.displayName || session.user.username,
     });
-  } catch (error: any) {
-    console.error("[api/contribute/upload] Error saving contribution:", error);
+  } catch (error) {
+    console.error("[contribute/upload] Error processing contribution:", error);
     return NextResponse.json(
-      { ok: false, error: error?.message || "Failed to save asset contribution." },
+      { ok: false, error: "Internal server error while staging asset contribution." },
       { status: 500 }
     );
   }

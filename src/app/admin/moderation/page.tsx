@@ -2,18 +2,20 @@ import "server-only";
 
 import React from "react";
 import Link from "next/link";
-import { Trophy, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { getModerationComments, getModerationScores } from "@/lib/community";
+import { getModerationContributions } from "@/lib/contributions";
 import { AdminModerationClient } from "@/components/admin/AdminModerationClient";
 
 export const metadata = {
-  title: "Content & Scores Moderation | ROM Vault Admin",
+  title: "Content, Assets & Scores Moderation | ROM Vault Admin",
 };
 
 export default async function AdminModerationPage() {
-  const [comments, scores] = await Promise.all([
+  const [comments, scores, contributions] = await Promise.all([
     getModerationComments(100),
     getModerationScores(100),
+    getModerationContributions("all", 200),
   ]);
 
   return (
@@ -24,7 +26,7 @@ export default async function AdminModerationPage() {
             Vault Integrity &amp; Safety
           </span>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Content &amp; High Score Moderation
+            Asset Uploads, High Scores &amp; Content Moderation
           </h1>
         </div>
 
@@ -37,7 +39,11 @@ export default async function AdminModerationPage() {
         </Link>
       </div>
 
-      <AdminModerationClient initialComments={comments} initialScores={scores} />
+      <AdminModerationClient
+        initialComments={comments}
+        initialScores={scores}
+        initialContributions={contributions}
+      />
     </div>
   );
 }

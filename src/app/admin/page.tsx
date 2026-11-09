@@ -18,6 +18,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { getAdminStorageHealth, getAdminAuditLogs } from "@/lib/community";
+import { getPendingContributionsCount } from "@/lib/contributions";
 import { getStorageRoot } from "@/lib/paths";
 import { AdminRescanButton } from "@/components/AdminRescanButton";
 
@@ -29,9 +30,10 @@ function formatBytes(bytes: number): string {
 }
 
 export default async function AdminOverviewPage() {
-  const [health, auditLogs] = await Promise.all([
+  const [health, auditLogs, pendingAssetsCount] = await Promise.all([
     getAdminStorageHealth(),
     getAdminAuditLogs(10),
+    getPendingContributionsCount(),
   ]);
 
   return (
@@ -68,10 +70,40 @@ export default async function AdminOverviewPage() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition"
           >
             <Trophy className="w-4 h-4 text-amber-400" />
-            <span>Moderate Content</span>
+            <span>Moderate Assets &amp; Scores</span>
+            {pendingAssetsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-black">
+                {pendingAssetsCount}
+              </span>
+            )}
           </Link>
         </div>
       </div>
+
+      {pendingAssetsCount > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white">
+                {pendingAssetsCount} Community Asset Upload{pendingAssetsCount === 1 ? "" : "s"} Awaiting Admin Verification
+              </div>
+              <div className="text-xs text-amber-200/80">
+                Inspect uploaded images, videos, and descriptions in the Moderation Queue before publishing them live to the Vault.
+              </div>
+            </div>
+          </div>
+          <Link
+            href="/admin/moderation"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-black shrink-0 transition"
+          >
+            <span>Review Pending Uploads</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* 1. Quick Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
