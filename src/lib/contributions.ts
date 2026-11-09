@@ -261,9 +261,8 @@ export async function getContributionLeaderboard(
     const rows = await query<any>(
       `SELECT
           c.user_id,
-          MAX(COALESCE(u.username, c.username)) AS username,
-          MAX(COALESCE(p.display_name, c.display_name)) AS display_name,
-          MAX(p.avatar_url) AS avatar_url,
+          MAX(c.username) AS username,
+          MAX(c.display_name) AS display_name,
           SUM(CASE WHEN c.status = 'approved' THEN c.points ELSE 0 END) AS total_points,
           SUM(CASE WHEN c.status = 'approved' THEN 1 ELSE 0 END) AS approved_count,
           SUM(CASE WHEN c.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
@@ -272,8 +271,6 @@ export async function getContributionLeaderboard(
           SUM(CASE WHEN c.status = 'approved' AND c.category = 'story' THEN 1 ELSE 0 END) AS stories_count,
           MAX(c.created_at) AS last_contribution_at
        FROM asset_contributions c
-       LEFT JOIN users u ON c.user_id = u.id
-       LEFT JOIN user_profiles p ON c.user_id = p.user_id
        WHERE c.status IN ('approved', 'pending')
        GROUP BY c.user_id
        ORDER BY total_points DESC, approved_count DESC, pending_count DESC, last_contribution_at ASC
