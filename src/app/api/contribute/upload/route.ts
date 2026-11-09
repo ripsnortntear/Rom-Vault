@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
+import fsp from "fs/promises";
+import os from "os";
 import path from "path";
+import crypto from "crypto";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { getCurrentSession } from "@/lib/auth/session";
 import { getRomsDirectory, normalizeSystem } from "@/lib/paths";
 import {
@@ -8,6 +13,8 @@ import {
   extractYoutubeVideoId,
   type ContributionCategory,
 } from "@/lib/contributions";
+
+const execFileAsync = promisify(execFile);
 
 const ALLOWED_ASSET_TYPES = new Set<ContributionCategory>([
   "artwork_front",
@@ -20,7 +27,58 @@ const ALLOWED_ASSET_TYPES = new Set<ContributionCategory>([
   "story",
 ]);
 
-function detectImageExtension(buf: Buffer, fallbackName: string): string | null {
+const CONTENT_TYPE_TO_EXT: Record<string, string> = {
+  "image/png": ".png",
+  "image/apng": ".png",
+  "image/x-png": ".png",
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/pjpeg": ".jpg",
+  "image/jfif": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/avif": ".avif",
+  "image/bmp": ".bmp",
+  "image/x-ms-bmp": ".bmp",
+  "image/x-bmp": ".bmp",
+  "image/svg+xml": ".svg",
+  "image/x-icon": ".ico",
+  "image/vnd.microsoft.icon": ".ico",
+  "image/ico": ".ico",
+  "image/tiff": ".tiff",
+  "image/x-tiff": ".tiff",
+  "image/heic": ".heic",
+  "image/heif": ".heif",
+};
+
+const EXT_NORMALIZATION_MAP: Record<string, string> = {
+  ".png": ".png",
+  ".apng": ".png",
+  ".jpg": ".jpg",
+  ".jpeg": ".jpg",
+  ".jfif": ".jpg",
+  ".pjpeg": ".jpg",
+  ".pjp": ".jpg",
+  ".webp": ".webp",
+  ".gif": ".gif",
+  ".avif": ".avif",
+  ".bmp": ".bmp",
+  ".dib": ".bmp",
+  ".svg": ".svg",
+  ".ico": ".ico",
+  ".tif": ".tiff",
+  ".tiff": ".tiff",
+  ".heic": ".heic",
+  ".heif": ".heif",
+};
+
+function detectImageExtension(
+  buf: Buffer,
+  fallbackName: string,
+  contentTypeHeader?: string | null
+): string | null {
+  // 1. Magic byte signatures
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
   if (
     buf.length >= 8 &&
     buf[0] === 0x89 &&
@@ -30,9 +88,13 @@ function detectImageExtension(buf: Buffer, fallbackName: string): string | null 
   ) {
     return ".png";
   }
+
+  // JPEG / JFIF / Exif: FF D8 FF
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
     return ".jpg";
   }
+
+  // WebP: "RIFF" .... "WEBP"
   if (
     buf.length >= 12 &&
     buf.subarray(0, 4).toString("ascii") === "RIFF" &&
@@ -40,11 +102,120 @@ function detectImageExtension(buf: Buffer, fallbackName: string): string | null 
   ) {
     return ".webp";
   }
-  const ext = path.extname(fallbackName).toLowerCase();
-  if (ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp") {
-    return ext === ".jpeg" ? ".jpg" : ext;
+
+  // GIF: "GIF87a" or "GIF89a"
+  if (buf.length >= 6) {
+    const gifSig = buf.subarray(0, 6).toString("ascii");
+    if (gifSig === "GIF87a" || gifSig === "GIF89a") {
+      return ".gif";
+    }
   }
+
+  // BMP: "BM" (42 4D)
+  if (buf.length >= 6 && buf[0] === 0x42 && buf[1] === 0x4d) {
+    return ".bmp";
+  }
+
+  // ICO: 00 00 01 00
+  if (
+    buf.length >= 4 &&
+    buf[0] === 0x00 &&
+    buf[1] === 0x00 &&
+    buf[2] === 0x01 &&
+    buf[3] === 0x00
+  ) {
+    return ".ico";
+  }
+
+  // TIFF: "II*\0" (49 49 2A 00) or "MM\0*" (4D 4D 00 2A)
+  if (
+    buf.length >= 4 &&
+    ((buf[0] === 0x49 && buf[1] === 0x49 && buf[2] === 0x2a && buf[3] === 0x00) ||
+      (buf[0] === 0x4d && buf[1] === 0x4d && buf[2] === 0x00 && buf[3] === 0x2a))
+  ) {
+    return ".tiff";
+  }
+
+  // ISO BMFF (AVIF / HEIC / HEIF): bytes 4..8 === "ftyp"
+  if (buf.length >= 12 && buf.subarray(4, 8).toString("ascii") === "ftyp") {
+    const brand = buf.subarray(8, 12).toString("ascii").toLowerCase();
+    if (brand === "avif" || brand === "avis" || brand === "MA1B" || brand === "ma1b") {
+      return ".avif";
+    }
+    if (
+      brand === "heic" ||
+      brand === "heix" ||
+      brand === "hevc" ||
+      brand === "mif1" ||
+      brand === "msf1"
+    ) {
+      return ".heic";
+    }
+  }
+
+  // SVG: XML/SVG text signature (only when no <script> tag is present)
+  if (buf.length >= 5) {
+    const headText = buf.subarray(0, Math.min(buf.length, 1024)).toString("utf-8").trim();
+    if (
+      (headText.startsWith("<svg") ||
+        (headText.startsWith("<?xml") && headText.includes("<svg"))) &&
+      !/<script\b/i.test(buf.toString("utf-8"))
+    ) {
+      return ".svg";
+    }
+  }
+
+  // 2. HTTP Content-Type header fallback (handles extensionless CDN URLs)
+  if (contentTypeHeader) {
+    const cleanMime = contentTypeHeader.split(";")[0].trim().toLowerCase();
+    if (CONTENT_TYPE_TO_EXT[cleanMime]) {
+      return CONTENT_TYPE_TO_EXT[cleanMime];
+    }
+  }
+
+  // 3. URL / Filename extension fallback
+  const ext = path.extname(fallbackName).toLowerCase();
+  if (EXT_NORMALIZATION_MAP[ext]) {
+    return EXT_NORMALIZATION_MAP[ext];
+  }
+
   return null;
+}
+
+/**
+ * Transcodes legacy/non-browser-universal formats (.tiff, .heic, .heif, .bmp) to .png using ffmpeg when possible.
+ */
+async function normalizeImageBufferIfNeeded(
+  buf: Buffer,
+  ext: string
+): Promise<{ buffer: Buffer; ext: string }> {
+  if (ext !== ".tiff" && ext !== ".heic" && ext !== ".heif") {
+    return { buffer: buf, ext };
+  }
+
+  const tmpToken = crypto.randomBytes(8).toString("hex");
+  const tmpIn = path.join(os.tmpdir(), `romvault_in_${tmpToken}${ext}`);
+  const tmpOut = path.join(os.tmpdir(), `romvault_out_${tmpToken}.png`);
+  try {
+    await fsp.writeFile(tmpIn, buf);
+    await execFileAsync(
+      "/usr/bin/ffmpeg",
+      ["-y", "-i", tmpIn, "-frames:v", "1", tmpOut],
+      { timeout: 15000 }
+    );
+    if (fs.existsSync(tmpOut)) {
+      const converted = await fsp.readFile(tmpOut);
+      if (converted.byteLength > 0) {
+        return { buffer: converted, ext: ".png" };
+      }
+    }
+  } catch {
+    // Fall back to original buffer if conversion is unavailable
+  } finally {
+    await fsp.unlink(tmpIn).catch(() => {});
+    await fsp.unlink(tmpOut).catch(() => {});
+  }
+  return { buffer: buf, ext };
 }
 
 function isSafeExternalImageUrl(rawUrl: string): URL | null {
@@ -257,6 +428,7 @@ export async function POST(request: NextRequest) {
     let buffer: Buffer | null = null;
     let fallbackName = "";
     let sourceUrl: string | null = null;
+    let fetchedContentType: string | null = null;
 
     if (imageUrl) {
       const safeUrl = isSafeExternalImageUrl(imageUrl);
@@ -274,7 +446,8 @@ export async function POST(request: NextRequest) {
           signal: controller.signal,
           headers: {
             "User-Agent": "ROMVault-AssetFetcher/1.0",
-            Accept: "image/png,image/jpeg,image/webp,image/*;q=0.8",
+            Accept:
+              "image/avif,image/webp,image/png,image/jpeg,image/gif,image/svg+xml,image/bmp,image/*;q=0.8,*/*;q=0.5",
           },
         });
         if (!res.ok) {
@@ -283,6 +456,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+        fetchedContentType = res.headers.get("content-type");
         const arrayBuf = await res.arrayBuffer();
         buffer = Buffer.from(arrayBuf);
         fallbackName = safeUrl.pathname;
@@ -299,6 +473,7 @@ export async function POST(request: NextRequest) {
       const fileObj = fileField as File;
       buffer = Buffer.from(await fileObj.arrayBuffer());
       fallbackName = fileObj.name;
+      fetchedContentType = fileObj.type || null;
     } else {
       return NextResponse.json(
         { ok: false, error: "Please upload an image file or enter a direct image URL." },
@@ -320,17 +495,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ext = detectImageExtension(buffer, fallbackName);
-    if (!ext) {
+    const detectedExt = detectImageExtension(buffer, fallbackName, fetchedContentType);
+    if (!detectedExt) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "Unsupported or invalid image format. The file or URL must be a valid PNG, JPG, or WEBP image.",
+            "Unsupported or invalid image format. Supported formats include PNG, JPG/JPEG/JFIF, WEBP, GIF, AVIF, SVG, BMP, ICO, TIFF, and HEIC.",
         },
         { status: 400 }
       );
     }
+
+    const normalized = await normalizeImageBufferIfNeeded(buffer, detectedExt);
+    buffer = normalized.buffer;
+    const ext = normalized.ext;
 
     const submission = await submitAssetContribution({
       userId: String(session.user.id),

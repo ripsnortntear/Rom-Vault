@@ -63,14 +63,18 @@ interface AssetCategoryDef {
   getPreviewUrl: (game: GameItem) => string | null;
 }
 
+const IMAGE_ACCEPT_TYPES =
+  "image/*,.png,.apng,.jpg,.jpeg,.jfif,.webp,.gif,.avif,.svg,.bmp,.ico,.tif,.tiff,.heic,.heif";
+
 export const ASSET_CATEGORIES: AssetCategoryDef[] = [
   {
     key: "artwork_front",
     label: "2D Box Art",
     shortLabel: "2D Box",
     points: 15,
-    accept: ".png,.jpg,.jpeg,.webp",
-    description: "Front 2D box cover or arcade flyer (.png, .jpg, .webp)",
+    accept: IMAGE_ACCEPT_TYPES,
+    description:
+      "Front 2D box cover or arcade flyer (PNG, JPG, WEBP, GIF, AVIF, SVG, BMP, TIFF, HEIC, or any image URL)",
     isAvailable: (g) => Boolean(g.media.artworkFront),
     getPreviewUrl: (g) => g.media.artworkFront,
   },
@@ -79,8 +83,9 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     label: "3D Box Art",
     shortLabel: "3D Box",
     points: 15,
-    accept: ".png,.jpg,.jpeg,.webp",
-    description: "3D angled box art render (.png, .jpg, .webp)",
+    accept: IMAGE_ACCEPT_TYPES,
+    description:
+      "3D angled box art render (PNG, JPG, WEBP, GIF, AVIF, SVG, BMP, TIFF, HEIC, or any image URL)",
     isAvailable: (g) => Boolean(g.media.artwork3d),
     getPreviewUrl: (g) => g.media.artwork3d,
   },
@@ -89,8 +94,9 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     label: "In-Game Screenshot",
     shortLabel: "Screenshot",
     points: 10,
-    accept: ".png,.jpg,.jpeg,.webp",
-    description: "Action gameplay screenshot (.png, .jpg, .webp)",
+    accept: IMAGE_ACCEPT_TYPES,
+    description:
+      "Action gameplay screenshot (PNG, JPG, WEBP, GIF, AVIF, SVG, BMP, TIFF, HEIC, or any image URL)",
     isAvailable: (g) => Boolean(g.media.screenshot),
     getPreviewUrl: (g) => g.media.screenshot,
   },
@@ -99,8 +105,9 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     label: "Title Screen",
     shortLabel: "Title Screen",
     points: 10,
-    accept: ".png,.jpg,.jpeg,.webp",
-    description: "Game title screen capture (.png, .jpg, .webp)",
+    accept: IMAGE_ACCEPT_TYPES,
+    description:
+      "Game title screen capture (PNG, JPG, WEBP, GIF, AVIF, SVG, BMP, TIFF, HEIC, or any image URL)",
     isAvailable: (g) => Boolean(g.media.screenTitle),
     getPreviewUrl: (g) => g.media.screenTitle,
   },
@@ -109,8 +116,9 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     label: "Logo / Marquee",
     shortLabel: "Logo",
     points: 15,
-    accept: ".png,.jpg,.jpeg,.webp",
-    description: "Transparent clear logo or arcade marquee banner (.png, .webp)",
+    accept: IMAGE_ACCEPT_TYPES,
+    description:
+      "Transparent clear logo or arcade marquee banner (PNG, WEBP, SVG, GIF, AVIF, JPG, or any image URL)",
     isAvailable: (g) => Boolean(g.media.logo || g.media.marquee),
     getPreviewUrl: (g) => g.media.logo || g.media.marquee || null,
   },
@@ -119,8 +127,9 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     label: "Cartridge / Disc Art",
     shortLabel: "Cart/Disc",
     points: 10,
-    accept: ".png,.jpg,.jpeg,.webp",
-    description: "Cartridge, CD/DVD disc scan, or arcade PCB plate (.png, .webp)",
+    accept: IMAGE_ACCEPT_TYPES,
+    description:
+      "Cartridge, CD/DVD disc scan, or arcade PCB plate (PNG, WEBP, SVG, GIF, AVIF, JPG, or any image URL)",
     isAvailable: (g) => Boolean(g.media.mediumFront || g.media.mediumDisc),
     getPreviewUrl: (g) => g.media.mediumFront || g.media.mediumDisc,
   },
@@ -1571,7 +1580,7 @@ export function ContributeClient({
                       {/* Option A: Direct Image URL Input */}
                       <div className="space-y-1.5">
                         <label className="block text-xs font-bold text-zinc-200">
-                          Option A: Paste Direct Image URL (.png, .jpg, .webp)
+                          Option A: Paste Image URL (PNG, JPG/JPEG/JFIF, WEBP, GIF, AVIF, SVG, BMP, TIFF, HEIC, or CDN Link)
                         </label>
                         <input
                           type="url"
@@ -1588,7 +1597,7 @@ export function ContributeClient({
                             }
                             setUploadStatus(null);
                           }}
-                          placeholder="https://example.com/artwork/boxart.png"
+                          placeholder="https://example.com/artwork/image (supports any image format or extensionless CDN URL)"
                           className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-white/15 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                         />
                       </div>

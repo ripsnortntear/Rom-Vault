@@ -13,9 +13,18 @@ import {
 
 const MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
+  ".apng": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".jfif": "image/jpeg",
   ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".tiff": "image/tiff",
+  ".tif": "image/tiff",
   ".mp4": "video/mp4",
   ".txt": "text/plain; charset=utf-8",
 };

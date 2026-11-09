@@ -22,12 +22,27 @@ function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case ".png":
+    case ".apng":
       return "image/png";
     case ".jpg":
     case ".jpeg":
+    case ".jfif":
       return "image/jpeg";
     case ".webp":
       return "image/webp";
+    case ".gif":
+      return "image/gif";
+    case ".avif":
+      return "image/avif";
+    case ".bmp":
+      return "image/bmp";
+    case ".svg":
+      return "image/svg+xml";
+    case ".ico":
+      return "image/x-icon";
+    case ".tif":
+    case ".tiff":
+      return "image/tiff";
     case ".mp4":
       return "video/mp4";
     case ".txt":

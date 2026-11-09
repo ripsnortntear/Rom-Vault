@@ -585,7 +585,22 @@ export async function approveAssetContribution(
     const targetFile = `${targetDir}/${item.baseName}${safeExt}`;
 
     // Remove conflicting extensions for the same baseName in targetDir so the newly approved asset takes precedence
-    for (const oldExt of [".png", ".jpg", ".jpeg", ".webp", ".mp4"]) {
+    for (const oldExt of [
+      ".png",
+      ".apng",
+      ".jpg",
+      ".jpeg",
+      ".jfif",
+      ".webp",
+      ".gif",
+      ".avif",
+      ".bmp",
+      ".svg",
+      ".ico",
+      ".tif",
+      ".tiff",
+      ".mp4",
+    ]) {
       if (oldExt !== safeExt) {
         const oldPath = `${targetDir}/${item.baseName}${oldExt}`;
         if (fs.existsSync(oldPath)) {
