@@ -99,11 +99,32 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "No fields provided to update." }, { status: 400 });
     }
 
-    params.push(session.user.id);
-    await execute(
-      `UPDATE user_profiles SET ${updates.join(", ")}, updated_at = NOW() WHERE user_id = ?`,
-      params
+    const existingProfile = await query<{ id: string }>(
+      "SELECT id FROM user_profiles WHERE user_id = ? LIMIT 1",
+      [session.user.id]
     );
+
+    if (existingProfile.length === 0) {
+      const initialQuota = session.user.role === "admin" ? 0 : 50;
+      await execute(
+        `INSERT INTO user_profiles (id, user_id, display_name, avatar_url, preferences, favorites, download_quota_daily)
+         VALUES (UUID(), ?, ?, ?, ?, ?, ?)`,
+        [
+          session.user.id,
+          displayName || session.user.displayName || session.user.username,
+          avatarUrl || null,
+          JSON.stringify(preferences || { theme: "dark" }),
+          JSON.stringify(favorites || []),
+          initialQuota,
+        ]
+      );
+    } else {
+      params.push(session.user.id);
+      await execute(
+        `UPDATE user_profiles SET ${updates.join(", ")}, updated_at = NOW() WHERE user_id = ?`,
+        params
+      );
+    }
 
     return NextResponse.json({
       success: true,

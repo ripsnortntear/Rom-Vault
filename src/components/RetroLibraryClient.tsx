@@ -193,6 +193,7 @@ export function RetroLibraryClient({
           setCurrentUser({
             ...data.user,
             displayName: data.profile?.displayName ?? data.user.displayName,
+            favorites: data.profile?.favorites || [],
             quotaDaily: data.user.role === "admin" ? null : (data.profile?.quotaDaily ?? data.user.quotaDaily ?? 50),
             quotaUsedToday: data.user.role === "admin" ? 0 : (data.profile?.quotaUsedToday ?? data.user.quotaUsedToday ?? 0),
           });
@@ -299,6 +300,52 @@ export function RetroLibraryClient({
     }
   }, []);
 
+  const hasSyncedFavoritesRef = useRef<boolean>(false);
+
+  // Synchronize favorites bidirectionally between localStorage and the user's cloud account
+  useEffect(() => {
+    if (!currentUser) return;
+    if (hasSyncedFavoritesRef.current) return;
+    hasSyncedFavoritesRef.current = true;
+
+    try {
+      let localFavs: string[] = [];
+      const savedFavs = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (savedFavs) {
+        localFavs = JSON.parse(savedFavs) as string[];
+      }
+
+      const cloudFavs: string[] = Array.isArray(currentUser.favorites)
+        ? currentUser.favorites
+        : [];
+
+      // Combine both sets preserving order and eliminating duplicates
+      const mergedFavs = Array.from(new Set([...cloudFavs, ...localFavs]));
+
+      if (mergedFavs.length > 0) {
+        setFavorites(mergedFavs);
+        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(mergedFavs));
+      }
+
+      // If local favorites had entries that were missing from the cloud, push to server
+      const isMissingFromCloud =
+        mergedFavs.length !== cloudFavs.length ||
+        mergedFavs.some((id, idx) => id !== cloudFavs[idx]);
+
+      if (isMissingFromCloud && mergedFavs.length > 0) {
+        fetch("/roms/api/users/me", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ favorites: mergedFavs }),
+        }).catch((err) => {
+          console.error("[RetroLibraryClient] Failed syncing favorites to cloud:", err);
+        });
+      }
+    } catch (error) {
+      console.error("[RetroLibraryClient] Error during favorites cloud sync:", error);
+    }
+  }, [currentUser]);
+
   // Update component filter state if browser navigates back/forward
   useEffect(() => {
     const handlePopState = () => {
@@ -402,9 +449,20 @@ export function RetroLibraryClient({
       } catch (error) {
         console.error("[RetroLibraryClient] Failed saving favorites:", error);
       }
+
+      if (currentUser) {
+        fetch("/roms/api/users/me", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ favorites: next }),
+        }).catch((error) => {
+          console.error("[RetroLibraryClient] Failed syncing favorites to cloud:", error);
+        });
+      }
+
       return next;
     });
-  }, []);
+  }, [currentUser]);
 
   const handlePlayGame = useCallback((game: GameItem): void => {
     setRecentIds((prev) => {

@@ -25,9 +25,23 @@ export default async function HomePage(): Promise<React.ReactElement> {
       profile = profiles[0];
     } catch {}
 
+    const rawFavs = profile?.favorites;
+    const userFavorites: string[] = Array.isArray(rawFavs)
+      ? rawFavs
+      : typeof rawFavs === "string"
+      ? (() => {
+          try {
+            return JSON.parse(rawFavs);
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+
     initialUser = {
       ...session.user,
       displayName: profile?.display_name ?? session.user.displayName,
+      favorites: userFavorites,
       quotaDaily:
         session.user.role === "admin"
           ? null
