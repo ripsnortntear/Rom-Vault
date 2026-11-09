@@ -4,7 +4,7 @@ import path from "path";
 import { getCurrentSession } from "@/lib/auth/session";
 import { syncUserMemoryCard, normalizeCardSystem } from "@/lib/memory-cards";
 import { validateSaveFormatForPlatform } from "@/lib/security";
-import { getStorageRoot } from "@/lib/paths";
+import { getStorageRoot, safeDecodeURIComponent } from "@/lib/paths";
 
 interface RouteContext {
   params: Promise<{
@@ -17,7 +17,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const savesBaseDir = path.resolve(path.join(getStorageRoot(), "saves"));
 
     const { id: rawId } = await context.params;
-    const cardId = decodeURIComponent(rawId).trim();
+    const cardId = safeDecodeURIComponent(rawId).trim();
 
     // Prevent path traversal on ID parameter
     if (!cardId || cardId.includes("..") || cardId.includes("/") || cardId.includes("\\") || cardId.includes("\0")) {

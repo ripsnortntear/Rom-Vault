@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeSystem, getStorageRoot } from "@/lib/paths";
+import { normalizeSystem, getStorageRoot, safeDecodeURIComponent } from "@/lib/paths";
 import { getCurrentSession } from "@/lib/auth/session";
 import { query } from "@/lib/db";
 import { getCorsHeaders, handleCorsPreflight } from "@/lib/cors";
@@ -82,7 +82,7 @@ function resolveRomFilePath(
   if (id.includes("__")) {
     const parts = id.split("__");
     targetSystem = normalizeSystem(parts[0]);
-    baseName = decodeURIComponent(parts.slice(1).join("__"));
+    baseName = safeDecodeURIComponent(parts.slice(1).join("__"));
   }
 
   const systemsToCheck = targetSystem
@@ -302,7 +302,7 @@ async function handleStream(
   const corsHeaders = getCorsStreamHeaders(request);
   try {
     const { id: rawId } = await context.params;
-    const id = decodeURIComponent(rawId);
+    const id = safeDecodeURIComponent(rawId);
     const fileParam = request.nextUrl.searchParams.get("file");
     const discParam = request.nextUrl.searchParams.get("disc");
     const systemParam = request.nextUrl.searchParams.get("system");

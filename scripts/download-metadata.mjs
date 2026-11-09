@@ -729,7 +729,20 @@ async function runAudit() {
       .filter((e) => {
         if (!e.isFile()) return false;
         const l = e.name.toLowerCase();
-        return !l.startsWith(".") && !l.endsWith(".xml") && !l.endsWith(".txt") && !l.endsWith(".json") && !l.endsWith(".dat") && !l.endsWith(".db") && !l.endsWith(".ini") && !l.endsWith(".m3u");
+        return (
+          !l.startsWith(".") &&
+          !l.startsWith("gamelist") &&
+          !l.includes(".bak") &&
+          !l.endsWith(".old") &&
+          !/\bbios\b/i.test(l) &&
+          !l.endsWith(".xml") &&
+          !l.endsWith(".txt") &&
+          !l.endsWith(".json") &&
+          !l.endsWith(".dat") &&
+          !l.endsWith(".db") &&
+          !l.endsWith(".ini") &&
+          !l.endsWith(".m3u")
+        );
       })
       .map((e) => e.name)
       .sort((a, b) => a.localeCompare(b));

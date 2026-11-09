@@ -440,7 +440,14 @@ export function RetroLibraryClient({
     }
 
     if (isMobile) {
-      window.location.assign(`/roms/play/${encodeURIComponent(decodeURIComponent(game.id))}`);
+      const safeId = (() => {
+        try {
+          return decodeURIComponent(game.id);
+        } catch {
+          return game.id;
+        }
+      })();
+      window.location.assign(`/roms/play/${encodeURIComponent(safeId)}`);
       return;
     }
 

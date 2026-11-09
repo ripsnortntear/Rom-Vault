@@ -547,9 +547,9 @@ export async function approveAssetContribution(
     try {
       const gameId = `${item.system}__${encodeURIComponent(item.baseName)}`;
       await execute(
-        `INSERT INTO game_metadata (id, system, clean_title, summary, is_fetched)
-         VALUES (?, ?, ?, ?, 1)
-         ON DUPLICATE KEY UPDATE summary = VALUES(summary), is_fetched = 1`,
+        `INSERT INTO game_metadata (id, system, clean_title, summary)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE summary = VALUES(summary), updated_at = NOW()`,
         [gameId, item.system, item.gameTitle || item.baseName, text]
       );
     } catch (err) {
