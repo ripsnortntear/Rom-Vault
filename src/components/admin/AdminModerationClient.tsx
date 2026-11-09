@@ -50,6 +50,26 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function getYoutubeIdFromUrl(rawUrl?: string | null): string | null {
+  if (!rawUrl) return null;
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.hostname.includes("youtu.be")) {
+      return parsed.pathname.split("/").filter(Boolean)[0] || null;
+    }
+    if (parsed.pathname === "/watch") {
+      return parsed.searchParams.get("v");
+    }
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length >= 2 && ["shorts", "embed", "v", "live"].includes(parts[0])) {
+      return parts[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function AdminModerationClient({
   initialComments,
   initialScores,
@@ -362,10 +382,28 @@ export function AdminModerationClient({
                         <h3 className="text-sm font-black text-white truncate" title={item.gameTitle}>
                           {item.gameTitle}
                         </h3>
-                        <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-2">
+                        <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-2 flex-wrap">
                           <span>ROM: {item.baseName}</span>
-                          <span>•</span>
-                          <span>{formatFileSize(item.fileSize)}</span>
+                          {item.fileSize > 0 && (
+                            <>
+                              <span>•</span>
+                              <span>{formatFileSize(item.fileSize)}</span>
+                            </>
+                          )}
+                          {item.sourceUrl && (
+                            <>
+                              <span>•</span>
+                              <a
+                                href={item.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 underline"
+                              >
+                                <span>{isVideo ? "YouTube Source" : "Source URL"}</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -388,6 +426,14 @@ export function AdminModerationClient({
                         <div className="p-3 w-full h-full overflow-y-auto text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed font-sans">
                           {item.storyText || "No story text."}
                         </div>
+                      ) : isVideo && getYoutubeIdFromUrl(item.sourceUrl) ? (
+                        <iframe
+                          src={`https://www.youtube-nocookie.com/embed/${getYoutubeIdFromUrl(item.sourceUrl)}`}
+                          title={`${item.gameTitle} YouTube Preview`}
+                          className="w-full h-full bg-black"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
                       ) : item.status === "pending" && item.stagedFilename ? (
                         isVideo ? (
                           <video

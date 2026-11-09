@@ -4,10 +4,14 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { query, execute } from "@/lib/db";
 import { getStorageRoot, getArtworkDirectory, normalizeSystem } from "@/lib/paths";
 import { scanGameLibrary } from "@/lib/scanner";
 import { logAdminAudit } from "@/lib/community";
+
+const execFileAsync = promisify(execFile);
 
 export type ContributionCategory =
   | "artwork_front"
@@ -34,6 +38,7 @@ export interface AssetContributionItem {
   fileExt: string;
   fileSize: number;
   storyText: string | null;
+  sourceUrl: string | null;
   points: number;
   status: ContributionStatus;
   reviewedBy: string | null;
@@ -68,6 +73,56 @@ export interface PendingAssetSlot {
 
 const DISC_SYSTEMS = new Set(["psx", "ps2", "saturn", "dreamcast", "gamecube"]);
 
+const ALLOWED_YOUTUBE_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+  "www.youtu.be",
+  "youtube-nocookie.com",
+  "www.youtube-nocookie.com",
+]);
+
+/**
+ * Strictly validate and extract an 11-character YouTube video ID from a URL.
+ * Returns null for any non-YouTube domain or invalid video ID.
+ */
+export function extractYoutubeVideoId(rawUrl: string): string | null {
+  try {
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return null;
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (!ALLOWED_YOUTUBE_HOSTS.has(host)) {
+      return null;
+    }
+
+    let candidateId: string | null = null;
+    if (host === "youtu.be" || host === "www.youtu.be") {
+      candidateId = parsed.pathname.split("/").filter(Boolean)[0] || null;
+    } else if (parsed.pathname === "/watch") {
+      candidateId = parsed.searchParams.get("v");
+    } else if (
+      parsed.pathname.startsWith("/shorts/") ||
+      parsed.pathname.startsWith("/embed/") ||
+      parsed.pathname.startsWith("/v/") ||
+      parsed.pathname.startsWith("/live/")
+    ) {
+      candidateId = parsed.pathname.split("/").filter(Boolean)[1] || null;
+    }
+
+    if (candidateId && /^[a-zA-Z0-9_-]{11}$/.test(candidateId)) {
+      return candidateId;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 let tableEnsured = false;
 
 export async function ensureContributionsTable(): Promise<void> {
@@ -87,6 +142,7 @@ export async function ensureContributionsTable(): Promise<void> {
         file_ext VARCHAR(16) NOT NULL,
         file_size INT NOT NULL DEFAULT 0,
         story_text TEXT NULL,
+        source_url VARCHAR(1024) NULL,
         points INT NOT NULL DEFAULT 10,
         status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
         reviewed_by VARCHAR(64) NULL,
@@ -99,6 +155,9 @@ export async function ensureContributionsTable(): Promise<void> {
         INDEX idx_game_cat (system, base_name, category, status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    await execute(
+      "ALTER TABLE asset_contributions ADD COLUMN IF NOT EXISTS source_url VARCHAR(1024) NULL AFTER story_text"
+    ).catch(() => {});
     tableEnsured = true;
   } catch (err) {
     console.warn("[contributions] Failed ensuring asset_contributions table:", err);
@@ -168,6 +227,7 @@ function mapRow(r: any): AssetContributionItem {
     fileExt: String(r.file_ext || ""),
     fileSize: Number(r.file_size || 0),
     storyText: r.story_text ? String(r.story_text) : null,
+    sourceUrl: r.source_url ? String(r.source_url) : null,
     points: Number(r.points || getPointsForCategory(r.category as ContributionCategory)),
     status: (r.status || "pending") as ContributionStatus,
     reviewedBy: r.reviewed_by ? String(r.reviewed_by) : null,
@@ -176,6 +236,58 @@ function mapRow(r: any): AssetContributionItem {
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
     reviewedAt: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
   };
+}
+
+/**
+ * Download a 45-second 480p MP4 preview clip from a verified YouTube URL into the staging path.
+ */
+export async function downloadYoutubePreviewToStaging(
+  submissionId: number,
+  youtubeUrl: string,
+  stagedPath: string
+): Promise<boolean> {
+  try {
+    const ytDlpBin = fs.existsSync("/usr/local/bin/yt-dlp")
+      ? "/usr/local/bin/yt-dlp"
+      : "yt-dlp";
+
+    await fsp.mkdir(path.dirname(stagedPath), { recursive: true });
+
+    await execFileAsync(
+      ytDlpBin,
+      [
+        "--no-playlist",
+        "--no-warnings",
+        "--max-filesize",
+        "65M",
+        "--download-sections",
+        "*0:00-0:45",
+        "-f",
+        "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]",
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        stagedPath,
+        youtubeUrl,
+      ],
+      { timeout: 120000 }
+    );
+
+    if (fs.existsSync(stagedPath)) {
+      const stat = await fsp.stat(stagedPath);
+      if (stat.size > 0) {
+        await execute(
+          "UPDATE asset_contributions SET file_size = ? WHERE id = ?",
+          [stat.size, submissionId]
+        ).catch(() => {});
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.warn("[contributions] yt-dlp background preview extraction warning:", err);
+    return false;
+  }
 }
 
 /**
@@ -192,6 +304,7 @@ export async function submitAssetContribution(params: {
   fileExt: string;
   buffer?: Buffer;
   storyText?: string;
+  sourceUrl?: string | null;
 }): Promise<AssetContributionItem> {
   await ensureContributionsTable();
 
@@ -211,12 +324,17 @@ export async function submitAssetContribution(params: {
     const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, stagedFilename);
     await fsp.writeFile(stagedPath, params.buffer);
     fileSize = params.buffer.length;
+  } else if (params.category === "video" && params.sourceUrl) {
+    const stagingDir = getContributionsStagingDir();
+    await fsp.mkdir(stagingDir, { recursive: true });
+    const token = crypto.randomBytes(12).toString("hex");
+    stagedFilename = `${normSys}_${Date.now()}_${token}.mp4`;
   }
 
   const res = await execute(
     `INSERT INTO asset_contributions
-      (user_id, username, display_name, system, base_name, game_title, category, staged_filename, file_ext, file_size, story_text, points, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      (user_id, username, display_name, system, base_name, game_title, category, staged_filename, file_ext, file_size, story_text, source_url, points, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
     [
       params.userId,
       params.username,
@@ -229,9 +347,17 @@ export async function submitAssetContribution(params: {
       params.fileExt,
       fileSize,
       params.storyText || null,
+      params.sourceUrl || null,
       points,
     ]
   );
+
+  // If this is a YouTube video link submission, kick off non-blocking background extraction into staging
+  if (params.category === "video" && params.sourceUrl && stagedFilename) {
+    const stagingDir = getContributionsStagingDir();
+    const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, stagedFilename);
+    void downloadYoutubePreviewToStaging(res.insertId, params.sourceUrl, stagedPath);
+  }
 
   const inserted = await getContributionById(res.insertId);
   if (!inserted) {
@@ -435,6 +561,22 @@ export async function approveAssetContribution(
     }
     const stagingDir = getContributionsStagingDir();
     const stagedPath = path.join(/*turbopackIgnore: true*/ stagingDir, path.basename(item.stagedFilename));
+
+    // If this is a YouTube video and the background download hasn't finished yet, complete it now
+    if (!fs.existsSync(stagedPath) && item.category === "video" && item.sourceUrl) {
+      const downloaded = await downloadYoutubePreviewToStaging(
+        item.id,
+        item.sourceUrl,
+        stagedPath
+      );
+      if (!downloaded || !fs.existsSync(stagedPath)) {
+        return {
+          ok: false,
+          error: "Failed to download MP4 video clip from YouTube link.",
+        };
+      }
+    }
+
     if (!fs.existsSync(stagedPath)) {
       return { ok: false, error: "Staged file no longer exists on disk." };
     }
@@ -472,6 +614,7 @@ export async function approveAssetContribution(
     baseName: item.baseName,
     category: item.category,
     contributor: item.username,
+    sourceUrl: item.sourceUrl || null,
     points: item.points,
   });
 

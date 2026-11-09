@@ -5,6 +5,7 @@ import { getCurrentSession } from "@/lib/auth/session";
 import { getRomsDirectory, normalizeSystem } from "@/lib/paths";
 import {
   submitAssetContribution,
+  extractYoutubeVideoId,
   type ContributionCategory,
 } from "@/lib/contributions";
 
@@ -46,11 +47,33 @@ function detectImageExtension(buf: Buffer, fallbackName: string): string | null 
   return null;
 }
 
-function isMp4Buffer(buf: Buffer, fallbackName: string): boolean {
-  if (buf.length >= 12 && buf.subarray(4, 8).toString("ascii") === "ftyp") {
-    return true;
+function isSafeExternalImageUrl(rawUrl: string): URL | null {
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      /^127\./.test(host) ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^169\.254\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
   }
-  return path.extname(fallbackName).toLowerCase() === ".mp4";
 }
 
 export async function POST(request: NextRequest) {
@@ -103,7 +126,12 @@ export async function POST(request: NextRequest) {
     const romEntries = fs.readdirSync(romsDir);
     const matchingRom = romEntries.find((entry) => {
       const lower = entry.toLowerCase();
-      if (lower.startsWith(".") || lower.startsWith("gamelist") || lower.includes(".bak") || lower.endsWith(".old")) {
+      if (
+        lower.startsWith(".") ||
+        lower.startsWith("gamelist") ||
+        lower.includes(".bak") ||
+        lower.endsWith(".old")
+      ) {
         return false;
       }
       const extIdx = entry.lastIndexOf(".");
@@ -125,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     const gameTitle = rawGameTitle || canonicalBaseName;
 
-    // Handle Story / Overview text contribution (staged for admin review)
+    // 1. Handle Story / Overview text contribution (staged for admin review)
     if (assetType === "story") {
       let storyText = String(formData.get("storyText") || "").trim();
       const uploadedFile = formData.get("file");
@@ -173,38 +201,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Handle Binary Image / Video upload (staged for admin review)
-    const fileField = formData.get("file");
-    if (!fileField || typeof fileField !== "object" || !("arrayBuffer" in fileField)) {
-      return NextResponse.json(
-        { ok: false, error: "No file uploaded." },
-        { status: 400 }
-      );
-    }
-
-    const fileObj = fileField as File;
-    const buffer = Buffer.from(await fileObj.arrayBuffer());
-
-    if (buffer.byteLength === 0) {
-      return NextResponse.json(
-        { ok: false, error: "Uploaded file is empty." },
-        { status: 400 }
-      );
-    }
-
+    // 2. Handle Gameplay Video contribution — ONLY ACCEPT YOUTUBE LINKS
     if (assetType === "video") {
-      if (buffer.byteLength > 65 * 1024 * 1024) {
+      const youtubeUrl = String(formData.get("youtubeUrl") || formData.get("mediaUrl") || "").trim();
+      if (!youtubeUrl) {
         return NextResponse.json(
-          { ok: false, error: "Gameplay video must be under 65 MB." },
+          {
+            ok: false,
+            error: "Please enter a YouTube link (only YouTube links are accepted for gameplay videos).",
+          },
           { status: 400 }
         );
       }
-      if (!isMp4Buffer(buffer, fileObj.name)) {
+
+      const youtubeId = extractYoutubeVideoId(youtubeUrl);
+      if (!youtubeId) {
         return NextResponse.json(
-          { ok: false, error: "Gameplay video must be a valid .mp4 file." },
+          {
+            ok: false,
+            error:
+              "Invalid video link. Only YouTube links (youtube.com/watch?v=... or youtu.be/...) are accepted for gameplay videos.",
+          },
           { status: 400 }
         );
       }
+
+      const canonicalYoutubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
 
       const submission = await submitAssetContribution({
         userId: String(session.user.id),
@@ -215,7 +237,7 @@ export async function POST(request: NextRequest) {
         gameTitle,
         category: "video",
         fileExt: ".mp4",
-        buffer,
+        sourceUrl: canonicalYoutubeUrl,
       });
 
       return NextResponse.json({
@@ -228,7 +250,69 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Image asset types
+    // 3. Handle Image asset contribution (File upload OR Image URL)
+    const imageUrl = String(formData.get("imageUrl") || formData.get("mediaUrl") || "").trim();
+    const fileField = formData.get("file");
+
+    let buffer: Buffer | null = null;
+    let fallbackName = "";
+    let sourceUrl: string | null = null;
+
+    if (imageUrl) {
+      const safeUrl = isSafeExternalImageUrl(imageUrl);
+      if (!safeUrl) {
+        return NextResponse.json(
+          { ok: false, error: "Please provide a valid public http:// or https:// image URL." },
+          { status: 400 }
+        );
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const res = await fetch(safeUrl.toString(), {
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "ROMVault-AssetFetcher/1.0",
+            Accept: "image/png,image/jpeg,image/webp,image/*;q=0.8",
+          },
+        });
+        if (!res.ok) {
+          return NextResponse.json(
+            { ok: false, error: `Failed to fetch image from URL (HTTP ${res.status}).` },
+            { status: 400 }
+          );
+        }
+        const arrayBuf = await res.arrayBuffer();
+        buffer = Buffer.from(arrayBuf);
+        fallbackName = safeUrl.pathname;
+        sourceUrl = safeUrl.toString();
+      } catch (err: any) {
+        return NextResponse.json(
+          { ok: false, error: `Could not download image from URL: ${err?.message || "timeout"}` },
+          { status: 400 }
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
+    } else if (fileField && typeof fileField === "object" && "arrayBuffer" in fileField) {
+      const fileObj = fileField as File;
+      buffer = Buffer.from(await fileObj.arrayBuffer());
+      fallbackName = fileObj.name;
+    } else {
+      return NextResponse.json(
+        { ok: false, error: "Please upload an image file or enter a direct image URL." },
+        { status: 400 }
+      );
+    }
+
+    if (!buffer || buffer.byteLength === 0) {
+      return NextResponse.json(
+        { ok: false, error: "Image is empty." },
+        { status: 400 }
+      );
+    }
+
     if (buffer.byteLength > 15 * 1024 * 1024) {
       return NextResponse.json(
         { ok: false, error: "Image file must be under 15 MB." },
@@ -236,10 +320,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ext = detectImageExtension(buffer, fileObj.name);
+    const ext = detectImageExtension(buffer, fallbackName);
     if (!ext) {
       return NextResponse.json(
-        { ok: false, error: "Unsupported image format. Please upload PNG, JPG, or WEBP." },
+        {
+          ok: false,
+          error:
+            "Unsupported or invalid image format. The file or URL must be a valid PNG, JPG, or WEBP image.",
+        },
         { status: 400 }
       );
     }
@@ -254,6 +342,7 @@ export async function POST(request: NextRequest) {
       category: assetType,
       fileExt: ext,
       buffer,
+      sourceUrl,
     });
 
     return NextResponse.json({

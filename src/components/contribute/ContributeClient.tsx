@@ -130,7 +130,7 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     shortLabel: "Video",
     points: 25,
     accept: ".mp4",
-    description: "Short gameplay preview clip (.mp4, up to 65 MB)",
+    description: "YouTube gameplay link (ONLY youtube.com or youtu.be links accepted)",
     isAvailable: (g) => Boolean(g.media.video),
     getPreviewUrl: (g) => g.media.video,
   },
@@ -165,6 +165,43 @@ function getMissingCount(game: GameItem): number {
   return missing;
 }
 
+function extractClientYoutubeId(rawUrl: string): string | null {
+  try {
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return null;
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    const host = parsed.hostname.toLowerCase();
+    const allowed = [
+      "youtube.com",
+      "www.youtube.com",
+      "m.youtube.com",
+      "youtu.be",
+      "www.youtu.be",
+      "youtube-nocookie.com",
+      "www.youtube-nocookie.com",
+    ];
+    if (!allowed.includes(host)) return null;
+
+    let id: string | null = null;
+    if (host === "youtu.be" || host === "www.youtu.be") {
+      id = parsed.pathname.split("/").filter(Boolean)[0] || null;
+    } else if (parsed.pathname === "/watch") {
+      id = parsed.searchParams.get("v");
+    } else if (
+      parsed.pathname.startsWith("/shorts/") ||
+      parsed.pathname.startsWith("/embed/") ||
+      parsed.pathname.startsWith("/v/") ||
+      parsed.pathname.startsWith("/live/")
+    ) {
+      id = parsed.pathname.split("/").filter(Boolean)[1] || null;
+    }
+    return id && /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ContributeClient({
   initialGames,
   initialUser,
@@ -196,6 +233,7 @@ export function ContributeClient({
   const [activeCategory, setActiveCategory] = useState<AssetCategoryKey>("artwork_front");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+  const [mediaUrlInput, setMediaUrlInput] = useState<string>("");
   const [storyDraft, setStoryDraft] = useState<string>("");
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<{
@@ -365,6 +403,7 @@ export function ContributeClient({
   const openModal = (game: GameItem, preferredCat?: AssetCategoryKey) => {
     setActiveGame(game);
     setSelectedFile(null);
+    setMediaUrlInput("");
     if (previewObjectUrl) {
       URL.revokeObjectURL(previewObjectUrl);
       setPreviewObjectUrl(null);
@@ -385,6 +424,7 @@ export function ContributeClient({
   const closeModal = () => {
     setActiveGame(null);
     setSelectedFile(null);
+    setMediaUrlInput("");
     if (previewObjectUrl) {
       URL.revokeObjectURL(previewObjectUrl);
       setPreviewObjectUrl(null);
@@ -398,8 +438,11 @@ export function ContributeClient({
       setPreviewObjectUrl(null);
     }
     setSelectedFile(file);
+    if (file) {
+      setMediaUrlInput("");
+    }
     setUploadStatus(null);
-    if (file && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+    if (file && file.type.startsWith("image/")) {
       setPreviewObjectUrl(URL.createObjectURL(file));
     }
   };
@@ -424,16 +467,32 @@ export function ContributeClient({
         } else {
           formData.append("storyText", storyDraft);
         }
-      } else {
-        if (!selectedFile) {
+      } else if (activeCategory === "video") {
+        const ytId = extractClientYoutubeId(mediaUrlInput);
+        if (!ytId) {
           setUploadStatus({
             type: "error",
-            message: "Please select a file to upload first.",
+            message:
+              "Only valid YouTube links (https://www.youtube.com/watch?v=... or https://youtu.be/...) are accepted for gameplay videos.",
           });
           setUploading(false);
           return;
         }
-        formData.append("file", selectedFile);
+        formData.append("youtubeUrl", mediaUrlInput.trim());
+      } else {
+        const trimmedUrl = mediaUrlInput.trim();
+        if (trimmedUrl) {
+          formData.append("imageUrl", trimmedUrl);
+        } else if (selectedFile) {
+          formData.append("file", selectedFile);
+        } else {
+          setUploadStatus({
+            type: "error",
+            message: "Please choose an image file or paste a direct image URL.",
+          });
+          setUploading(false);
+          return;
+        }
       }
 
       const res = await fetch("/roms/api/contribute/upload", {
@@ -498,6 +557,7 @@ export function ContributeClient({
       }
 
       setSelectedFile(null);
+      setMediaUrlInput("");
       if (previewObjectUrl) {
         URL.revokeObjectURL(previewObjectUrl);
         setPreviewObjectUrl(null);
@@ -1320,6 +1380,7 @@ export function ContributeClient({
                         onClick={() => {
                           setActiveCategory(cat.key);
                           setSelectedFile(null);
+                          setMediaUrlInput("");
                           if (previewObjectUrl) {
                             URL.revokeObjectURL(previewObjectUrl);
                             setPreviewObjectUrl(null);
@@ -1431,7 +1492,7 @@ export function ContributeClient({
                       </div>
                     )}
 
-                  {/* Story Textarea or File Upload */}
+                  {/* Story Textarea, YouTube Link Input, or Image File/URL Upload */}
                   {activeCategory === "story" ? (
                     <div className="space-y-3">
                       <textarea
@@ -1442,62 +1503,153 @@ export function ContributeClient({
                         className="w-full p-3.5 rounded-xl bg-zinc-950 border border-white/10 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500/60"
                       />
                     </div>
-                  ) : (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const dropped = e.dataTransfer.files?.[0] || null;
-                        if (dropped) handleFileChange(dropped);
-                      }}
-                      className="border-2 border-dashed border-white/15 hover:border-red-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-zinc-950/60 flex flex-col items-center justify-center gap-2"
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept={activeCategoryDef.accept}
-                        onChange={(e) =>
-                          handleFileChange(e.target.files?.[0] || null)
+                  ) : activeCategory === "video" ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-zinc-200">
+                            YouTube Gameplay Link
+                          </label>
+                          <span className="px-2 py-0.5 rounded bg-red-600/20 border border-red-500/40 text-[10px] font-extrabold text-red-300 uppercase">
+                            YouTube Links Only
+                          </span>
+                        </div>
+                        <input
+                          type="url"
+                          value={mediaUrlInput}
+                          onChange={(e) => {
+                            setMediaUrlInput(e.target.value);
+                            setUploadStatus(null);
+                          }}
+                          placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-white/15 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
+                        />
+                        <p className="text-[11px] text-zinc-400">
+                          Paste a YouTube gameplay video link. Only <code className="text-zinc-200">youtube.com</code> and <code className="text-zinc-200">youtu.be</code> URLs are accepted.
+                        </p>
+                      </div>
+
+                      {(() => {
+                        const ytId = extractClientYoutubeId(mediaUrlInput);
+                        if (ytId) {
+                          return (
+                            <div className="rounded-xl overflow-hidden border border-emerald-500/40 bg-black aspect-video max-h-60 mx-auto">
+                              <iframe
+                                src={`https://www.youtube-nocookie.com/embed/${ytId}`}
+                                title="YouTube Gameplay Preview"
+                                className="w-full h-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          );
                         }
-                        className="hidden"
-                      />
-                      {previewObjectUrl ? (
-                        <div className="space-y-2">
-                          {activeCategory === "video" ? (
-                            <video
-                              src={previewObjectUrl}
-                              controls
-                              muted
-                              playsInline
-                              className="max-h-48 mx-auto rounded-lg"
-                            />
-                          ) : (
+                        if (mediaUrlInput.trim().length > 0) {
+                          return (
+                            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300 font-semibold flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 shrink-0" />
+                              <span>
+                                Only valid YouTube links (<code className="text-white">youtube.com/watch?v=...</code> or <code className="text-white">youtu.be/...</code>) are accepted.
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Option A: Direct Image URL Input */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-zinc-200">
+                          Option A: Paste Direct Image URL (.png, .jpg, .webp)
+                        </label>
+                        <input
+                          type="url"
+                          value={mediaUrlInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setMediaUrlInput(val);
+                            if (val.trim()) {
+                              setSelectedFile(null);
+                              if (previewObjectUrl) {
+                                URL.revokeObjectURL(previewObjectUrl);
+                                setPreviewObjectUrl(null);
+                              }
+                            }
+                            setUploadStatus(null);
+                          }}
+                          placeholder="https://example.com/artwork/boxart.png"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-white/15 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
+                        />
+                      </div>
+
+                      {mediaUrlInput.trim() && (
+                        <div className="rounded-xl bg-black/60 border border-emerald-500/30 p-3 flex flex-col items-center gap-2">
+                          <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold">
+                            Image URL Preview
+                          </span>
+                          <img
+                            src={mediaUrlInput.trim()}
+                            alt="Image URL Preview"
+                            className="max-h-48 object-contain rounded-lg"
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
+                        <div className="flex-1 h-px bg-white/10" />
+                        <span>OR UPLOAD IMAGE FILE</span>
+                        <div className="flex-1 h-px bg-white/10" />
+                      </div>
+
+                      {/* Option B: Drag & Drop File Upload */}
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const dropped = e.dataTransfer.files?.[0] || null;
+                          if (dropped) handleFileChange(dropped);
+                        }}
+                        className="border-2 border-dashed border-white/15 hover:border-red-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-zinc-950/60 flex flex-col items-center justify-center gap-2"
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={activeCategoryDef.accept}
+                          onChange={(e) =>
+                            handleFileChange(e.target.files?.[0] || null)
+                          }
+                          className="hidden"
+                        />
+                        {previewObjectUrl ? (
+                          <div className="space-y-2">
                             <img
                               src={previewObjectUrl}
                               alt="Upload preview"
                               className="max-h-48 mx-auto object-contain rounded-lg"
                             />
-                          )}
-                          <p className="text-xs font-bold text-emerald-400">
-                            {selectedFile?.name} (Ready to submit for verification)
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          <Upload className="w-7 h-7 text-red-400" />
-                          <p className="text-xs font-bold text-zinc-200">
-                            Click to choose a file or drag &amp; drop here
-                          </p>
-                          <p className="text-[11px] text-zinc-500">
-                            Accepted formats: {activeCategoryDef.accept} (Staged for admin verification as{" "}
-                            <code className="text-zinc-300">
-                              {activeGame.baseName}
-                            </code>
-                            )
-                          </p>
-                        </>
-                      )}
+                            <p className="text-xs font-bold text-emerald-400">
+                              {selectedFile?.name} (Ready to submit for verification)
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-7 h-7 text-red-400" />
+                            <p className="text-xs font-bold text-zinc-200">
+                              Click to choose a file or drag &amp; drop here
+                            </p>
+                            <p className="text-[11px] text-zinc-500">
+                              Accepted formats: {activeCategoryDef.accept} (Staged for admin verification as{" "}
+                              <code className="text-zinc-300">
+                                {activeGame.baseName}
+                              </code>
+                              )
+                            </p>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
