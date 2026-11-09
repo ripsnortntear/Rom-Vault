@@ -47,7 +47,9 @@ export function useGamepadManager({
 
   const activeIndexRef = useRef<number | null>(null);
   const onPollRef = useRef(onPoll);
-  onPollRef.current = onPoll;
+  useEffect(() => {
+    onPollRef.current = onPoll;
+  }, [onPoll]);
 
   const isTabActiveRef = useRef(true);
   const rafIdRef = useRef<number | null>(null);

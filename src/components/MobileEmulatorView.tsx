@@ -145,6 +145,16 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
     return <StandaloneRecommendationView game={game} />;
   }
 
+  return <StandardMobileEmulatorView game={game} systemMeta={systemMeta} />;
+}
+
+function StandardMobileEmulatorView({
+  game,
+  systemMeta,
+}: {
+  game: MobileEmulatorViewProps["game"];
+  systemMeta: ReturnType<typeof getSystemMeta>;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [bootState, setBootState] = useState<"idle" | "booting" | "running" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -190,8 +200,10 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
   }, [currentShader]);
 
   const cleanGameId = deepDecode(game.id).trim();
-  const activeCardIdRef = useRef<string | null>(null);
-  activeCardIdRef.current = activeCardId;
+  const activeCardIdRef = useRef<string | null>(activeCardId);
+  useEffect(() => {
+    activeCardIdRef.current = activeCardId;
+  }, [activeCardId]);
   const lastSyncedChecksumRef = useRef<string | null>(null);
   const hasNonBlankSaveRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
@@ -1938,7 +1950,7 @@ export function MobileEmulatorView({ game }: MobileEmulatorViewProps) {
             {game.discs && game.discs.length > 1 && (
               <div className="flex items-center gap-1 bg-zinc-900/80 p-0.5 rounded-md border border-white/10 backdrop-blur">
                 <Disc3 className="w-3.5 h-3.5 text-red-400 ml-1.5 mr-0.5" />
-                {game.discs.map((disc, idx) => (
+                {game.discs.map((disc: AdditionalDisc, idx: number) => (
                   <button
                     key={disc.discNumber}
                     type="button"

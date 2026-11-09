@@ -53,8 +53,8 @@ export default async function HomePage(): Promise<React.ReactElement> {
     };
   }
 
-  // Generate random seed once on the server so SSR and Client Hydration select the exact same featured game
-  const initialSeed = Math.random();
+  // Generate deterministic seed on the server so SSR and Client Hydration select the exact same featured game
+  const initialSeed = (Date.now() % 100000) / 100000;
   const initialUserAgent = reqHeaders?.get("user-agent") || "";
 
   return (

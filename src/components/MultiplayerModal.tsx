@@ -2809,7 +2809,7 @@ export function MultiplayerModal({
                         <Gamepad2 className="w-6 h-6 text-zinc-500 shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <div className="text-[10px] font-bold text-zinc-400 uppercase">Match Host's Game</div>
+                        <div className="text-[10px] font-bold text-zinc-400 uppercase">Match Host&apos;s Game</div>
                         <div className="text-xs font-bold text-white truncate">{activeRoom.gameTitle}</div>
                       </div>
                     </div>
