@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/guards";
 import { getPendingContributionsCount } from "@/lib/contributions";
+import { ExitAdminButton } from "@/components/admin/ExitAdminButton";
 
 export const metadata = {
   title: "ROM Vault Administration Portal",
@@ -51,13 +52,7 @@ export default async function AdminLayout({
             </div>
           </div>
 
-          <Link
-            href="/"
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-zinc-400 hover:text-white transition"
-            title="Exit Admin to Library"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
+          <ExitAdminButton />
         </div>
 
         {/* Current Admin Tag */}
