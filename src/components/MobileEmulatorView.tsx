@@ -490,40 +490,47 @@ function StandardMobileEmulatorView({
 
   const updatePadMode = useCallback(
     (_connected: boolean) => {
-      if (game.system !== "psx" && game.system !== "ps1") return;
+      const isPs1 = game.system === "psx" || game.system === "ps1";
 
-      // Keep pad1type as "standard" with "left_analog" mapping.
+      // Keep pad1type as "standard" with "left_analog" mapping for PS1.
       // Forcing "dualshock" (device 5) causes the PCSX ReARMed WASM core to transmit
       // motor handshake packets via the Gamepad Haptic API, which trips low-voltage
       // cut-offs and crashes the Bluetooth MCU on desktop controllers (Xbox/PS4/PS5/8BitDo).
-      if (window.EJS_coreSettings) {
+      if (window.EJS_coreSettings && isPs1) {
         window.EJS_coreSettings.pcsx_rearmed_pad1type = "standard";
         window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = "left_analog";
       }
 
+      // Universal: input_player1_analog_dpad_mode = 1 maps Left Analog Stick to D-Pad across all retro cores
       if (window.EJS_defaultOptions) {
         window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = "1";
-        window.EJS_defaultOptions["input_libretro_device_p1"] = "1";
+        if (isPs1) {
+          window.EJS_defaultOptions["input_libretro_device_p1"] = "1";
+        }
       }
 
       const emu = window.EJS_emulator;
       if (emu) {
         try {
-          if (typeof emu.setCoreSetting === "function") {
+          if (typeof emu.setCoreSetting === "function" && isPs1) {
             emu.setCoreSetting("pcsx_rearmed_pad1type", "standard");
             emu.setCoreSetting("pcsx_rearmed_analog_to_digital", "left_analog");
           }
           if (emu.gameManager) {
             const gm = emu.gameManager;
             if (typeof gm.setOption === "function") {
-              gm.setOption("pcsx_rearmed_pad1type", "standard");
-              gm.setOption("pcsx_rearmed_analog_to_digital", "left_analog");
+              if (isPs1) {
+                gm.setOption("pcsx_rearmed_pad1type", "standard");
+                gm.setOption("pcsx_rearmed_analog_to_digital", "left_analog");
+                gm.setOption("input_libretro_device_p1", "1");
+              }
               gm.setOption("input_player1_analog_dpad_mode", "1");
-              gm.setOption("input_libretro_device_p1", "1");
             }
             if (typeof gm.setVariable === "function") {
-              gm.setVariable("pcsx_rearmed_pad1type", "standard");
-              gm.setVariable("pcsx_rearmed_analog_to_digital", "left_analog");
+              if (isPs1) {
+                gm.setVariable("pcsx_rearmed_pad1type", "standard");
+                gm.setVariable("pcsx_rearmed_analog_to_digital", "left_analog");
+              }
               gm.setVariable("input_player1_analog_dpad_mode", "1");
             }
           }
@@ -735,9 +742,13 @@ function StandardMobileEmulatorView({
   useEffect(() => {
     if (bootState !== "running") return;
 
+    if (checkPhysicalGamepadConnected()) {
+      updatePadMode(true);
+    }
+
     const handleGamepadConnected = (e: GamepadEvent) => {
       const pad = e.gamepad;
-      if (pad && pad.axes && pad.axes.length >= 2) {
+      if (pad) {
         updatePadMode(true);
       }
       try {
@@ -779,6 +790,55 @@ function StandardMobileEmulatorView({
       window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
     };
   }, [bootState, updatePadMode]);
+
+  // Cross-device control settings synchronization
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+
+    const pushControls = (controls: any, settings: any) => {
+      try {
+        fetch("/roms/api/users/me/controls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            gameId: cleanGameId,
+            system: game.system,
+            controls,
+            settings,
+          }),
+        }).catch((err) => console.warn("[ControlSync] Push error:", err));
+      } catch {}
+    };
+
+    window.localStorage.setItem = function (key: string, value: string) {
+      originalSetItem(key, value);
+      if (
+        typeof key === "string" &&
+        key.startsWith("ejs-") &&
+        key.endsWith("-settings") &&
+        key !== "ejs-settings"
+      ) {
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed && (parsed.controlSettings || parsed.settings)) {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              pushControls(parsed.controlSettings, parsed.settings);
+            }, 1000);
+          }
+        } catch {}
+      }
+    };
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.localStorage.setItem = originalSetItem;
+    };
+  }, [cleanGameId, game.system]);
 
   const handleStartGame = async () => {
     if (bootState !== "idle") return;
@@ -880,6 +940,26 @@ function StandardMobileEmulatorView({
       const hasPriorSave = Boolean(cloudBuffer && cloudBuffer.byteLength > 0);
       hasPriorCloudSaveRef.current = hasPriorSave;
       console.log("[SaveSync] Prior cloud save exists in database:", hasPriorSave);
+
+      // Pre-download cloud control settings and RetroArch preferences
+      let cloudControls: any = null;
+      let cloudSettings: any = null;
+      try {
+        const ctrlRes = await fetch(
+          `/roms/api/users/me/controls?gameId=${encodeURIComponent(cleanGameId)}&system=${encodeURIComponent(game.system)}&_t=${Date.now()}`,
+          { credentials: "include" }
+        );
+        if (ctrlRes.ok) {
+          const ctrlData = await ctrlRes.json();
+          if (ctrlData.success && ctrlData.exists) {
+            cloudControls = ctrlData.controls;
+            cloudSettings = ctrlData.settings;
+            console.log("[ControlSync] Loaded user game controls from cloud for:", cleanGameId);
+          }
+        }
+      } catch (err) {
+        console.warn("[ControlSync] Could not fetch user game controls:", err);
+      }
 
       if (typeof window !== "undefined") {
         const screenAny = (screen as unknown as { orientation?: { lock?: unknown } })?.orientation;
@@ -1046,8 +1126,50 @@ function StandardMobileEmulatorView({
           window.EJS_defaultOptions = {
             ...(window.EJS_defaultOptions || {}),
             "save-save-interval": "30",
+            "input_player1_analog_dpad_mode": "1",
             shader: currentShader,
           };
+        }
+
+        // Apply cloud-synced controls and RetroArch settings across all platforms
+        const ejsCore = systemMeta.ejsCore || game.system;
+        const storageKey = `ejs-1-${ejsCore}-${game.title}-settings`;
+
+        window.EJS_defaultOptions = {
+          ...(window.EJS_defaultOptions || {}),
+          "input_player1_analog_dpad_mode": "1",
+          ...(cloudSettings || {}),
+        };
+
+        if (cloudControls && typeof cloudControls === "object") {
+          window.EJS_defaultControls = cloudControls;
+        }
+
+        try {
+          const existingStored = localStorage.getItem(storageKey);
+          let parsedStored: any = null;
+          if (existingStored) {
+            try {
+              parsedStored = JSON.parse(existingStored);
+            } catch {}
+          }
+
+          const mergedControlSettings = cloudControls || parsedStored?.controlSettings || window.EJS_defaultControls || {};
+          const mergedSettings = {
+            input_player1_analog_dpad_mode: "1",
+            ...(parsedStored?.settings || {}),
+            ...(cloudSettings || {}),
+          };
+
+          const mergedPayload = {
+            controlSettings: mergedControlSettings,
+            settings: mergedSettings,
+            cheats: parsedStored?.cheats || [],
+          };
+
+          localStorage.setItem(storageKey, JSON.stringify(mergedPayload));
+        } catch (storageErr) {
+          console.warn("[ControlSync] Pre-populating localStorage failed:", storageErr);
         }
 
         // Bridge: When Emscripten mounts /data/saves IDBFS, inject cloud memory card scoped strictly to this game
