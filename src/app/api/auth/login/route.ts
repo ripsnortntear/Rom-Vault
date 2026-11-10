@@ -4,6 +4,7 @@ import { verifyPassword } from "@/lib/auth/crypto";
 import { checkRateLimit, recordRateLimitEvent, resetRateLimitEvents, getClientIp } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session-db";
 import { signSessionToken, setSessionCookie } from "@/lib/auth/session";
+import { syncJellyfinUser } from "@/lib/jellyfin";
 import type { User } from "@/types/auth";
 
 export async function POST(req: NextRequest) {
@@ -130,6 +131,11 @@ export async function POST(req: NextRequest) {
       "SELECT display_name, avatar_url FROM user_profiles WHERE user_id = ?",
       [user.id]
     );
+
+    // Auto-provision or sync password with Jellyfin in the background
+    syncJellyfinUser(user.username, password, user.role).catch((syncErr) => {
+      console.error("[Login] Background Jellyfin sync error:", syncErr);
+    });
 
     return NextResponse.json({
       success: true,

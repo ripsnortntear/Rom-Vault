@@ -8,6 +8,7 @@ import {
   validatePasswordComplexity,
   hashPassword,
 } from "@/lib/auth/crypto";
+import { syncJellyfinUser } from "@/lib/jellyfin";
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,6 +81,11 @@ export async function POST(req: NextRequest) {
     // Invalidate all active sessions across all devices for this user
     await revokeAllUserSessions(session.user.id);
     await clearSessionCookie();
+
+    // Synchronize changed password to Jellyfin
+    syncJellyfinUser(session.user.username, newPassword, session.user.role).catch((syncErr) => {
+      console.error("[ChangePassword] Background Jellyfin sync error:", syncErr);
+    });
 
     return NextResponse.json({
       success: true,

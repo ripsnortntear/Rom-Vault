@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/crypto";
 import { checkRateLimit, recordRateLimitEvent, getTrustedClientIp } from "@/lib/auth/rate-limit";
 import { revokeAllUserSessions } from "@/lib/auth/session-db";
+import { syncJellyfinUser } from "@/lib/jellyfin";
 
 export async function POST(req: NextRequest) {
   try {
@@ -75,6 +76,21 @@ export async function POST(req: NextRequest) {
 
     // Invalidate all tokens & sessions for this user (force re-login everywhere)
     await revokeAllUserSessions(tokenRecord.user_id);
+
+    // Synchronize newly reset password to Jellyfin
+    try {
+      const resetUserRows = await query<{ username: string; role: string }>(
+        "SELECT username, role FROM users WHERE id = ? LIMIT 1",
+        [tokenRecord.user_id]
+      );
+      if (resetUserRows[0]) {
+        syncJellyfinUser(resetUserRows[0].username, password, resetUserRows[0].role).catch((err) => {
+          console.error("[ResetPassword] Jellyfin sync error:", err);
+        });
+      }
+    } catch (lookupErr) {
+      console.error("[ResetPassword] Jellyfin user lookup error:", lookupErr);
+    }
 
     return NextResponse.json({
       success: true,

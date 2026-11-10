@@ -12,6 +12,7 @@ import {
 import { checkRateLimit, recordRateLimitEvent, getClientIp } from "@/lib/auth/rate-limit";
 import { sendVerificationEmail } from "@/lib/mail/mailer";
 import { ensureDefaultCard } from "@/lib/memory-cards";
+import { syncJellyfinUser } from "@/lib/jellyfin";
 
 export async function POST(req: NextRequest) {
   try {
@@ -120,6 +121,13 @@ export async function POST(req: NextRequest) {
       await ensureDefaultCard(userId);
     } catch (cardErr) {
       console.error("[Register] Failed initializing default memory card:", cardErr);
+    }
+
+    // Synchronize account to Jellyfin for native Smart TV, Roku, Apple TV & mobile apps
+    try {
+      await syncJellyfinUser(cleanUsername, password, role);
+    } catch (jellyErr) {
+      console.error("[Register] Jellyfin provisioning error:", jellyErr);
     }
 
     // 5. Generate Verification Token (24 hours)
