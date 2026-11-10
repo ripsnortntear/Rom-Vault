@@ -184,7 +184,7 @@ export async function validateSessionToken(token: string): Promise<Session | nul
   try {
     // Verify against database to enforce explicit logouts & revocations
     const [rows] = await db.query<any>(
-      `SELECT t.id, t.user_id, t.expires_at, u.account_status 
+      `SELECT t.id, t.user_id, t.expires_at, u.username, u.role, u.account_status 
        FROM auth_tokens t
        JOIN users u ON u.id = t.user_id 
        WHERE (t.token_hash = SHA2(?, 256) OR t.token_hash = SHA2(?, 256)) 
@@ -194,9 +194,17 @@ export async function validateSessionToken(token: string): Promise<Session | nul
       [lookupToken, token]
     );
 
-    const tokenRecord = Array.isArray(rows) && rows.length > 0 ? (rows[0] as SessionRecord & { account_status?: string }) : null;
+    const tokenRecord = Array.isArray(rows) && rows.length > 0 ? (rows[0] as SessionRecord & { username?: string; role?: "admin" | "user"; account_status?: string }) : null;
     if (!tokenRecord || tokenRecord.account_status === "suspended") {
       return null; // Session was deleted, logged out, revoked, or account suspended
+    }
+
+    // Always synchronize live role and username from database
+    if (tokenRecord.role) {
+      parsed.role = tokenRecord.role;
+    }
+    if (tokenRecord.username) {
+      parsed.username = tokenRecord.username;
     }
 
     return {

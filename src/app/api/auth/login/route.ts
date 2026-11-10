@@ -21,7 +21,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Username/email and password are required." }, { status: 400 });
     }
 
-    const cleanIdentifier = String(identifier).trim();
+    const rawIdentifier = String(identifier).trim();
+    // Support mobile keyboard auto-spacing (e.g. "CFW 34683" -> "cfw34683")
+    const collapsedIdentifier = rawIdentifier.replace(/\s+/g, "");
 
     // 1. IP and Account rate limit check
     const rateCheck = await checkRateLimit({
@@ -38,10 +40,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Lookup user
+    // 2. Lookup user (exact, case-insensitive, or collapsed whitespace)
     const users = await query<User>(
-      `SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1`,
-      [cleanIdentifier, cleanIdentifier.toLowerCase()]
+      `SELECT * FROM users WHERE username = ? OR email = ? OR username = ? OR email = ? LIMIT 1`,
+      [rawIdentifier, rawIdentifier.toLowerCase(), collapsedIdentifier, collapsedIdentifier.toLowerCase()]
     );
 
     const user = users[0];
