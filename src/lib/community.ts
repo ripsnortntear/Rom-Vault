@@ -417,9 +417,12 @@ export async function getAdminUsers(
   let sql = `
     SELECT u.id, u.username, u.email, u.role, u.account_status, u.failed_login_attempts,
            u.locked_until, u.created_at,
-           p.download_quota_daily, p.download_count_today, p.display_name, p.avatar_url
+           p.download_quota_daily, p.download_count_today, p.display_name, p.avatar_url,
+           s.id AS seedbox_id, s.port AS seedbox_port, s.status AS seedbox_status,
+           s.quota_gb AS seedbox_quota_gb, s.created_at AS seedbox_created_at
     FROM users u
     LEFT JOIN user_profiles p ON u.id = p.user_id
+    LEFT JOIN user_seedboxes s ON u.id = s.user_id
   `;
   const params: any[] = [];
 
@@ -447,6 +450,15 @@ export async function getAdminUsers(
     createdAt: new Date(r.created_at).toISOString(),
     displayName: r.display_name,
     avatarUrl: r.avatar_url,
+    seedbox: r.seedbox_id
+      ? {
+          id: r.seedbox_id,
+          port: r.seedbox_port,
+          status: r.seedbox_status,
+          quotaGb: r.seedbox_quota_gb,
+          createdAt: new Date(r.seedbox_created_at).toISOString(),
+        }
+      : null,
   }));
 }
 

@@ -14,6 +14,10 @@ import {
   Check,
   Copy,
   AlertTriangle,
+  HardDrive,
+  Download,
+  RefreshCw,
+  Zap,
 } from "lucide-react";
 import {
   updateUserRoleAction,
@@ -21,6 +25,9 @@ import {
   updateUserStatusAction,
   resetUserPasswordAction,
   purgeUserAction,
+  provisionSeedboxAction,
+  deprovisionSeedboxAction,
+  restartSeedboxAction,
 } from "@/app/actions/admin";
 import { getSafeAvatarUrl } from "@/lib/security";
 import type { AdminUserListItem } from "@/types/community";
@@ -46,6 +53,14 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
 
   // Purge confirmation dialog state
   const [purgeModalUser, setPurgeModalUser] = useState<AdminUserListItem | null>(null);
+
+  // Seedbox provisioning modal state
+  const [provisionModalUser, setProvisionModalUser] = useState<AdminUserListItem | null>(null);
+  const [provisionQuota, setProvisionQuota] = useState<number>(100);
+
+  // Seedbox deprovision modal state
+  const [deprovisionModalUser, setDeprovisionModalUser] = useState<AdminUserListItem | null>(null);
+  const [wipeDataOnDeprovision, setWipeDataOnDeprovision] = useState<boolean>(false);
 
   const [isPending, startTransition] = useTransition();
 
@@ -137,6 +152,65 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
     });
   };
 
+  // Seedbox provision execute
+  const handleProvisionSeedbox = () => {
+    if (!provisionModalUser) return;
+    startTransition(async () => {
+      const res = await provisionSeedboxAction(provisionModalUser.id, provisionQuota);
+      if (res.ok && res.port) {
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === provisionModalUser.id
+              ? {
+                  ...u,
+                  seedbox: {
+                    id: `seedbox-${u.username}`,
+                    port: res.port!,
+                    status: "active",
+                    quotaGb: provisionQuota,
+                    createdAt: new Date().toISOString(),
+                  },
+                }
+              : u
+          )
+        );
+        setProvisionModalUser(null);
+        setFeedbackMessage({ type: "success", text: res.message || "Seedbox provisioned!" });
+      } else {
+        setFeedbackMessage({ type: "error", text: res.error || "Failed to provision seedbox." });
+      }
+    });
+  };
+
+  // Seedbox deprovision execute
+  const handleDeprovisionSeedbox = () => {
+    if (!deprovisionModalUser) return;
+    startTransition(async () => {
+      const res = await deprovisionSeedboxAction(deprovisionModalUser.id, wipeDataOnDeprovision);
+      if (res.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === deprovisionModalUser.id ? { ...u, seedbox: null } : u))
+        );
+        setDeprovisionModalUser(null);
+        setFeedbackMessage({ type: "success", text: res.message || "Seedbox removed." });
+      } else {
+        setFeedbackMessage({ type: "error", text: res.error || "Failed to deprovision seedbox." });
+      }
+    });
+  };
+
+  // Seedbox restart execute
+  const handleRestartSeedbox = (user: AdminUserListItem) => {
+    startTransition(async () => {
+      const res = await restartSeedboxAction(user.id);
+      if (res.ok) {
+        setFeedbackMessage({ type: "success", text: `Seedbox for ${user.username} restarted.` });
+      } else {
+        setFeedbackMessage({ type: "error", text: res.error || "Failed to restart seedbox." });
+      }
+    });
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* Search & Actions Bar */}
@@ -186,6 +260,7 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                 <th className="py-3 px-4">Role</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Daily Quota</th>
+                <th className="py-3 px-4">Seedbox (/tor)</th>
                 <th className="py-3 px-4">Registered</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
@@ -193,7 +268,7 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
             <tbody className="divide-y divide-white/5 font-medium">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-zinc-500 italic">
+                  <td colSpan={7} className="py-8 text-center text-zinc-500 italic">
                     No users matching criteria.
                   </td>
                 </tr>
@@ -286,6 +361,60 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                             </button>
                           )}
                         </div>
+                      </td>
+
+                      {/* Seedbox (/tor) */}
+                      <td className="py-3 px-4">
+                        {user.seedbox ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              <span>{user.seedbox.quotaGb > 0 ? `${user.seedbox.quotaGb}GB` : "Host"}</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              :{user.seedbox.port}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRestartSeedbox(user)}
+                              disabled={isPending}
+                              className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
+                              title="Restart Seedbox Containers"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                            </button>
+                            {user.username !== "cfw34683" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeprovisionModalUser(user);
+                                  setWipeDataOnDeprovision(false);
+                                }}
+                                disabled={isPending}
+                                className="p-1 rounded hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition cursor-pointer"
+                                title="Deprovision Seedbox"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        ) : isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProvisionModalUser(user);
+                              setProvisionQuota(100);
+                            }}
+                            disabled={isPending}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/40 transition cursor-pointer shadow-sm"
+                            title="Provision dedicated 100GB qBittorrent + VPN instance"
+                          >
+                            <Zap className="w-3 h-3 text-amber-400" />
+                            <span>Provision /tor</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-zinc-600 italic">None</span>
+                        )}
                       </td>
 
                       {/* Registered Date */}
@@ -521,6 +650,143 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                 className="px-4 py-2 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
               >
                 {isPending ? "Purging..." : "Permanently Purge User"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provision Seedbox Modal */}
+      {provisionModalUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          onClick={() => setProvisionModalUser(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-zinc-950 border border-blue-500/40 p-5 shadow-2xl flex flex-col gap-4 text-xs"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <Zap className="w-4 h-4 text-amber-400" />
+                <span>Deploy Torrent Seedbox: {provisionModalUser.username}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProvisionModalUser(null)}
+                className="text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 text-zinc-300 leading-relaxed">
+              <p>
+                This will automatically spin up a dedicated, isolated stack for{" "}
+                <strong className="text-white">{provisionModalUser.username}</strong>:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
+                <li>
+                  <strong className="text-white">qBittorrent</strong> container with SSO authentication bypass.
+                </li>
+                <li>
+                  <strong className="text-white">Gluetun VPN</strong> tunnel using PIA (Florida) encryption &amp; kill-switch.
+                </li>
+                <li>
+                  <strong className="text-white">ZFS Dataset</strong> at{" "}
+                  <code className="text-blue-300">/mnt/storage/oldsmarchaos.com/seedboxes/{provisionModalUser.username}/downloads</code>.
+                </li>
+                <li>
+                  Integrated into <code className="text-emerald-300">oldsmarchaos.com/tor/</code> so they see only their torrents.
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-zinc-300 mb-1">
+                Hard ZFS Storage Quota (GB)
+              </label>
+              <input
+                type="number"
+                min={10}
+                max={5000}
+                value={provisionQuota}
+                onChange={(e) => setProvisionQuota(parseInt(e.target.value, 10) || 100)}
+                className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-white font-mono text-base focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <span className="text-[10px] text-zinc-500 mt-1 block">
+                ZFS enforces this quota at the file system level.
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setProvisionModalUser(null)}
+                className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleProvisionSeedbox}
+                disabled={isPending}
+                className="px-4 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30"
+              >
+                {isPending ? "Deploying Stack..." : "Deploy 100GB Seedbox"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deprovision Seedbox Modal */}
+      {deprovisionModalUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          onClick={() => setDeprovisionModalUser(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-zinc-950 border border-red-500/40 p-5 shadow-2xl flex flex-col gap-4 text-xs"
+          >
+            <div className="flex items-center gap-2.5 text-red-400 font-bold text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>Deprovision Seedbox: {deprovisionModalUser.username}</span>
+            </div>
+
+            <p className="text-zinc-300 leading-relaxed">
+              This will stop and remove the qBittorrent and Gluetun containers for{" "}
+              <strong className="text-white">{deprovisionModalUser.username}</strong> and revoke their access to /tor.
+            </p>
+
+            <label className="flex items-center gap-2 p-2.5 rounded-xl bg-red-950/40 border border-red-500/20 text-red-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={wipeDataOnDeprovision}
+                onChange={(e) => setWipeDataOnDeprovision(e.target.checked)}
+                className="rounded border-red-500/50 bg-zinc-900 text-red-600 focus:ring-0"
+              />
+              <span className="text-[11px]">
+                Permanently destroy ZFS dataset and wipe all downloaded files
+              </span>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setDeprovisionModalUser(null)}
+                className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeprovisionSeedbox}
+                disabled={isPending}
+                className="px-4 py-2 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
+              >
+                {isPending ? "Deprovisioning..." : "Deprovision Seedbox"}
               </button>
             </div>
           </div>

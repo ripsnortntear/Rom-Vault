@@ -17,6 +17,11 @@ import {
   rejectAssetContribution,
 } from "@/lib/contributions";
 import { generateSecureToken } from "@/lib/auth/crypto";
+import {
+  provisionSeedbox,
+  deprovisionSeedbox,
+  restartSeedbox,
+} from "@/lib/seedboxes";
 
 export async function updateUserRoleAction(userId: string, role: "user" | "admin") {
   try {
@@ -218,5 +223,56 @@ export async function rejectAssetContributionAction(submissionId: number, review
   } catch (error: any) {
     console.error("[rejectAssetContributionAction] Error:", error);
     return { ok: false, error: error.message || "Failed to reject asset contribution." };
+  }
+}
+
+export async function provisionSeedboxAction(userId: string, quotaGb = 100) {
+  try {
+    await requireAdmin();
+    const res = await provisionSeedbox(userId, quotaGb);
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Failed to provision seedbox." };
+    }
+    return {
+      ok: true,
+      port: res.port,
+      message: `Seedbox successfully provisioned on port ${res.port} with ${quotaGb}GB ZFS quota!`,
+    };
+  } catch (error: any) {
+    console.error("[provisionSeedboxAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to provision seedbox." };
+  }
+}
+
+export async function deprovisionSeedboxAction(userId: string, destroyData = false) {
+  try {
+    await requireAdmin();
+    const res = await deprovisionSeedbox(userId, destroyData);
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Failed to deprovision seedbox." };
+    }
+    return {
+      ok: true,
+      message: destroyData
+        ? "Seedbox deprovisioned and all download data wiped."
+        : "Seedbox deprovisioned. Download files preserved.",
+    };
+  } catch (error: any) {
+    console.error("[deprovisionSeedboxAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to deprovision seedbox." };
+  }
+}
+
+export async function restartSeedboxAction(userId: string) {
+  try {
+    await requireAdmin();
+    const res = await restartSeedbox(userId);
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Failed to restart seedbox." };
+    }
+    return { ok: true, message: "Seedbox restarted successfully." };
+  } catch (error: any) {
+    console.error("[restartSeedboxAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to restart seedbox." };
   }
 }

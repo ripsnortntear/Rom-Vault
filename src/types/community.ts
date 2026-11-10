@@ -68,6 +68,14 @@ export interface AuditLogItem {
   createdAt: string;
 }
 
+export interface AdminUserSeedboxInfo {
+  id: string;
+  port: number;
+  status: "active" | "stopped" | "error";
+  quotaGb: number;
+  createdAt: string;
+}
+
 export interface AdminUserListItem {
   id: string;
   username: string;
@@ -81,6 +89,7 @@ export interface AdminUserListItem {
   createdAt: string;
   displayName: string | null;
   avatarUrl: string | null;
+  seedbox?: AdminUserSeedboxInfo | null;
 }
 
 export interface AdminStorageHealth {
