@@ -16,12 +16,6 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        source: "/",
-        destination: "/roms",
-        basePath: false,
-        permanent: false,
-      },
-      {
         source: "/api/:path*",
         destination: "/roms/api/:path*",
         basePath: false,

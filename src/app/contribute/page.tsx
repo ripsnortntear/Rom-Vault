@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import "server-only";
 
 import React, { Suspense } from "react";

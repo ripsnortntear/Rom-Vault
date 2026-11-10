@@ -46,7 +46,7 @@ export async function proxy(request: NextRequest) {
       : `/roms${pathname === "/" ? "" : pathname}`;
     const returnPath = targetPath + (request.nextUrl.search || "");
 
-    if (returnPath && returnPath !== "/roms" && !returnPath.startsWith("/roms/auth")) {
+    if (returnPath && !returnPath.startsWith("/roms/auth")) {
       loginUrl.searchParams.set("redirect", returnPath);
     }
 

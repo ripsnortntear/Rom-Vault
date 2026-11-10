@@ -1,10 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Gamepad2, Lock, User, Mail, AlertCircle, CheckCircle2, Loader2, ArrowRight, ShieldCheck } from "lucide-react";
 
-export default function RegisterPage(): React.ReactElement {
+function RegisterForm(): React.ReactElement {
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+  const loginHref = redirectParam
+    ? `/auth/login?redirect=${encodeURIComponent(redirectParam)}`
+    : "/auth/login";
+
   const [username, setUsername] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -99,7 +106,7 @@ export default function RegisterPage(): React.ReactElement {
                 An activation link was sent to <strong className="text-zinc-200">{email}</strong> via Zoho Mail. Click the link in the message to activate your account.
               </div>
               <Link
-                href="/auth/login"
+                href={loginHref}
                 className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 text-white transition"
               >
                 <span>Go to Sign In</span>
@@ -242,7 +249,7 @@ export default function RegisterPage(): React.ReactElement {
               <div className="mt-6 pt-6 border-t border-white/10 text-center text-xs text-zinc-400">
                 Already have an account?{" "}
                 <Link
-                  href="/auth/login"
+                  href={loginHref}
                   className="font-bold text-red-400 hover:text-red-300 transition underline underline-offset-4"
                 >
                   Sign In
@@ -251,7 +258,25 @@ export default function RegisterPage(): React.ReactElement {
             </>
           )}
         </div>
+
+        <div className="text-center mt-6 flex flex-col gap-2 items-center text-xs text-zinc-500">
+          <a
+            href="/"
+            className="text-zinc-400 hover:text-cyan-400 transition flex items-center gap-1 font-medium"
+          >
+            <span>&larr;</span> Return to OldsmarChaos Home
+          </a>
+          <span>ROM Vault &bull; Multi-Console Retro Archive</span>
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#070709] flex items-center justify-center"><Loader2 className="w-8 h-8 text-red-500 animate-spin" /></div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }

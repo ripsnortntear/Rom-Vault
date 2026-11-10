@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Gamepad2, Lock, User, AlertCircle, CheckCircle2, Loader2, ArrowRight, AlertTriangle, Info } from "lucide-react";
 import { useBrowserEnvironment } from "@/hooks/useBrowserEnvironment";
+import { getSafeRedirectUrl } from "@/lib/auth/redirect";
 
 function LoginForm(): React.ReactElement {
   const router = useRouter();
@@ -47,10 +48,7 @@ function LoginForm(): React.ReactElement {
       // Successful login -> perform top-level navigation to ensure fresh session state
       setSuccessMessage("Authentication successful! Redirecting...");
       const redirectParam = searchParams.get("redirect");
-      let target = redirectParam || "/roms";
-      if (target.includes("/auth")) {
-        target = "/roms";
-      }
+      const target = getSafeRedirectUrl(redirectParam);
       window.location.replace(target);
     } catch {
       setErrorMessage("Network error occurred. Please check your connection.");
@@ -208,7 +206,7 @@ function LoginForm(): React.ReactElement {
         <div className="mt-6 pt-6 border-t border-white/10 text-center text-xs text-zinc-400">
           Don&apos;t have an account?{" "}
           <Link
-            href="/auth/register"
+            href={searchParams.get("redirect") ? `/auth/register?redirect=${encodeURIComponent(searchParams.get("redirect")!)}` : "/auth/register"}
             className="font-bold text-red-400 hover:text-red-300 transition underline underline-offset-4"
           >
             Create Account
@@ -216,8 +214,14 @@ function LoginForm(): React.ReactElement {
         </div>
       </div>
 
-      <div className="text-center mt-6 text-xs text-zinc-500">
-        ROM Vault &bull; Multi-Console Retro Archive
+      <div className="text-center mt-6 flex flex-col gap-2 items-center text-xs text-zinc-500">
+        <a
+          href="/"
+          className="text-zinc-400 hover:text-cyan-400 transition flex items-center gap-1 font-medium"
+        >
+          <span>&larr;</span> Return to OldsmarChaos Home
+        </a>
+        <span>ROM Vault &bull; Multi-Console Retro Archive</span>
       </div>
     </div>
   );

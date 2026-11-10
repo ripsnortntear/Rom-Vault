@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import "server-only";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
