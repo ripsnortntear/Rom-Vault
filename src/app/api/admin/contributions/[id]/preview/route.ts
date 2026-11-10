@@ -34,10 +34,14 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const isProxyAuthorized =
-      request.headers.get("x-admin-authorized") === "true" ||
-      request.headers.get("x-user-role") === "admin";
-    if (!isProxyAuthorized) {
+    const authHeader = request.headers.get("authorization");
+    const isDirectBearer = Boolean(
+      authHeader &&
+        ((process.env.AUTH_SECRET && authHeader === `Bearer ${process.env.AUTH_SECRET}`) ||
+          (process.env.SESSION_SECRET && authHeader === `Bearer ${process.env.SESSION_SECRET}`))
+    );
+
+    if (!isDirectBearer) {
       const session = await getCurrentSession();
       if (!session?.user || session.user.role !== "admin") {
         return NextResponse.json({ error: "Admin access required." }, { status: 403 });

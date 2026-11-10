@@ -224,6 +224,10 @@ function isSafeExternalImageUrl(rawUrl: string): URL | null {
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
       return null;
     }
+    // Only standard web ports allowed
+    if (parsed.port && parsed.port !== "80" && parsed.port !== "443") {
+      return null;
+    }
     const host = parsed.hostname.toLowerCase();
     if (
       host === "localhost" ||
@@ -233,11 +237,23 @@ function isSafeExternalImageUrl(rawUrl: string): URL | null {
       host === "[::1]" ||
       host.endsWith(".local") ||
       host.endsWith(".internal") ||
+      host.endsWith(".arpa") ||
+      host.endsWith(".lan") ||
+      host === "oldsmarchaos.com" ||
+      host.endsWith(".oldsmarchaos.com") ||
+      !host.includes(".") ||
+      host.startsWith("[") ||
+      host.includes(":") ||
       /^127\./.test(host) ||
       /^10\./.test(host) ||
       /^192\.168\./.test(host) ||
       /^169\.254\./.test(host) ||
-      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+      /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host) ||
+      /^192\.0\.2\./.test(host) ||
+      /^198\.51\.100\./.test(host) ||
+      /^203\.0\.113\./.test(host) ||
+      /^(22[4-9]|2[3-5]\d)\./.test(host)
     ) {
       return null;
     }
@@ -444,6 +460,7 @@ export async function POST(request: NextRequest) {
       try {
         const res = await fetch(safeUrl.toString(), {
           signal: controller.signal,
+          redirect: "error",
           headers: {
             "User-Agent": "ROMVault-AssetFetcher/1.0",
             Accept:
@@ -453,6 +470,13 @@ export async function POST(request: NextRequest) {
         if (!res.ok) {
           return NextResponse.json(
             { ok: false, error: `Failed to fetch image from URL (HTTP ${res.status}).` },
+            { status: 400 }
+          );
+        }
+        const contentLength = Number(res.headers.get("content-length"));
+        if (contentLength && contentLength > 15 * 1024 * 1024) {
+          return NextResponse.json(
+            { ok: false, error: "Image file exceeds 15 MB limit." },
             { status: 400 }
           );
         }

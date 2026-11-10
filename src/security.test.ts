@@ -490,6 +490,31 @@ describe("Residual Security Hardening (SEC-09 through SEC-12)", () => {
     });
     const resAdmin = await proxy(reqAdmin);
     expect(resAdmin.status).toBe(200);
+
+    // 3. SEC-API-ADMIN: Proxy strictly enforces admin privileges on /api/admin/* and /roms/api/admin/*
+    mockDbQuery.mockResolvedValueOnce([
+      [
+        {
+          id: "tok-user-2",
+          user_id: "user-42",
+          expires_at: new Date(Date.now() + 86400000),
+          account_status: "active",
+        },
+      ],
+      [],
+    ]);
+    const reqApiAdminDeny = new NextRequest("http://localhost/roms/api/admin/scripts", {
+      headers: { cookie: `rom_vault_session=${userToken}` },
+    });
+    const resApiAdminDeny = await proxy(reqApiAdminDeny);
+    expect(resApiAdminDeny.status).toBe(403);
+    const jsonApiAdminDeny = await resApiAdminDeny.json();
+    expect(jsonApiAdminDeny.error).toBe("Forbidden");
+
+    // Unauthenticated access to /api/admin/* yields 401
+    const reqApiAdminUnauth = new NextRequest("http://localhost/roms/api/admin/scan");
+    const resApiAdminUnauth = await proxy(reqApiAdminUnauth);
+    expect(resApiAdminUnauth.status).toBe(401);
   });
 });
 

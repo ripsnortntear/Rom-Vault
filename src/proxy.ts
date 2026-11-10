@@ -33,7 +33,13 @@ export async function proxy(request: NextRequest) {
   }
 
   // 2. Identify administrative protected paths
-  const isAdminPath = pathname.startsWith("/admin") || pathname.startsWith("/roms/admin");
+  const isAdminPath =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/roms/admin") ||
+    pathname.startsWith("/api/admin") ||
+    pathname.startsWith("/roms/api/admin") ||
+    pathname === "/api/roms/scan" ||
+    pathname === "/roms/api/roms/scan";
 
   // Helper to construct Stage 1 307 login redirect preserving target path
   const buildLoginRedirect = (shouldClearCookies = false) => {

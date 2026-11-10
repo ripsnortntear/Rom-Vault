@@ -5,14 +5,12 @@ import { announceGameRelease } from "@/lib/shoutbox";
 import { checkRateLimit, recordRateLimitEvent, getTrustedClientIp } from "@/lib/auth/rate-limit";
 
 async function handleScan(request: NextRequest): Promise<NextResponse> {
-  const isHeaderAuthorized = request.headers.get("x-admin-authorized") === "true";
   const authHeader = request.headers.get("authorization");
-  const isDirectBearer = Boolean(
+  const isCliAdmin = Boolean(
     authHeader &&
       ((process.env.AUTH_SECRET && authHeader === `Bearer ${process.env.AUTH_SECRET}`) ||
         (process.env.SESSION_SECRET && authHeader === `Bearer ${process.env.SESSION_SECRET}`))
   );
-  const isCliAdmin = isHeaderAuthorized || isDirectBearer;
 
   let session = await getCurrentSession();
 
