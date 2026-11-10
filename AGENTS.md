@@ -44,6 +44,10 @@ All source files reside in `src/`:
 - Component Composition: Pass Server Components into Client Components via children or serializable props. Do not import server utilities into client boundaries.
 - Serialization Boundary: Objects crossing the boundary must be strictly serializable (no raw DB connection instances, class prototypes, functions, or unformatted Date objects).
 - Data Fetching: Execute database queries directly in Server Components using `await db.query(...)` wrapped with React's `cache()`. Never use client-side `useEffect` data fetching or have Server Components call local route handlers over HTTP.
+- React 19 Rules of Hooks & Subcomponent Delegation:
+  - Never call hooks (`useMemo`, `useCallback`, `useEffect`, `useRef`) after an early conditional return (e.g. `if (!game) return null;`).
+  - If a component requires pre-checks or renders fallbacks, either replace `useMemo` with inline pure expressions or extract the hook-dependent view into a dedicated subcomponent (e.g. `StandardMobileEmulatorView`) rendered only when prerequisites are met.
+  - Never assign or mutate `ref.current` directly in the component render body (e.g. `gamepadRef.current = ...`). Always defer ref synchronizations to `useEffect` or event handlers to avoid tearing in concurrent rendering.
 
 ## 5. Async Request APIs & Types
 - Type all page, layout, and route handler inputs using generated global types (`PageProps<"/play/[id]">`, `RouteContext<"/api/roms/[id]/stream">`).
@@ -127,9 +131,11 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Do not re-randomize or re-filter server-rendered featured items unconditionally in `useEffect` on initial client mount (e.g. `setFeaturedGame(Math.random())`), and never call `Math.random()` inside `useState()` initializers in `"use client"` components (which executes once during SSR and again with a different random value during client hydration, causing the Hero Card to flip at hydration). Always generate random seeds and initial user/header state in the Server Component (`page.tsx`) and pass them down via props, gating filter-driven client effects with a ref (e.g. `prevSystemRef`) to preserve server-rendered state and eliminate F5 double-load visual flicker and redundant media downloads.
 - Do not pass `keepalive: true` to `fetch()` when uploading payloads larger than 48 KB (such as 128 KB PS1 `.mcr` or 8.65 MB PS2 `.ps2` memory cards); Chromium and Microsoft Edge enforce a hard 64 KiB (`65,536`-byte) body limit on `keepalive` requests and immediately throw `TypeError: Failed to fetch` client-side before sending any network traffic.
 - Do not use bare navigation `<a href="...?download=1">` links to export memory cards while an emulator iframe is running; always use programmatic `Blob` + `URL.createObjectURL()` downloads so the browser does not fire `beforeunload` and abort the running WebAssembly core.
+- Do not place React hooks after conditional early returns, and do not mutate `ref.current` during render execution.
 
 ## 11. Pre-Flight Verification
 - Typecheck & Lint: Execute `tsc --noEmit` and the configured Biome/ESLint checks; ensure zero type mismatches across App Router contracts.
+- ESLint Flat Config Scope (`eslint.config.mjs`): Always maintain `globalIgnores` for third-party emulator cores, vendored submodules, and generated build scripts (`public/**`, `vendor/**`, `scripts/**`). Never disable project-wide linting or add file-level `@ts-ignore` comments to silence upstream emulator bundle issues.
 - Performance Profiling: Validate via `/_next/mcp` that emulation routes, media streams, and library views emit clean static shells without unexpected blocking SSR waterfalls.
 - Audit Caching Tiers: Clearly annotate which segments are prerendered, cache-component accelerated (`"use cache"`), or streamed via `<Suspense>`.
 
