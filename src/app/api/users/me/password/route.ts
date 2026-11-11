@@ -9,6 +9,7 @@ import {
   hashPassword,
 } from "@/lib/auth/crypto";
 import { syncJellyfinUser } from "@/lib/jellyfin";
+import { syncFilebotUser } from "@/lib/filebot";
 
 export async function POST(req: NextRequest) {
   try {
@@ -85,6 +86,11 @@ export async function POST(req: NextRequest) {
     // Synchronize changed password to Jellyfin
     syncJellyfinUser(session.user.username, newPassword, session.user.role).catch((syncErr) => {
       console.error("[ChangePassword] Background Jellyfin sync error:", syncErr);
+    });
+
+    // Synchronize changed password to FileBot
+    syncFilebotUser(session.user.username, newPassword).catch((syncErr) => {
+      console.error("[ChangePassword] Background FileBot sync error:", syncErr);
     });
 
     return NextResponse.json({

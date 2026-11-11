@@ -13,6 +13,7 @@ import { checkRateLimit, recordRateLimitEvent, getClientIp } from "@/lib/auth/ra
 import { sendVerificationEmail } from "@/lib/mail/mailer";
 import { ensureDefaultCard } from "@/lib/memory-cards";
 import { syncJellyfinUser } from "@/lib/jellyfin";
+import { syncFilebotUser } from "@/lib/filebot";
 
 export async function POST(req: NextRequest) {
   try {
@@ -128,6 +129,13 @@ export async function POST(req: NextRequest) {
       await syncJellyfinUser(cleanUsername, password, role);
     } catch (jellyErr) {
       console.error("[Register] Jellyfin provisioning error:", jellyErr);
+    }
+
+    // Synchronize account to FileBot webauth database
+    try {
+      await syncFilebotUser(cleanUsername, password);
+    } catch (filebotErr) {
+      console.error("[Register] FileBot provisioning error:", filebotErr);
     }
 
     // 5. Generate Verification Token (24 hours)

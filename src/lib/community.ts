@@ -4,6 +4,8 @@ import fs from "fs/promises";
 import { query, execute } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/crypto";
 import { getStorageRoot } from "@/lib/paths";
+import { syncJellyfinUser } from "@/lib/jellyfin";
+import { syncFilebotUser } from "@/lib/filebot";
 import type {
   GameComment,
   GameHighScore,
@@ -470,11 +472,24 @@ export async function updateUserRole(
   role: "user" | "admin",
   adminId: string
 ): Promise<boolean> {
+  const users = await query<{ username: string }>("SELECT username FROM users WHERE id = ?", [
+    userId,
+  ]);
   const res = await execute("UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?", [
     role,
     userId,
   ]);
   await logAdminAudit(adminId, "update_role", "user", userId, { newRole: role });
+
+  if (users.length > 0) {
+    const username = users[0].username;
+    try {
+      await syncJellyfinUser(username, undefined, role);
+    } catch (err) {
+      console.error("[community] Failed to sync Jellyfin role update:", err);
+    }
+  }
+
   return res.affectedRows > 0;
 }
 

@@ -8,6 +8,7 @@ import {
 import { checkRateLimit, recordRateLimitEvent, getTrustedClientIp } from "@/lib/auth/rate-limit";
 import { revokeAllUserSessions } from "@/lib/auth/session-db";
 import { syncJellyfinUser } from "@/lib/jellyfin";
+import { syncFilebotUser } from "@/lib/filebot";
 
 export async function POST(req: NextRequest) {
   try {
@@ -86,6 +87,9 @@ export async function POST(req: NextRequest) {
       if (resetUserRows[0]) {
         syncJellyfinUser(resetUserRows[0].username, password, resetUserRows[0].role).catch((err) => {
           console.error("[ResetPassword] Jellyfin sync error:", err);
+        });
+        syncFilebotUser(resetUserRows[0].username, password).catch((err) => {
+          console.error("[ResetPassword] FileBot sync error:", err);
         });
       }
     } catch (lookupErr) {

@@ -6,6 +6,7 @@ import { handleCorsPreflight } from "@/lib/cors";
 const PUBLIC_PREFIXES = [
   "/auth",
   "/api/auth",
+  "/api/filebot",
   "/scores",
   "/emulatorjs",
   "/tabstationtoo",

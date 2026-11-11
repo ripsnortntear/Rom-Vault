@@ -5,6 +5,7 @@ import { checkRateLimit, recordRateLimitEvent, resetRateLimitEvents, getClientIp
 import { createSession } from "@/lib/auth/session-db";
 import { signSessionToken, setSessionCookie } from "@/lib/auth/session";
 import { syncJellyfinUser } from "@/lib/jellyfin";
+import { syncFilebotUser } from "@/lib/filebot";
 import type { User } from "@/types/auth";
 
 export async function POST(req: NextRequest) {
@@ -135,6 +136,11 @@ export async function POST(req: NextRequest) {
     // Auto-provision or sync password with Jellyfin in the background
     syncJellyfinUser(user.username, password, user.role).catch((syncErr) => {
       console.error("[Login] Background Jellyfin sync error:", syncErr);
+    });
+
+    // Auto-provision or sync password with FileBot in the background
+    syncFilebotUser(user.username, password).catch((filebotErr) => {
+      console.error("[Login] Background FileBot sync error:", filebotErr);
     });
 
     return NextResponse.json({
