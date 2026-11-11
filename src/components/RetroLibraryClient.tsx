@@ -1126,8 +1126,8 @@ export function RetroLibraryClient({
                         </div>
 
                         <div className="space-y-1 pt-1.5 border-t border-white/10">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media & Gaming</div>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media &amp; Gaming</div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                             <a
                               href="/roms"
                               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
@@ -1156,6 +1156,16 @@ export function RetroLibraryClient({
                               <div>
                                 <div className="font-bold text-[11px] leading-tight">Charm</div>
                                 <div className="text-[9px] text-zinc-400 leading-tight">Manuals</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/forums/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">💬</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Forums</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Discussions</div>
                               </div>
                             </a>
                           </div>
@@ -1201,8 +1211,8 @@ export function RetroLibraryClient({
                         </div>
 
                         <div className="space-y-1 pt-1.5 border-t border-white/10">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media & Gaming</div>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media &amp; Gaming</div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                             <a
                               href="/roms"
                               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
@@ -1231,6 +1241,16 @@ export function RetroLibraryClient({
                               <div>
                                 <div className="font-bold text-[11px] leading-tight">Charm</div>
                                 <div className="text-[9px] text-zinc-400 leading-tight">Manuals</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/forums/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">💬</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Forums</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Discussions</div>
                               </div>
                             </a>
                           </div>
