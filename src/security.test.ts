@@ -41,7 +41,7 @@ import {
   handleCorsPreflight,
 } from "./lib/cors";
 import { getClientIp, getTrustedClientIp } from "./lib/ip";
-import { submitScoreSchema } from "./app/actions/scores";
+import { submitScoreSchema } from "./lib/score-validation";
 import { signSessionToken, validateSessionToken, verifySessionTokenFast } from "./lib/auth/session";
 import { acquireScanLock, releaseScanLock, isScanActive } from "./lib/scanner";
 

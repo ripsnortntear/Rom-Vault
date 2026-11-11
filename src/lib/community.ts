@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/auth/crypto";
 import { getStorageRoot } from "@/lib/paths";
 import { syncJellyfinUser } from "@/lib/jellyfin";
 import { syncFilebotUser } from "@/lib/filebot";
+import { sendAccountApprovedEmail, sendAccountDeniedEmail } from "@/lib/mail/mailer";
 import type {
   GameComment,
   GameHighScore,
@@ -14,6 +15,7 @@ import type {
   AdminUserListItem,
   AdminStorageHealth,
 } from "@/types/community";
+import type { AccountStatus } from "@/types/auth";
 
 /**
  * Submit or update a 1-5 star rating for a game.
@@ -511,18 +513,129 @@ export async function updateUserQuota(
 }
 
 /**
- * Update user account status (active / suspended).
+ * Fetch total count of user accounts currently awaiting administrator approval.
+ */
+export async function getPendingUsersCount(): Promise<number> {
+  const rows = await query<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM users WHERE account_status = 'pending_approval'"
+  );
+  return rows[0]?.count || 0;
+}
+
+/**
+ * Approve a pending user account, granting full active access and dispatching confirmation email.
+ */
+export async function approveUser(
+  userId: string,
+  adminId: string
+): Promise<{ success: boolean; username: string; email: string }> {
+  const userRows = await query<{ id: string; username: string; email: string; account_status: string }>(
+    "SELECT id, username, email, account_status FROM users WHERE id = ? LIMIT 1",
+    [userId]
+  );
+
+  const targetUser = userRows[0];
+  if (!targetUser) {
+    throw new Error("User not found.");
+  }
+
+  const res = await execute(
+    "UPDATE users SET account_status = 'active', updated_at = NOW() WHERE id = ?",
+    [userId]
+  );
+
+  await logAdminAudit(adminId, "approve_user", "user", userId, {
+    previousStatus: targetUser.account_status,
+    newStatus: "active",
+  });
+
+  // Dispatch automated approval email
+  try {
+    await sendAccountApprovedEmail(targetUser.email, targetUser.username);
+  } catch (emailErr) {
+    console.error(`[approveUser] Failed sending approval email to ${targetUser.email}:`, emailErr);
+  }
+
+  return { success: res.affectedRows > 0, username: targetUser.username, email: targetUser.email };
+}
+
+/**
+ * Deny a pending user account registration, dispatching notification email.
+ */
+export async function denyUser(
+  userId: string,
+  adminId: string,
+  reason?: string
+): Promise<{ success: boolean; username: string; email: string }> {
+  const userRows = await query<{ id: string; username: string; email: string; account_status: string }>(
+    "SELECT id, username, email, account_status FROM users WHERE id = ? LIMIT 1",
+    [userId]
+  );
+
+  const targetUser = userRows[0];
+  if (!targetUser) {
+    throw new Error("User not found.");
+  }
+
+  const res = await execute(
+    "UPDATE users SET account_status = 'denied', updated_at = NOW() WHERE id = ?",
+    [userId]
+  );
+
+  await logAdminAudit(adminId, "deny_user", "user", userId, {
+    previousStatus: targetUser.account_status,
+    newStatus: "denied",
+    reason: reason || null,
+  });
+
+  // Dispatch automated denial email
+  try {
+    await sendAccountDeniedEmail(targetUser.email, targetUser.username, reason);
+  } catch (emailErr) {
+    console.error(`[denyUser] Failed sending denial email to ${targetUser.email}:`, emailErr);
+  }
+
+  return { success: res.affectedRows > 0, username: targetUser.username, email: targetUser.email };
+}
+
+/**
+ * Update user account status (active / suspended / pending_approval / denied).
  */
 export async function updateUserStatus(
   userId: string,
-  status: "active" | "suspended",
+  status: AccountStatus,
   adminId: string
 ): Promise<boolean> {
+  const userRows = await query<{ id: string; username: string; email: string; account_status: string }>(
+    "SELECT id, username, email, account_status FROM users WHERE id = ? LIMIT 1",
+    [userId]
+  );
+  const targetUser = userRows[0];
+
   const res = await execute(
     "UPDATE users SET account_status = ?, updated_at = NOW() WHERE id = ?",
     [status, userId]
   );
-  await logAdminAudit(adminId, "update_status", "user", userId, { newStatus: status });
+  await logAdminAudit(adminId, "update_status", "user", userId, {
+    previousStatus: targetUser?.account_status,
+    newStatus: status,
+  });
+
+  // If transitioned to active, dispatch approval email
+  if (targetUser && status === "active" && (targetUser.account_status === "pending_approval" || targetUser.account_status === "denied")) {
+    try {
+      await sendAccountApprovedEmail(targetUser.email, targetUser.username);
+    } catch (emailErr) {
+      console.error(`[updateUserStatus] Failed sending approval email:`, emailErr);
+    }
+  } else if (targetUser && status === "denied") {
+    try {
+      await sendAccountDeniedEmail(targetUser.email, targetUser.username);
+    } catch (emailErr) {
+      console.error(`[updateUserStatus] Failed sending denial email:`, emailErr);
+    }
+  }
+
   return res.affectedRows > 0;
 }
 

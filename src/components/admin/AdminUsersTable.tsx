@@ -18,11 +18,16 @@ import {
   Download,
   RefreshCw,
   Zap,
+  Clock,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import {
   updateUserRoleAction,
   updateUserQuotaAction,
   updateUserStatusAction,
+  approveUserAction,
+  denyUserAction,
   resetUserPasswordAction,
   purgeUserAction,
   provisionSeedboxAction,
@@ -39,7 +44,12 @@ interface AdminUsersTableProps {
 export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
   const [users, setUsers] = useState<AdminUserListItem[]>(initialUsers);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending_approval" | "active" | "suspended" | "denied">("all");
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Approval / Denial dialog state
+  const [denyModalUser, setDenyModalUser] = useState<AdminUserListItem | null>(null);
+  const [denyReason, setDenyReason] = useState("");
 
   // Password reset dialog state
   const [resetModalUser, setResetModalUser] = useState<AdminUserListItem | null>(null);
@@ -64,7 +74,21 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
 
   const [isPending, startTransition] = useTransition();
 
+  const pendingCount = users.filter((u) => u.accountStatus === "pending_approval").length;
+  const activeCount = users.filter((u) => u.accountStatus === "active").length;
+  const suspendedCount = users.filter((u) => u.accountStatus === "suspended" || u.accountStatus === "denied").length;
+
   const filteredUsers = users.filter((u) => {
+    // 1. Status Filter
+    if (statusFilter !== "all" && u.accountStatus !== statusFilter) {
+      if (statusFilter === "suspended" && u.accountStatus !== "denied" && u.accountStatus !== "suspended") {
+        return false;
+      } else if (statusFilter !== "suspended" && u.accountStatus !== statusFilter) {
+        return false;
+      }
+    }
+
+    // 2. Search Term
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -73,6 +97,39 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
       (u.displayName && u.displayName.toLowerCase().includes(term))
     );
   });
+
+  // Approve User Handler
+  const handleApproveUser = (user: AdminUserListItem) => {
+    startTransition(async () => {
+      const res = await approveUserAction(user.id);
+      if (res.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === user.id ? { ...u, accountStatus: "active" } : u))
+        );
+        setFeedbackMessage({ type: "success", text: res.message || `Account for ${user.username} approved.` });
+      } else {
+        setFeedbackMessage({ type: "error", text: res.error || "Failed to approve user." });
+      }
+    });
+  };
+
+  // Deny User Handler
+  const handleDenyUser = () => {
+    if (!denyModalUser) return;
+    startTransition(async () => {
+      const res = await denyUserAction(denyModalUser.id, denyReason.trim() || undefined);
+      if (res.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === denyModalUser.id ? { ...u, accountStatus: "denied" } : u))
+        );
+        setDenyModalUser(null);
+        setDenyReason("");
+        setFeedbackMessage({ type: "success", text: res.message || `Registration for ${denyModalUser.username} denied.` });
+      } else {
+        setFeedbackMessage({ type: "error", text: res.error || "Failed to deny user." });
+      }
+    });
+  };
 
   // Role toggle
   const handleToggleRole = (user: AdminUserListItem) => {
@@ -213,22 +270,107 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Search & Actions Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-80">
+      {/* Pending Registrations Approval Alert */}
+      {pendingCount > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl shadow-amber-500/10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/25 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white flex items-center gap-2">
+                <span>{pendingCount} User Account Registration{pendingCount === 1 ? "" : "s"} Awaiting Approval</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black uppercase">
+                  Action Required
+                </span>
+              </div>
+              <div className="text-xs text-amber-200/90 mt-0.5">
+                All signups must be reviewed and approved by administrator cfw34683 within 24 hours. Automated emails will be dispatched to users upon decision.
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === "pending_approval" ? "all" : "pending_approval")}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-black shrink-0 transition shadow-md shadow-amber-400/20 cursor-pointer"
+          >
+            <span>{statusFilter === "pending_approval" ? "Show All Accounts" : `Review Pending (${pendingCount})`}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Status Filter Tabs & Search Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Status Tabs */}
+        <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+              statusFilter === "all"
+                ? "bg-white/15 text-white shadow-sm"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            All ({users.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("pending_approval")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+              statusFilter === "pending_approval"
+                ? "bg-amber-500 text-black shadow-sm"
+                : pendingCount > 0
+                ? "text-amber-400 hover:text-amber-300 bg-amber-500/10"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            <span>Pending Approvals</span>
+            {pendingCount > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${statusFilter === "pending_approval" ? "bg-black text-amber-300" : "bg-amber-500 text-black font-extrabold"}`}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("active")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+              statusFilter === "active"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Active ({activeCount})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("suspended")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+              statusFilter === "suspended"
+                ? "bg-red-600 text-white shadow-sm"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Suspended / Denied ({suspendedCount})
+          </button>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative w-full md:w-80">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by username, email, or display name..."
+            placeholder="Search by username, email, or name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-red-500"
           />
         </div>
-
-        <span className="text-xs text-zinc-400 font-mono">
-          Showing {filteredUsers.length} of {users.length} accounts
-        </span>
       </div>
 
       {feedbackMessage && (
@@ -323,22 +465,39 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                         </button>
                       </td>
 
-                      {/* Status Toggle */}
+                      {/* Status Column */}
                       <td className="py-3 px-4">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(user)}
-                          disabled={isPending}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition cursor-pointer ${
-                            isActive
-                              ? "bg-emerald-950 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-900"
-                              : "bg-red-950 text-red-400 border border-red-500/30 hover:bg-red-900"
-                          }`}
-                          title="Click to toggle Active / Suspended"
-                        >
-                          {isActive ? <CheckCircle className="w-2.5 h-2.5" /> : <Ban className="w-2.5 h-2.5" />}
-                          <span>{user.accountStatus}</span>
-                        </button>
+                        {user.accountStatus === "pending_approval" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20 animate-pulse">
+                            <Clock className="w-3 h-3 text-amber-400" />
+                            <span>Pending Approval</span>
+                          </span>
+                        ) : user.accountStatus === "pending" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-900 text-zinc-400 border border-white/10">
+                            <Clock className="w-3 h-3" />
+                            <span>Awaiting Verify</span>
+                          </span>
+                        ) : user.accountStatus === "denied" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-950 text-red-400 border border-red-500/40">
+                            <Ban className="w-3 h-3" />
+                            <span>Denied</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(user)}
+                            disabled={isPending}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition cursor-pointer ${
+                              isActive
+                                ? "bg-emerald-950 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-900"
+                                : "bg-red-950 text-red-400 border border-red-500/30 hover:bg-red-900"
+                            }`}
+                            title="Click to toggle Active / Suspended"
+                          >
+                            {isActive ? <CheckCircle className="w-2.5 h-2.5" /> : <Ban className="w-2.5 h-2.5" />}
+                            <span>{user.accountStatus}</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Daily Quota */}
@@ -429,6 +588,47 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {user.accountStatus === "pending_approval" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveUser(user)}
+                                disabled={isPending}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition cursor-pointer"
+                                title="Approve registration & dispatch confirmation email"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDenyModalUser(user);
+                                  setDenyReason("");
+                                }}
+                                disabled={isPending}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/40 transition cursor-pointer"
+                                title="Deny registration & dispatch notification email"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                <span>Deny</span>
+                              </button>
+                            </>
+                          )}
+
+                          {user.accountStatus === "denied" && (
+                            <button
+                              type="button"
+                              onClick={() => handleApproveUser(user)}
+                              disabled={isPending}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition cursor-pointer"
+                              title="Re-approve this previously denied account"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Re-Approve</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => {
@@ -787,6 +987,62 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                 className="px-4 py-2 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
               >
                 {isPending ? "Deprovisioning..." : "Deprovision Seedbox"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deny User Registration Modal */}
+      {denyModalUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          onClick={() => setDenyModalUser(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-zinc-950 border border-red-500/40 p-5 shadow-2xl flex flex-col gap-4 text-xs"
+          >
+            <div className="flex items-center gap-2.5 text-red-400 font-bold text-sm">
+              <UserX className="w-5 h-5 shrink-0" />
+              <span>Deny Registration: {denyModalUser.username}</span>
+            </div>
+
+            <p className="text-zinc-300 leading-relaxed">
+              Are you sure you want to deny the registration request for{" "}
+              <strong className="text-white">{denyModalUser.username}</strong> ({denyModalUser.email})?
+              An automated notification email will be dispatched to the applicant informing them of the decision.
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-zinc-400">
+                Reason / Note to applicant (optional):
+              </label>
+              <textarea
+                value={denyReason}
+                onChange={(e) => setDenyReason(e.target.value)}
+                placeholder="e.g. Account registrations are currently invitation-only or verification failed..."
+                rows={3}
+                className="w-full p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setDenyModalUser(null)}
+                className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDenyUser}
+                disabled={isPending}
+                className="px-4 py-2 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30 flex items-center gap-1.5 cursor-pointer"
+              >
+                <UserX className="w-3.5 h-3.5" />
+                <span>{isPending ? "Denying..." : "Confirm Denial & Dispatch Email"}</span>
               </button>
             </div>
           </div>

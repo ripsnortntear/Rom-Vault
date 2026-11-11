@@ -95,7 +95,7 @@ export async function isSessionActiveInDb(
 
     const rows = await query<{ id: string; account_status: string }>(sql, params);
     if (rows.length === 0) return false;
-    if (rows[0].account_status === "suspended") return false;
+    if (rows[0].account_status !== "active") return false;
 
     return true;
   } catch (error) {

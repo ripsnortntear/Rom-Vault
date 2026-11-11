@@ -1,5 +1,5 @@
 export type UserRole = "user" | "admin";
-export type AccountStatus = "pending" | "active" | "suspended";
+export type AccountStatus = "pending" | "pending_approval" | "active" | "suspended" | "denied";
 export type TokenType = "session" | "email_verification" | "password_reset";
 
 export interface User {

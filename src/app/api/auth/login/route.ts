@@ -95,10 +95,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Check account verification / suspension status
+    // 5. Check account verification / approval / suspension status
     if (user.account_status === "pending") {
       return NextResponse.json(
-        { error: "Your account has not been activated. Please check your email for the verification link." },
+        { error: "Your email address has not been verified yet. Please check your inbox for the activation link." },
+        { status: 403 }
+      );
+    }
+
+    if (user.account_status === "pending_approval") {
+      return NextResponse.json(
+        { error: "Your email is verified, but your account is pending administrator approval (cfw34683). An admin will review and approve or deny your account within 24 hours. You will receive an automated confirmation email once approved." },
+        { status: 403 }
+      );
+    }
+
+    if (user.account_status === "denied") {
+      return NextResponse.json(
+        { error: "Your account registration request was reviewed and denied by an administrator." },
         { status: 403 }
       );
     }

@@ -3,17 +3,24 @@
 import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Gamepad2, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { Gamepad2, CheckCircle2, AlertCircle, ArrowRight, Loader2, Clock, ShieldCheck } from "lucide-react";
 
 function VerifyContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const statusParam = searchParams.get("status");
 
-  const [state, setState] = useState<"loading" | "success" | "expired" | "invalid" | "error">("loading");
+  const [state, setState] = useState<"loading" | "success" | "pending_approval" | "expired" | "invalid" | "error">("loading");
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
+    if (statusParam === "pending_approval") {
+      setState("pending_approval");
+      setMessage(
+        "Your email address has been verified! Your account is now pending administrator approval (cfw34683). An admin will review and approve or deny your account within 24 hours. You will receive an automated email as soon as a decision is made."
+      );
+      return;
+    }
     if (statusParam === "expired") {
       setState("expired");
       setMessage("Your verification link has expired. Verification links are valid for 24 hours.");
@@ -40,7 +47,11 @@ function VerifyContent(): React.ReactElement {
         .then((res) => res.json())
         .then((data) => {
           if (data.success) {
-            setState("success");
+            if (data.status === "pending_approval") {
+              setState("pending_approval");
+            } else {
+              setState("success");
+            }
             setMessage(data.message || "Email verified successfully!");
           } else {
             setState("invalid");
@@ -80,6 +91,40 @@ function VerifyContent(): React.ReactElement {
             <Loader2 className="w-10 h-10 text-red-500 animate-spin mx-auto mb-4" />
             <h1 className="text-lg font-bold text-white mb-2">Verifying Account...</h1>
             <p className="text-xs text-zinc-400">Please wait while we validate your activation token.</p>
+          </div>
+        )}
+
+        {state === "pending_approval" && (
+          <div className="py-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto mb-4 text-amber-400 shadow-lg shadow-amber-500/20">
+              <Clock className="w-8 h-8" />
+            </div>
+            <h1 className="text-xl font-bold text-white mb-2">Email Verified</h1>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/15 border border-amber-500/30 text-amber-300 mb-4">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Pending Administrator Approval</span>
+            </div>
+            <p className="text-sm text-zinc-300 mb-6 leading-relaxed">
+              Your email has been verified successfully! All new registrations must be approved by the administrator (<strong>cfw34683</strong>) before access is granted. An admin will review and approve or deny your account within <strong>24 hours</strong>.
+            </p>
+            <p className="text-xs text-zinc-400 mb-6 bg-zinc-950/60 p-3 rounded-xl border border-white/5">
+              📧 You will receive an automated email confirmation as soon as your account is reviewed.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                href="/auth/login"
+                className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <span>Return to Sign In</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link
+                href="/"
+                className="text-xs text-zinc-400 hover:text-white transition py-1"
+              >
+                Back to Home Portal
+              </Link>
+            </div>
           </div>
         )}
 

@@ -195,8 +195,8 @@ export async function validateSessionToken(token: string): Promise<Session | nul
     );
 
     const tokenRecord = Array.isArray(rows) && rows.length > 0 ? (rows[0] as SessionRecord & { username?: string; role?: "admin" | "user"; account_status?: string }) : null;
-    if (!tokenRecord || tokenRecord.account_status === "suspended") {
-      return null; // Session was deleted, logged out, revoked, or account suspended
+    if (!tokenRecord || tokenRecord.account_status !== "active") {
+      return null; // Session was deleted, logged out, revoked, or account not active (pending/suspended/denied)
     }
 
     // Always synchronize live role and username from database

@@ -36,14 +36,30 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Activate the user
-    await execute(
-      "UPDATE users SET account_status = 'active' WHERE id = ?",
+    // Check user role and username
+    const userRows = await query<{ id: string; role: string; username: string }>(
+      "SELECT id, role, username FROM users WHERE id = ?",
       [tokenRecord.user_id]
+    );
+    const targetUser = userRows[0];
+    const isRootAdmin = targetUser?.role === "admin" || targetUser?.username?.toLowerCase() === "cfw34683";
+
+    // Designated admin becomes active immediately; all user signups require admin approval
+    const nextStatus = isRootAdmin ? "active" : "pending_approval";
+
+    await execute(
+      "UPDATE users SET account_status = ? WHERE id = ?",
+      [nextStatus, tokenRecord.user_id]
     );
 
     // Consume the verification token
     await execute("DELETE FROM auth_tokens WHERE id = ?", [tokenRecord.id]);
+
+    if (nextStatus === "pending_approval") {
+      return NextResponse.redirect(
+        new URL("/roms/auth/verify?status=pending_approval", req.url)
+      );
+    }
 
     return NextResponse.redirect(
       new URL("/roms/auth/login?verified=true", req.url)
@@ -84,15 +100,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Verification token has expired. Please sign up or request a new one." }, { status: 400 });
     }
 
-    await execute(
-      "UPDATE users SET account_status = 'active' WHERE id = ?",
+    const userRows = await query<{ id: string; role: string; username: string }>(
+      "SELECT id, role, username FROM users WHERE id = ?",
       [tokenRecord.user_id]
+    );
+    const targetUser = userRows[0];
+    const isRootAdmin = targetUser?.role === "admin" || targetUser?.username?.toLowerCase() === "cfw34683";
+
+    const nextStatus = isRootAdmin ? "active" : "pending_approval";
+
+    await execute(
+      "UPDATE users SET account_status = ? WHERE id = ?",
+      [nextStatus, tokenRecord.user_id]
     );
 
     await execute("DELETE FROM auth_tokens WHERE id = ?", [tokenRecord.id]);
 
+    if (nextStatus === "pending_approval") {
+      return NextResponse.json({
+        success: true,
+        status: "pending_approval",
+        message: "Your email has been verified! Your account is now pending administrator approval (cfw34683). An admin will review and approve or deny your account within 24 hours. You will receive an automated email once a decision is made.",
+      });
+    }
+
     return NextResponse.json({
       success: true,
+      status: "active",
       message: "Your email has been verified successfully! You may now log in.",
     });
   } catch (error: any) {

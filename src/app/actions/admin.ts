@@ -7,11 +7,14 @@ import {
   updateUserRole,
   updateUserQuota,
   updateUserStatus,
+  approveUser,
+  denyUser,
   adminResetPassword,
   adminPurgeUser,
   deleteComment,
   deleteHighScore,
 } from "@/lib/community";
+import type { AccountStatus } from "@/types/auth";
 import {
   approveAssetContribution,
   rejectAssetContribution,
@@ -62,12 +65,12 @@ export async function updateUserQuotaAction(userId: string, quota: number) {
   }
 }
 
-export async function updateUserStatusAction(userId: string, status: "active" | "suspended") {
+export async function updateUserStatusAction(userId: string, status: AccountStatus) {
   try {
     const admin = await requireAdmin();
 
-    if (userId === admin.id && status === "suspended") {
-      return { ok: false, error: "You cannot suspend your own administrator account." };
+    if (userId === admin.id && (status === "suspended" || status === "denied")) {
+      return { ok: false, error: "You cannot suspend or deny your own administrator account." };
     }
 
     const success = await updateUserStatus(userId, status, admin.id);
@@ -79,6 +82,39 @@ export async function updateUserStatusAction(userId: string, status: "active" | 
   } catch (error: any) {
     console.error("[updateUserStatusAction] Error:", error);
     return { ok: false, error: error.message || "Failed to update account status." };
+  }
+}
+
+export async function approveUserAction(userId: string) {
+  try {
+    const admin = await requireAdmin();
+    const res = await approveUser(userId, admin.id);
+    return {
+      ok: true,
+      message: `Account for ${res.username} (${res.email}) approved! Confirmation email dispatched.`,
+    };
+  } catch (error: any) {
+    console.error("[approveUserAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to approve user." };
+  }
+}
+
+export async function denyUserAction(userId: string, reason?: string) {
+  try {
+    const admin = await requireAdmin();
+
+    if (userId === admin.id) {
+      return { ok: false, error: "You cannot deny your own administrator account." };
+    }
+
+    const res = await denyUser(userId, admin.id, reason);
+    return {
+      ok: true,
+      message: `Account registration for ${res.username} (${res.email}) denied. Notification email dispatched.`,
+    };
+  } catch (error: any) {
+    console.error("[denyUserAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to deny user." };
   }
 }
 

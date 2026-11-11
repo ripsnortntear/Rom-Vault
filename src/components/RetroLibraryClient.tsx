@@ -1011,167 +1011,291 @@ export function RetroLibraryClient({
                 />
               </button>
 
-              {isFleetMenuOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-zinc-950/98 border border-cyan-500/30 shadow-2xl backdrop-blur-2xl p-4 z-50 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                    <span className="text-xs font-black tracking-wider uppercase text-cyan-400 flex items-center gap-1.5">
-                      <span>🚀</span> Fleet Services
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-400">OLDSMARCHAOS SSO</span>
+              {isFleetMenuOpen && (() => {
+                const isAuth = !!currentUser;
+                const isAdmin = currentUser?.role === "admin";
+                const isRoot = currentUser?.username === "cfw34683";
+                const hasSeedbox = isRoot || Boolean(
+                  currentUser?.has_seedbox ||
+                  currentUser?.hasSeedbox ||
+                  currentUser?.seedbox ||
+                  currentUser?.preferences?.has_seedbox ||
+                  currentUser?.preferences?.seedbox
+                );
+
+                return (
+                  <div
+                    className={`absolute right-0 mt-2 ${
+                      !isAuth ? "w-72" : !isAdmin ? "w-80 sm:w-[380px]" : "w-80 sm:w-[460px]"
+                    } rounded-2xl bg-zinc-950/98 border border-cyan-500/30 shadow-2xl backdrop-blur-2xl p-4 z-50 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150`}
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                      <span className="text-xs font-black tracking-wider uppercase text-cyan-400 flex items-center gap-1.5">
+                        <span>🚀</span> Fleet Services
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        {isRoot ? "ROOT SUPERADMIN" : isAdmin ? "ADMIN TIER" : isAuth ? "MEMBER TIER" : "GUEST MODE"}
+                      </span>
+                    </div>
+
+                    {!isAuth ? (
+                      /* 1. Guest / Logged Out: Minecraft & Video Tools */
+                      <div className="space-y-1 text-xs">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Public Services</div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <a
+                            href="/minecraft"
+                            className="flex items-center gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 hover:text-white transition border border-white/5"
+                          >
+                            <span className="text-base">⛏️</span>
+                            <div>
+                              <div className="font-bold text-[11px] leading-tight">Minecraft</div>
+                              <div className="text-[9px] text-zinc-400 leading-tight">Survival Server</div>
+                            </div>
+                          </a>
+                          <a
+                            href="/tools"
+                            className="flex items-center gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 hover:text-white transition border border-white/5"
+                          >
+                            <span className="text-base">⚡</span>
+                            <div>
+                              <div className="font-bold text-[11px] leading-tight">Video Tools</div>
+                              <div className="text-[9px] text-zinc-400 leading-tight">Converters & Utilities</div>
+                            </div>
+                          </a>
+                        </div>
+                      </div>
+                    ) : !isAdmin ? (
+                      /* 2. Logged-In User: Minecraft, Video Tools, ROM Vault, Jellyfin, Charm, GitLab */
+                      <div className="space-y-2 text-xs">
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Tools & Code</div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <a
+                              href="/tools"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">⚡</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Video Tools</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Utilities</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/minecraft"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">⛏️</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Minecraft</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Server</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/git/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">🦊</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">GitLab</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Git Repos</div>
+                              </div>
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 pt-1.5 border-t border-white/10">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media & Gaming</div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <a
+                              href="/roms"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">🕹️</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">ROM Vault</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Retro Gaming</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/jellyfin/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">📺</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Jellyfin</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Streaming</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/charm/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">🔧</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Charm</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Manuals</div>
+                              </div>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* 3. Logged-In Admin & 4. Root Superadmin */
+                      <div className="space-y-2 text-xs">
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Tools & Code</div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <a
+                              href="/tools"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">⚡</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Video Tools</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Utilities</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/minecraft"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">⛏️</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Minecraft</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Server</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/git/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">🦊</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">GitLab</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Git Repos</div>
+                              </div>
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 pt-1.5 border-t border-white/10">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media & Gaming</div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <a
+                              href="/roms"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">🕹️</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">ROM Vault</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Retro Gaming</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/jellyfin/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">📺</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Jellyfin</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Streaming</div>
+                              </div>
+                            </a>
+                            <a
+                              href="/charm/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">🔧</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">Charm</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Manuals</div>
+                              </div>
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 pt-1.5 border-t border-white/10">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Admin & Operations</div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                            <a
+                              href="/filebot/"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                            >
+                              <span className="text-sm">📁</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight">FileBot</div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">Auto Renamer</div>
+                              </div>
+                            </a>
+                            {(isRoot || hasSeedbox) && (
+                              <a
+                                href="/tor/"
+                                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                                title={isRoot ? "qBittorrent (main cfw34683)" : "qBittorrent (Seedbox)"}
+                              >
+                                <span className="text-sm">📥</span>
+                                <div>
+                                  <div className="font-bold text-[11px] leading-tight">qBittorrent</div>
+                                  <div className="text-[9px] text-zinc-400 leading-tight">
+                                    {isRoot ? "main cfw34683" : "Seedbox"}
+                                  </div>
+                                </div>
+                              </a>
+                            )}
+                            {isRoot && (
+                              <>
+                                <a
+                                  href="/ai/"
+                                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                                  title="Root Only"
+                                >
+                                  <span className="text-sm">🤖</span>
+                                  <div>
+                                    <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                                      WebsiteAI
+                                      <span className="text-[8px] bg-pink-500/20 text-pink-400 border border-pink-500/30 px-1 rounded font-mono">ROOT</span>
+                                    </div>
+                                    <div className="text-[9px] text-zinc-400 leading-tight">Website AI</div>
+                                  </div>
+                                </a>
+                                <a
+                                  href="/operations"
+                                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                                  title="Root Only"
+                                >
+                                  <span className="text-sm">🛡️</span>
+                                  <div>
+                                    <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                                      NexusOPS
+                                      <span className="text-[8px] bg-pink-500/20 text-pink-400 border border-pink-500/30 px-1 rounded font-mono">ROOT</span>
+                                    </div>
+                                    <div className="text-[9px] text-zinc-400 leading-tight">Operations</div>
+                                  </div>
+                                </a>
+                                <a
+                                  href="/asf/"
+                                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                                  title="Root Only"
+                                >
+                                  <span className="text-sm">🎮</span>
+                                  <div>
+                                    <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                                      ASF
+                                      <span className="text-[8px] bg-pink-500/20 text-pink-400 border border-pink-500/30 px-1 rounded font-mono">ROOT</span>
+                                    </div>
+                                    <div className="text-[9px] text-zinc-400 leading-tight">Steam Farm</div>
+                                  </div>
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Mega Menu Grid */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {/* Media & Torrents */}
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Media</div>
-                      <a
-                        href="/jellyfin/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">📺</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">Jellyfin</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Streaming</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/tor/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">📥</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">qBittorrent</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">VPN Client</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/filebot/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">📁</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">FileBot</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Renamer</div>
-                        </div>
-                      </a>
-                    </div>
-
-                    {/* Home & Inventory */}
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Home & Tools</div>
-                      <a
-                        href="/grocy/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">🥗</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">Grocy</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">ERP & Pantry</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/barcodebuddy/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">🏷️</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">BarcodeBuddy</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Scanner</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/homebox/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">📦</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">Homebox</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Inventory</div>
-                        </div>
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* Systems & Portals */}
-                  <div className="pt-2 border-t border-white/10 space-y-1 text-xs">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Systems & Portals</div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <a
-                        href="/git/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">🦊</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">GitLab</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Code & CI</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/ai/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">🤖</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">DecompAI</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Ghidra AI</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/charm/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">🔧</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">CHARM</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Car Manuals</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/tools"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">⚡</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">Video Tools</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">FFmpeg Suite</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/minecraft"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">⛏️</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">Minecraft</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Purpur 1.21</div>
-                        </div>
-                      </a>
-                      <a
-                        href="/"
-                        className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                      >
-                        <span className="text-sm">🏠</span>
-                        <div>
-                          <div className="font-bold text-[11px] leading-tight">Oldsmar Home</div>
-                          <div className="text-[9px] text-zinc-400 leading-tight">Main Portal</div>
-                        </div>
-                      </a>
-                    </div>
-                  </div>
-
-                  {currentUser?.role === "admin" && (
-                    <div className="pt-2 border-t border-white/10">
-                      <a
-                        href="/operations"
-                        className="flex items-center justify-center gap-2 py-1.5 px-3 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 font-bold text-xs transition"
-                      >
-                        <span>🛡️</span> Nexus Operations Command
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Subtle Divider */}

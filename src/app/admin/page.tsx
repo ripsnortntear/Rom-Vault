@@ -17,7 +17,7 @@ import {
   Clock,
   Terminal,
 } from "lucide-react";
-import { getAdminStorageHealth, getAdminAuditLogs } from "@/lib/community";
+import { getAdminStorageHealth, getAdminAuditLogs, getPendingUsersCount } from "@/lib/community";
 import { getPendingContributionsCount } from "@/lib/contributions";
 import { getStorageRoot } from "@/lib/paths";
 import { AdminRescanButton } from "@/components/AdminRescanButton";
@@ -30,10 +30,11 @@ function formatBytes(bytes: number): string {
 }
 
 export default async function AdminOverviewPage() {
-  const [health, auditLogs, pendingAssetsCount] = await Promise.all([
+  const [health, auditLogs, pendingAssetsCount, pendingUsersCount] = await Promise.all([
     getAdminStorageHealth(),
     getAdminAuditLogs(10),
     getPendingContributionsCount(),
+    getPendingUsersCount(),
   ]);
 
   return (
@@ -64,6 +65,11 @@ export default async function AdminOverviewPage() {
           >
             <Users className="w-4 h-4 text-blue-400" />
             <span>Manage Accounts</span>
+            {pendingUsersCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-black">
+                {pendingUsersCount}
+              </span>
+            )}
           </Link>
           <Link
             href="/admin/moderation"
@@ -79,6 +85,34 @@ export default async function AdminOverviewPage() {
           </Link>
         </div>
       </div>
+
+      {pendingUsersCount > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/10">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/25 text-amber-300">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white flex items-center gap-2">
+                <span>{pendingUsersCount} User Account Registration{pendingUsersCount === 1 ? "" : "s"} Awaiting Approval</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black uppercase">
+                  Action Required
+                </span>
+              </div>
+              <div className="text-xs text-amber-200/90">
+                All signups must be approved by administrator cfw34683 within 24 hours. Automated emails will be dispatched to users upon decision.
+              </div>
+            </div>
+          </div>
+          <Link
+            href="/admin/users"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-black shrink-0 transition"
+          >
+            <span>Review Pending Accounts</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {pendingAssetsCount > 0 && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

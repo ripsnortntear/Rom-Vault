@@ -81,7 +81,7 @@ export interface AdminUserListItem {
   username: string;
   email: string;
   role: "user" | "admin";
-  accountStatus: "pending" | "active" | "suspended";
+  accountStatus: "pending" | "pending_approval" | "active" | "suspended" | "denied";
   downloadQuotaDaily: number;
   downloadCountToday: number;
   failedLoginAttempts: number;
