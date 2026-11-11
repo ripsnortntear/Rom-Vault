@@ -184,4 +184,7 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
   - When 1 or more games are disabled, the "Disabled" pill appears only for administrators.
   - Non-administrators must NEVER see disabled games in the catalog, stream endpoints, or gameplay routes.
 
+## 18. Terminal State & Screen Reset Invariant
+- **Post-Task Reset**: When concluding a user task or execution loop, execute `reset` and transmit VT100 character reset sequences (`\033(B\033)0\017`) to prevent screen buffer corruption or DEC line-drawing character shifts.
+
 <!-- END:nextjs-agent-rules -->
