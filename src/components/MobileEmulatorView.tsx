@@ -20,6 +20,11 @@ import {
   getShaderPresetById,
   getNextShaderPreset,
 } from "@/lib/shaders";
+import {
+  extractLibretroStateFromGamepad,
+  diffGamepadStates,
+  type GamepadLike,
+} from "@/lib/xbox-controller";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -617,6 +622,38 @@ function StandardMobileEmulatorView({
         return;
       }
 
+      if (e.data?.type === "VAULT_FORWARD_KEY") {
+        const { eventType, key, code, keyCode } = e.data;
+        const kbEvent = new KeyboardEvent(eventType, {
+          key,
+          code,
+          keyCode,
+          which: keyCode,
+          bubbles: true,
+          cancelable: true,
+        });
+        window.dispatchEvent(kbEvent);
+        const gameElem = document.getElementById("game") || document.querySelector(".ejs_parent");
+        if (gameElem) {
+          gameElem.dispatchEvent(kbEvent);
+        }
+        return;
+      }
+
+      if (e.data?.type === "VAULT_MP_P1_INPUT") {
+        const { buttonIndex, value } = e.data;
+        const emu = window.EJS_emulator;
+        const gm = emu?.gameManager;
+        try {
+          if (gm && typeof gm.simulateInput === "function") {
+            gm.simulateInput(0, buttonIndex, value);
+          } else if (gm?.functions && typeof gm.functions.simulateInput === "function") {
+            gm.functions.simulateInput(0, buttonIndex, value);
+          }
+        } catch {}
+        return;
+      }
+
       if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
         updatePadMode(true);
       } else if (e.data?.type === "VAULT_FORCE_SAVE") {
@@ -667,61 +704,104 @@ function StandardMobileEmulatorView({
     if (bootState !== "running") return;
 
     let animId: number;
-    const DEADZONE = 0.4;
-    const lastAxesState = { up: false, down: false, left: false, right: false };
+    let prevLibretroState: Record<number, boolean> = {};
+
+    // Auto-focus emulator container on boot
+    const container = document.querySelector("#mobile-emulator-container") as HTMLElement;
+    if (container) {
+      container.tabIndex = 0;
+      container.focus();
+    }
+
+    // Ensure EmulatorJS keys and gamepad bindings are properly registered
+    const emu = window.EJS_emulator as any;
+    if (emu) {
+      if (typeof emu.setupKeys === "function") {
+        try { emu.setupKeys(); } catch {}
+      }
+      if (typeof emu.updateGamepadLabels === "function") {
+        try { emu.updateGamepadLabels(); } catch {}
+      }
+    }
 
     const pollPhysicalStick = () => {
       const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
-      const pad = Array.from(pads).find((p) => p && p.connected && p.axes && p.axes.length >= 2);
+      const pad = Array.from(pads).find((p) => p && p.connected);
 
       if (pad) {
-        const axisX = pad.axes[0] || 0;
-        const axisY = pad.axes[1] || 0;
+        // Auto-assign player 1 controller if not already bound
+        if (emu && Array.isArray(emu.gamepadSelection)) {
+          const padKey = `${pad.id}_${pad.index}`;
+          if (!emu.gamepadSelection[0]) {
+            emu.gamepadSelection[0] = padKey;
+            if (typeof emu.updateGamepadLabels === "function") {
+              try { emu.updateGamepadLabels(); } catch {}
+            }
+          }
+        }
 
-        const left = axisX < -DEADZONE;
-        const right = axisX > DEADZONE;
-        const up = axisY < -DEADZONE;
-        const down = axisY > DEADZONE;
+        const gm = emu?.gameManager;
+        const sim = (gm && typeof gm.simulateInput === "function")
+          ? gm.simulateInput.bind(gm)
+          : (gm?.functions && typeof gm.functions.simulateInput === "function")
+          ? gm.functions.simulateInput.bind(gm.functions)
+          : null;
 
-        if (left !== lastAxesState.left) {
-          window.dispatchEvent(
-            new KeyboardEvent(left ? "keydown" : "keyup", {
-              key: "ArrowLeft",
-              code: "ArrowLeft",
-              bubbles: true,
-            })
-          );
-          lastAxesState.left = left;
-        }
-        if (right !== lastAxesState.right) {
-          window.dispatchEvent(
-            new KeyboardEvent(right ? "keydown" : "keyup", {
-              key: "ArrowRight",
-              code: "ArrowRight",
-              bubbles: true,
-            })
-          );
-          lastAxesState.right = right;
-        }
-        if (up !== lastAxesState.up) {
-          window.dispatchEvent(
-            new KeyboardEvent(up ? "keydown" : "keyup", {
-              key: "ArrowUp",
-              code: "ArrowUp",
-              bubbles: true,
-            })
-          );
-          lastAxesState.up = up;
-        }
-        if (down !== lastAxesState.down) {
-          window.dispatchEvent(
-            new KeyboardEvent(down ? "keydown" : "keyup", {
-              key: "ArrowDown",
-              code: "ArrowDown",
-              bubbles: true,
-            })
-          );
-          lastAxesState.down = down;
+        const nextState = extractLibretroStateFromGamepad(pad as unknown as GamepadLike);
+        const deltas = diffGamepadStates(prevLibretroState, nextState);
+        if (deltas.length > 0) {
+          prevLibretroState = nextState;
+          for (const evt of deltas) {
+            const val = evt.pressed ? 1 : 0;
+            if (sim) {
+              try {
+                sim(0, evt.buttonIndex, val);
+              } catch {}
+            }
+
+            // Keyboard event fallback for D-Pad directions
+            if (evt.buttonIndex === 6) {
+              window.dispatchEvent(
+                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
+                  key: "ArrowLeft",
+                  code: "ArrowLeft",
+                  keyCode: 37,
+                  which: 37,
+                  bubbles: true,
+                })
+              );
+            } else if (evt.buttonIndex === 7) {
+              window.dispatchEvent(
+                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
+                  key: "ArrowRight",
+                  code: "ArrowRight",
+                  keyCode: 39,
+                  which: 39,
+                  bubbles: true,
+                })
+              );
+            } else if (evt.buttonIndex === 4) {
+              window.dispatchEvent(
+                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
+                  key: "ArrowUp",
+                  code: "ArrowUp",
+                  keyCode: 38,
+                  which: 38,
+                  bubbles: true,
+                })
+              );
+            } else if (evt.buttonIndex === 5) {
+              window.dispatchEvent(
+                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
+                  key: "ArrowDown",
+                  code: "ArrowDown",
+                  keyCode: 40,
+                  which: 40,
+                  bubbles: true,
+                })
+              );
+            }
+          }
         }
       }
 
@@ -1049,6 +1129,20 @@ function StandardMobileEmulatorView({
             shader: currentShader,
           };
         }
+
+        // Sanitize broken or empty controlSettings from localStorage so emulator falls back to clean defaults
+        try {
+          const ejsCore = systemMeta.ejsCore || game.system;
+          const storageKey = `ejs-1-${ejsCore}-${game.title}-settings`;
+          const stored = localStorage.getItem(storageKey);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (!parsed?.controlSettings || Object.keys(parsed.controlSettings?.[0] || {}).length === 0) {
+              localStorage.removeItem(storageKey);
+              console.log("[ControlSanitizer] Purged empty controls key:", storageKey);
+            }
+          }
+        } catch {}
 
         // Bridge: When Emscripten mounts /data/saves IDBFS, inject cloud memory card scoped strictly to this game
         window.EJS_onSaveDatabaseLoaded = (fs: any) => {
