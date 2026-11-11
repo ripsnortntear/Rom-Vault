@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Play, Info, Heart, Download, Monitor } from "lucide-react";
+import { Play, Info, Heart, Download, Monitor, EyeOff, Shield } from "lucide-react";
 import type { CoverArtStyle, GameItem } from "@/types/game";
 import { isDesktopOnlySystem } from "@/lib/systems";
 
@@ -10,6 +10,7 @@ interface GameCardProps {
   coverStyle: CoverArtStyle;
   isFavorite: boolean;
   isMobile?: boolean;
+  isAdmin?: boolean;
   onToggleFavorite: (gameId: string) => void;
   onSelectDetail: (game: GameItem) => void;
   onPlay: (game: GameItem) => void;
@@ -26,6 +27,32 @@ function formatFileSize(bytes: number): string {
 }
 
 function getCoverUrl(game: GameItem, style: CoverArtStyle): string | null {
+  if (game.customCoverUrl) {
+    return game.customCoverUrl;
+  }
+  if (game.preferredCover) {
+    switch (game.preferredCover) {
+      case "artwork_front":
+        return game.media.artworkFront ?? game.media.artwork3d;
+      case "artwork_3d":
+        return game.media.artwork3d ?? game.media.artworkFront;
+      case "medium_front":
+        return game.media.mediumFront ?? game.media.mediumDisc ?? game.media.artworkFront;
+      case "medium_disc":
+        return game.media.mediumDisc ?? game.media.mediumFront ?? game.media.artworkFront;
+      case "screentitle":
+        return game.media.screenTitle ?? game.media.screenshot;
+      case "screenshot":
+        return game.media.screenshot ?? game.media.screenTitle;
+      case "fanart":
+        return game.media.fanart ?? game.media.artworkFront;
+      default:
+        if (game.preferredCover.startsWith("http") || game.preferredCover.startsWith("/")) {
+          return game.preferredCover;
+        }
+        break;
+    }
+  }
   switch (style) {
     case "artwork_3d":
       return game.media.artwork3d ?? game.media.artworkFront;
@@ -81,7 +108,11 @@ export function GameCard({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={() => onSelectDetail(game)}
-      className="group relative flex flex-col rounded-2xl border border-white/10 bg-zinc-900/70 hover:bg-zinc-900 hover:border-red-500/60 transition-all duration-300 overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-red-600/15 hover:-translate-y-1.5 cursor-pointer"
+      className={`group relative flex flex-col rounded-2xl border ${
+        game.isDisabled
+          ? "border-amber-500/50 bg-zinc-950/90 opacity-80 hover:opacity-100 hover:border-amber-400"
+          : "border-white/10 bg-zinc-900/70 hover:bg-zinc-900 hover:border-red-500/60"
+      } transition-all duration-300 overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-red-600/15 hover:-translate-y-1.5 cursor-pointer`}
     >
       <div
         className={`relative w-full ${
@@ -112,6 +143,12 @@ export function GameCard({
 
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
           <div className="flex items-center gap-1.5 flex-wrap">
+            {game.isDisabled && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-zinc-900/90 text-amber-300 border border-amber-500/50 shadow flex items-center gap-1 backdrop-blur-md">
+                <EyeOff className="w-3 h-3 text-amber-400" />
+                <span>Disabled</span>
+              </span>
+            )}
             <span
               className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider text-white shadow ${
                 game.badgeColor || (game.system === "snes" ? "bg-purple-600/90" : "bg-red-600/90")

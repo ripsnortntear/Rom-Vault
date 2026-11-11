@@ -22,6 +22,8 @@ import {
   deprovisionSeedbox,
   restartSeedbox,
 } from "@/lib/seedboxes";
+import { updateGameModeration, wipeGameScores } from "@/lib/moderation";
+import { updateCachedGameModeration } from "@/lib/scanner";
 
 export async function updateUserRoleAction(userId: string, role: "user" | "admin") {
   try {
@@ -274,5 +276,71 @@ export async function restartSeedboxAction(userId: string) {
   } catch (error: any) {
     console.error("[restartSeedboxAction] Error:", error);
     return { ok: false, error: error.message || "Failed to restart seedbox." };
+  }
+}
+
+export async function moderateGameAction(
+  gameId: string,
+  system: string,
+  updates: {
+    isDisabled?: boolean;
+    preferredCover?: string | null;
+    customCoverUrl?: string | null;
+    customTitle?: string | null;
+    customStory?: string | null;
+  }
+) {
+  try {
+    const admin = await requireAdmin();
+    const success = await updateGameModeration(gameId, system, updates, {
+      id: admin.id,
+      username: admin.username,
+    });
+
+    if (!success) {
+      return { ok: false, error: "Failed to save game moderation settings." };
+    }
+
+    updateCachedGameModeration(gameId, updates);
+
+    try {
+      updateTag("library");
+      revalidateTag("library", "max");
+      updateTag(`game-${gameId}`);
+      revalidateTag(`game-${gameId}`, "max");
+    } catch {}
+
+    return {
+      ok: true,
+      message: updates.isDisabled !== undefined
+        ? updates.isDisabled
+          ? "Game has been disabled and placed in the 'Disabled' system."
+          : "Game has been re-enabled in the library."
+        : "Game moderation settings updated successfully.",
+      updates,
+    };
+  } catch (error: any) {
+    console.error("[moderateGameAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to update game moderation." };
+  }
+}
+
+export async function wipeGameScoresAction(gameId: string) {
+  try {
+    const admin = await requireAdmin();
+    const success = await wipeGameScores(gameId, admin.id);
+    if (!success) {
+      return { ok: false, error: "Failed to wipe game scores." };
+    }
+    try {
+      updateTag("leaderboards");
+      revalidateTag("leaderboards", "max");
+      updateTag(`game-social-${gameId}`);
+      revalidateTag(`game-social-${gameId}`, "max");
+    } catch {}
+    return { ok: true, message: "All leaderboard scores wiped for this game." };
+  } catch (error: any) {
+    console.error("[wipeGameScoresAction] Error:", error);
+    return { ok: false, error: error.message || "Failed to wipe scores." };
   }
 }

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { submitGameRating, postGameComment, deleteGameComment } from "@/app/actions/social";
 import { submitHighScoreAction } from "@/app/actions/scores";
+import { moderateDeleteScoreAction } from "@/app/actions/admin";
 import { getSafeHttpUrl, getSafeAvatarUrl } from "@/lib/security";
 import type { GameSocialStats, GameComment, GameHighScore } from "@/types/community";
 import type { AuthSession } from "@/types/auth";
@@ -58,6 +59,7 @@ interface GameSocialContextType {
   copiedScoreId: number | null;
   handleScoreSubmit: (e: React.FormEvent) => void;
   handleShareScore: (score: GameHighScore) => Promise<void>;
+  handleDeleteScore: (scoreId: number) => Promise<void>;
   gameId: string;
   gameTitle: string;
   system: string;
@@ -225,6 +227,20 @@ export function GameSocialProvider({
     }
   };
 
+  // Handle High Score delete (moderation)
+  const handleDeleteScore = async (scoreId: number) => {
+    if (!confirm("Are you sure you want to remove this high score?")) return;
+    const res = await moderateDeleteScoreAction(scoreId, gameId);
+    if (res.ok) {
+      setStats((prev) => ({
+        ...prev,
+        topScores: prev.topScores.filter((s) => s.id !== scoreId),
+      }));
+    } else {
+      setScoreError(res.error || "Failed to delete high score.");
+    }
+  };
+
   // Handle High Score submit
   const handleScoreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -333,6 +349,7 @@ export function GameSocialProvider({
     copiedScoreId,
     handleScoreSubmit,
     handleShareScore,
+    handleDeleteScore,
     gameId,
     gameTitle,
     system,
@@ -445,6 +462,7 @@ export function GameLeaderboardSnapshot({ className = "" }: { className?: string
     handleScoreSubmit,
     isSubmittingScore,
     handleShareScore,
+    handleDeleteScore,
     copiedScoreId,
     gameTitle,
   } = useGameSocial();
@@ -528,6 +546,17 @@ export function GameLeaderboardSnapshot({ className = "" }: { className?: string
                         <Share2 className="w-3.5 h-3.5" />
                       )}
                     </button>
+
+                    {(currentUser?.role === "admin" || currentUser?.id === score.userId) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteScore(score.id)}
+                        className="p-1 rounded hover:bg-white/10 text-zinc-500 hover:text-red-400 transition cursor-pointer"
+                        title="Delete High Score"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

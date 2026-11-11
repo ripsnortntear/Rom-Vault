@@ -17,6 +17,8 @@ import {
   VolumeX,
   Monitor,
   Info,
+  ShieldAlert,
+  EyeOff,
 } from "lucide-react";
 import type { GameItem } from "@/types/game";
 import { isDesktopOnlySystem } from "@/lib/systems";
@@ -26,14 +28,17 @@ import {
   GameLeaderboardSnapshot,
   GameCommentsFeed,
 } from "@/components/community/GameSocialSection";
+import { GameModerationDrawer } from "@/components/admin/GameModerationDrawer";
 
 interface GameDetailModalProps {
   game: GameItem | null;
   isFavorite: boolean;
   isMobile?: boolean;
+  currentUser?: any;
   onToggleFavorite: (gameId: string) => void;
   onClose: () => void;
   onPlay: (game: GameItem) => void;
+  onGameUpdated?: (updatedGame: GameItem) => void;
 }
 
 type MediaTab =
@@ -58,10 +63,14 @@ export function GameDetailModal({
   game,
   isFavorite,
   isMobile = false,
+  currentUser,
   onToggleFavorite,
   onClose,
   onPlay,
+  onGameUpdated,
 }: GameDetailModalProps): React.ReactElement | null {
+  const [currentGame, setCurrentGame] = useState<GameItem | null>(game);
+  const [isModerationOpen, setIsModerationOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<MediaTab>("video");
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [selectedDiscIndex, setSelectedDiscIndex] = useState<number>(0);
@@ -72,29 +81,34 @@ export function GameDetailModal({
     genres?: string[];
   } | null>(null);
 
-  const isDesktopOnly = game ? isDesktopOnlySystem(game.system) : false;
+  useEffect(() => {
+    setCurrentGame(game);
+  }, [game]);
+
+  const activeGame = currentGame || game;
+  const isDesktopOnly = activeGame ? isDesktopOnlySystem(activeGame.system) : false;
   const isBlockedOnMobile = isMobile && isDesktopOnly;
 
   useEffect(() => {
-    if (game) {
+    if (activeGame) {
       setIsMuted(true);
       setSelectedDiscIndex(0);
       setEnrichedMeta(null);
       setActiveTab(
-        game.media.video
+        activeGame.media.video
           ? "video"
-          : game.media.screenTitle
+          : activeGame.media.screenTitle
           ? "screentitle"
-          : game.media.artworkFront
+          : activeGame.media.artworkFront
           ? "artwork_front"
           : "screenshot"
       );
 
-      if (!game.year) {
+      if (!activeGame.year) {
         let isMounted = true;
         fetch(
-          `/roms/api/games/${encodeURIComponent(game.id)}/metadata?title=${encodeURIComponent(
-            game.displayTitle
+          `/roms/api/games/${encodeURIComponent(activeGame.id)}/metadata?title=${encodeURIComponent(
+            activeGame.displayTitle
           )}`
         )
           .then((res) => (res.ok ? res.json() : null))
@@ -117,24 +131,24 @@ export function GameDetailModal({
     }
   }, [game]);
 
-  if (!game) {
+  if (!activeGame) {
     return null;
   }
 
   const activeDisc =
-    game.discs && game.discs[selectedDiscIndex]
-      ? game.discs[selectedDiscIndex]
+    activeGame.discs && activeGame.discs[selectedDiscIndex]
+      ? activeGame.discs[selectedDiscIndex]
       : null;
-  const activeRomFileName = activeDisc ? activeDisc.fileName : game.romFileName;
-  const activeRomUrl = activeDisc ? activeDisc.romUrl : game.media.rom;
+  const activeRomFileName = activeDisc ? activeDisc.fileName : activeGame.romFileName;
+  const activeRomUrl = activeDisc ? activeDisc.romUrl : activeGame.media.rom;
   const activeDiscNum = activeDisc ? activeDisc.discNumber : 1;
 
   const handlePlayActive = () => {
     onPlay({
-      ...game,
+      ...activeGame,
       romFileName: activeRomFileName,
       media: {
-        ...game.media,
+        ...activeGame.media,
         rom: activeRomUrl,
       },
     });
@@ -144,55 +158,55 @@ export function GameDetailModal({
     {
       id: "video",
       label: "Gameplay Video",
-      available: Boolean(game.media.video),
+      available: Boolean(activeGame.media.video),
       icon: <Film className="w-3.5 h-3.5" />,
     },
     {
       id: "screentitle",
       label: "Title Screen",
-      available: Boolean(game.media.screenTitle),
+      available: Boolean(activeGame.media.screenTitle),
       icon: <Tv className="w-3.5 h-3.5" />,
     },
     {
       id: "screenshot",
       label: "Screenshot",
-      available: Boolean(game.media.screenshot),
+      available: Boolean(activeGame.media.screenshot),
       icon: <ImageIcon className="w-3.5 h-3.5" />,
     },
     {
       id: "artwork_front",
       label: "2D Box Art",
-      available: Boolean(game.media.artworkFront),
+      available: Boolean(activeGame.media.artworkFront),
       icon: <Box className="w-3.5 h-3.5" />,
     },
     {
       id: "artwork_3d",
       label: "3D Box Art",
-      available: Boolean(game.media.artwork3d),
+      available: Boolean(activeGame.media.artwork3d),
       icon: <Box className="w-3.5 h-3.5" />,
     },
     {
       id: "medium_front",
       label: "Cartridge",
-      available: Boolean(game.media.mediumFront),
+      available: Boolean(activeGame.media.mediumFront),
       icon: <Disc className="w-3.5 h-3.5" />,
     },
     {
       id: "medium_disc",
       label: "Disc Media",
-      available: Boolean(game.media.mediumDisc),
+      available: Boolean(activeGame.media.mediumDisc),
       icon: <Disc className="w-3.5 h-3.5" />,
     },
     {
       id: "fanart",
       label: "Fan Art",
-      available: Boolean(game.media.fanart),
+      available: Boolean(activeGame.media.fanart),
       icon: <ImageIcon className="w-3.5 h-3.5" />,
     },
     {
       id: "bezel_day",
       label: "Bezel Frame",
-      available: Boolean(game.media.bezelDay),
+      available: Boolean(activeGame.media.bezelDay),
       icon: <Tv className="w-3.5 h-3.5" />,
     },
   ];
@@ -202,44 +216,44 @@ export function GameDetailModal({
   const getActiveImageUrl = (): string | null => {
     switch (activeTab) {
       case "screentitle":
-        return game.media.screenTitle;
+        return activeGame.media.screenTitle;
       case "screenshot":
-        return game.media.screenshot;
+        return activeGame.media.screenshot;
       case "artwork_front":
-        return game.media.artworkFront;
+        return activeGame.media.artworkFront;
       case "artwork_3d":
-        return game.media.artwork3d;
+        return activeGame.media.artwork3d;
       case "medium_front":
-        return game.media.mediumFront;
+        return activeGame.media.mediumFront;
       case "medium_disc":
-        return game.media.mediumDisc;
+        return activeGame.media.mediumDisc;
       case "fanart":
-        return game.media.fanart;
+        return activeGame.media.fanart;
       case "bezel_day":
-        return game.media.bezelDay;
+        return activeGame.media.bezelDay;
       default:
         return null;
     }
   };
 
   const backdropUrl =
-    game.media.fanart ?? game.media.artworkFront ?? game.media.screenshot ?? game.media.screenTitle;
+    activeGame.media.fanart ?? activeGame.media.artworkFront ?? activeGame.media.screenshot ?? activeGame.media.screenTitle;
 
   const thumbnailItems: Array<{
     label: string;
     url: string | null;
     tab: MediaTab;
   }> = [
-    { label: "2D Box", url: game.media.artworkFront, tab: "artwork_front" },
-    { label: "3D Box", url: game.media.artwork3d, tab: "artwork_3d" },
+    { label: "2D Box", url: activeGame.media.artworkFront, tab: "artwork_front" },
+    { label: "3D Box", url: activeGame.media.artwork3d, tab: "artwork_3d" },
     {
-      label: game.media.mediumDisc ? "Disc" : "Cartridge",
-      url: game.media.mediumDisc ?? game.media.mediumFront,
-      tab: game.media.mediumDisc ? "medium_disc" : "medium_front",
+      label: activeGame.media.mediumDisc ? "Disc" : "Cartridge",
+      url: activeGame.media.mediumDisc ?? activeGame.media.mediumFront,
+      tab: activeGame.media.mediumDisc ? "medium_disc" : "medium_front",
     },
-    { label: "Title Screen", url: game.media.screenTitle, tab: "screentitle" },
-    { label: "Screenshot", url: game.media.screenshot, tab: "screenshot" },
-    { label: "Fan Art", url: game.media.fanart, tab: "fanart" },
+    { label: "Title Screen", url: activeGame.media.screenTitle, tab: "screentitle" },
+    { label: "Screenshot", url: activeGame.media.screenshot, tab: "screenshot" },
+    { label: "Fan Art", url: activeGame.media.fanart, tab: "fanart" },
   ];
 
   return (
@@ -265,43 +279,64 @@ export function GameDetailModal({
           <div className="flex items-center gap-3 min-w-0">
             <span
               className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase text-white ${
-                game.badgeColor || (game.system === "snes" ? "bg-purple-600" : "bg-red-600")
+                activeGame.badgeColor || (activeGame.system === "snes" ? "bg-purple-600" : "bg-red-600")
               }`}
             >
-              {game.systemLabel}
+              {activeGame.systemLabel}
             </span>
+            {activeGame.isDisabled && (
+              <span className="px-2 py-0.5 rounded-md text-xs font-black uppercase tracking-wider bg-zinc-900/90 text-amber-300 border border-amber-500/50 shadow flex items-center gap-1">
+                <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                <span>Disabled</span>
+              </span>
+            )}
             <h2 className="text-lg sm:text-xl font-bold text-white truncate">
-              {game.displayTitle}
+              {activeGame.displayTitle}
             </h2>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 transition cursor-pointer"
-            aria-label="Close modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {currentUser?.role === "admin" && (
+              <button
+                type="button"
+                onClick={() => setIsModerationOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm transition cursor-pointer"
+                title="Moderate Game Card, Main Picture, Status & Scores"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Moderate Game</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 transition cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body wrapped in GameSocialProvider */}
         <GameSocialProvider
-          gameId={game.id}
-          gameTitle={game.displayTitle}
-          system={game.system}
+          gameId={activeGame.id}
+          gameTitle={activeGame.displayTitle}
+          system={activeGame.system}
+          currentUser={currentUser}
         >
           <div className="relative z-10 overflow-y-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 flex-1">
             {/* Left Column: Media Viewport + Red Play Button Directly Under Media */}
             <div className="lg:col-span-6 flex flex-col gap-4">
               {/* Media Viewport */}
               <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/15 bg-black flex items-center justify-center shadow-2xl group">
-                {activeTab === "video" && game.media.video ? (
+                {activeTab === "video" && activeGame.media.video ? (
                   <>
                     <video
-                      key={game.media.video}
-                      src={game.media.video}
-                      poster={game.media.screenTitle ?? game.media.screenshot ?? undefined}
+                      key={activeGame.media.video}
+                      src={activeGame.media.video}
+                      poster={activeGame.media.screenTitle ?? activeGame.media.screenshot ?? undefined}
                       autoPlay
                       loop
                       muted={isMuted}
@@ -324,7 +359,7 @@ export function GameDetailModal({
                 ) : (
                   <img
                     src={getActiveImageUrl() ?? ""}
-                    alt={`${game.displayTitle} - ${activeTab}`}
+                    alt={`${activeGame.displayTitle} - ${activeTab}`}
                     className="w-full h-full object-contain p-3"
                   />
                 )}
@@ -345,7 +380,7 @@ export function GameDetailModal({
                     <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
                       <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <div className="flex flex-col gap-0.5">
-                        <strong className="text-white">Desktop Required for {game.systemLabel}</strong>
+                        <strong className="text-white">Desktop Required for {activeGame.systemLabel}</strong>
                         <span>
                           PlayStation 2, Sega Dreamcast, Nintendo GameCube, and Sega Saturn emulation requires desktop hardware and is not supported on mobile devices. Open ROM Vault on a desktop browser (Microsoft Edge recommended).
                         </span>
@@ -364,8 +399,8 @@ export function GameDetailModal({
                     >
                       <Play className="w-5 h-5 fill-current" />
                       <span>
-                        {game.playable
-                          ? game.discs && game.discs.length > 1
+                        {activeGame.playable
+                          ? activeGame.discs && activeGame.discs.length > 1
                             ? `Play Disc ${activeDiscNum} in Browser Now`
                             : "Play in Browser Now"
                           : "Play / Download Options"}
@@ -375,7 +410,7 @@ export function GameDetailModal({
                       <div className="p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-xs text-cyan-200 flex items-center gap-2">
                         <Monitor className="w-4 h-4 text-cyan-400 shrink-0" />
                         <span>
-                          <strong>Edge Recommended:</strong> For optimal 60 FPS performance on {game.systemLabel}, Microsoft Edge is recommended on desktop.
+                          <strong>Edge Recommended:</strong> For optimal 60 FPS performance on {activeGame.systemLabel}, Microsoft Edge is recommended on desktop.
                         </span>
                       </div>
                     )}
@@ -383,19 +418,19 @@ export function GameDetailModal({
                 )}
 
                 {/* Multi-disc Starting Disc Selector */}
-                {game.discs && game.discs.length > 1 && (
+                {activeGame.discs && activeGame.discs.length > 1 && (
                   <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-xs">
                     <div className="font-semibold text-zinc-300 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <Disc className="w-3.5 h-3.5 text-red-400" />
-                        Select Starting Disc ({game.discs.length} Discs)
+                        Select Starting Disc ({activeGame.discs.length} Discs)
                       </span>
                       <span className="text-red-400 font-bold text-[11px] bg-red-950/80 px-2 py-0.5 rounded border border-red-500/30">
                         Loaded: Disc {activeDiscNum}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 pt-1">
-                      {game.discs.map((d, idx) => {
+                      {activeGame.discs.map((d, idx) => {
                         const isSelected = idx === selectedDiscIndex;
                         return (
                           <div
@@ -502,7 +537,7 @@ export function GameDetailModal({
                   <span>Community Comments</span>
                 </h4>
                 <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar [scrollbar-width:thin] [scrollbar-color:rgba(63,63,70,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/40 hover:[&::-webkit-scrollbar-thumb]:bg-zinc-500/70 active:[&::-webkit-scrollbar-thumb]:bg-indigo-500">
-                  <GameCommentsFeed gameId={game.id} />
+                  <GameCommentsFeed gameId={activeGame.id} />
                 </div>
               </div>
             </div>
@@ -510,11 +545,11 @@ export function GameDetailModal({
             {/* Right Column: Badges, Rating, Download & Fav, Overview */}
             <div className="lg:col-span-6 flex flex-col justify-between gap-6">
               <div className="flex flex-col gap-4">
-                {game.media.logo && (
+                {activeGame.media.logo && (
                   <div className="h-20 flex items-center justify-center sm:justify-start bg-zinc-900/50 rounded-2xl p-3 border border-white/5">
                     <img
-                      src={game.media.logo}
-                      alt={game.displayTitle}
+                      src={activeGame.media.logo}
+                      alt={activeGame.displayTitle}
                       className="max-h-full max-w-full object-contain drop-shadow-lg"
                     />
                   </div>
@@ -522,7 +557,7 @@ export function GameDetailModal({
 
                 {/* Metadata & Badges */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {game.regions.map((region) => (
+                  {activeGame.regions.map((region) => (
                     <span
                       key={region}
                       className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10"
@@ -530,22 +565,22 @@ export function GameDetailModal({
                       Region: {region}
                     </span>
                   ))}
-                  {(enrichedMeta?.year ?? game.year) && (
+                  {(enrichedMeta?.year ?? activeGame.year) && (
                     <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-600/20 text-red-300 border border-red-500/30">
-                      Year: {enrichedMeta?.year ?? game.year}
+                      Year: {enrichedMeta?.year ?? activeGame.year}
                     </span>
                   )}
-                  {(enrichedMeta?.developer ?? game.developer) && (
+                  {(enrichedMeta?.developer ?? activeGame.developer) && (
                     <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10">
-                      Dev: {enrichedMeta?.developer ?? game.developer}
+                      Dev: {enrichedMeta?.developer ?? activeGame.developer}
                     </span>
                   )}
-                  {(enrichedMeta?.publisher ?? game.publisher) && (
+                  {(enrichedMeta?.publisher ?? activeGame.publisher) && (
                     <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-zinc-200 border border-white/10">
-                      Pub: {enrichedMeta?.publisher ?? game.publisher}
+                      Pub: {enrichedMeta?.publisher ?? activeGame.publisher}
                     </span>
                   )}
-                  {game.tags.map((tag) => (
+                  {activeGame.tags.map((tag) => (
                     <span
                       key={tag}
                       className="px-2.5 py-1 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 border border-white/10"
@@ -554,11 +589,11 @@ export function GameDetailModal({
                     </span>
                   ))}
                   <span className="px-2.5 py-1 rounded-lg text-xs font-mono bg-zinc-900 text-zinc-400 border border-white/10">
-                    {game.fileSizeBytes >= 1024 * 1024 * 1024
-                      ? `${(game.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-                      : game.fileSizeBytes >= 1024 * 1024
-                      ? `${(game.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
-                      : `${Math.max(1, Math.round(game.fileSizeBytes / 1024))} KB`}
+                    {activeGame.fileSizeBytes >= 1024 * 1024 * 1024
+                      ? `${(activeGame.fileSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+                      : activeGame.fileSizeBytes >= 1024 * 1024
+                      ? `${(activeGame.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
+                      : `${Math.max(1, Math.round(activeGame.fileSizeBytes / 1024))} KB`}
                   </span>
                 </div>
 
@@ -573,12 +608,12 @@ export function GameDetailModal({
                     className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white border border-white/15 transition"
                   >
                     <Download className="w-4 h-4" />
-                    Download {game.discs && game.discs.length > 1 ? `Disc ${activeDiscNum}` : "ROM"}
+                    Download {activeGame.discs && activeGame.discs.length > 1 ? `Disc ${activeDiscNum}` : "ROM"}
                   </a>
 
                   <button
                     type="button"
-                    onClick={() => onToggleFavorite(game.id)}
+                    onClick={() => onToggleFavorite(activeGame.id)}
                     className={`inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm border transition cursor-pointer ${
                       isFavorite
                         ? "bg-red-600/20 border-red-500 text-red-200"
@@ -599,7 +634,7 @@ export function GameDetailModal({
                     Story &amp; Gameplay Overview
                   </div>
                   <div className="text-sm text-zinc-300 leading-relaxed max-h-52 overflow-y-auto pr-1 whitespace-pre-line custom-scrollbar">
-                    {game.story || "No story text available for this title."}
+                    {activeGame.story || "No story text available for this title."}
                   </div>
                 </div>
 
@@ -613,13 +648,25 @@ export function GameDetailModal({
                     <span>Community Comments</span>
                   </h4>
                   <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar [scrollbar-width:thin] [scrollbar-color:rgba(63,63,70,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/40 hover:[&::-webkit-scrollbar-thumb]:bg-zinc-500/70 active:[&::-webkit-scrollbar-thumb]:bg-indigo-500">
-                    <GameCommentsFeed gameId={game.id} />
+                    <GameCommentsFeed gameId={activeGame.id} />
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </GameSocialProvider>
+
+        {isModerationOpen && (
+          <GameModerationDrawer
+            game={activeGame}
+            isOpen={isModerationOpen}
+            onClose={() => setIsModerationOpen(false)}
+            onGameUpdated={(updated) => {
+              setCurrentGame(updated);
+              onGameUpdated?.(updated);
+            }}
+          />
+        )}
       </div>
     </div>
   );

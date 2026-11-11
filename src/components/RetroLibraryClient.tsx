@@ -76,7 +76,7 @@ export function RetroLibraryClient({
     const sys = searchParams?.get("system");
     if (sys) {
       const lower = sys.toLowerCase();
-      if (lower in (stats.systems ?? {}) || lower === "all") {
+      if (lower in (stats.systems ?? {}) || lower === "all" || lower === "disabled") {
         return lower === "all" ? "ALL" : (lower as SystemFilter);
       }
     }
@@ -112,6 +112,17 @@ export function RetroLibraryClient({
     return l ? parseInt(l, 10) || PAGE_SIZE : PAGE_SIZE;
   }, [searchParams]);
 
+  const [games, setGames] = useState<GameItem[]>(initialGames);
+  const [systemCounts, setSystemCounts] = useState<Record<string, number>>(stats.systems ?? {});
+
+  useEffect(() => {
+    setGames(initialGames);
+  }, [initialGames]);
+
+  useEffect(() => {
+    setSystemCounts(stats.systems ?? {});
+  }, [stats.systems]);
+
   const [searchQuery, setSearchQuery] = useState<string>(initialSearch);
   const [selectedSystem, setSelectedSystem] = useState<SystemFilter>(initialSystem);
   const [selectedLetter, setSelectedLetter] = useState<string>(initialLetter);
@@ -125,11 +136,13 @@ export function RetroLibraryClient({
 
   const [featuredGame, setFeaturedGame] = useState<GameItem | null>(() => {
     if (!initialGames || initialGames.length === 0) return null;
+    const activeGames = initialGames.filter((g) => !g.isDisabled);
     const pool =
       initialSystem === "ALL"
-        ? initialGames
-        : initialGames.filter((g) => g.system === initialSystem);
-    const candidates = pool.length > 0 ? pool : initialGames;
+        ? activeGames
+        : activeGames.filter((g) => g.system === initialSystem);
+    const candidates = pool.length > 0 ? pool : activeGames;
+    if (candidates.length === 0) return null;
     // Use server-supplied initialSeed so SSR and client hydration select the exact same game
     const seed = typeof initialSeed === "number" ? initialSeed : 0;
     const index = Math.floor(seed * candidates.length) % candidates.length;
@@ -535,16 +548,17 @@ export function RetroLibraryClient({
   }, []);
 
   const handleShuffleFeatured = useCallback((): void => {
+    const activeGames = games.filter((g) => !g.isDisabled);
     const pool =
-      selectedSystem === "ALL"
-        ? initialGames
-        : initialGames.filter((g) => g.system === selectedSystem);
+      selectedSystem === "ALL" || selectedSystem === "disabled"
+        ? activeGames
+        : activeGames.filter((g) => g.system === selectedSystem);
     if (pool.length === 0) {
       return;
     }
     const randomIndex = Math.floor(Math.random() * pool.length);
     setFeaturedGame(pool[randomIndex]);
-  }, [initialGames, selectedSystem]);
+  }, [games, selectedSystem]);
 
   const handleResetHome = useCallback((e?: React.MouseEvent<HTMLAnchorElement>): void => {
     if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) {
@@ -605,21 +619,64 @@ export function RetroLibraryClient({
 
   const favoritesSet = useMemo(() => new Set(favorites), [favorites]);
 
+  const handleGameUpdated = useCallback(
+    (updated: GameItem) => {
+      setGames((prev) => {
+        const next = prev.map((g) => (g.id === updated.id ? updated : g));
+        const newCounts: Record<string, number> = {};
+        let disabledCount = 0;
+        for (const g of next) {
+          if (g.isDisabled) {
+            disabledCount += 1;
+          } else {
+            newCounts[g.system] = (newCounts[g.system] ?? 0) + 1;
+          }
+        }
+        if (disabledCount > 0) {
+          newCounts["disabled"] = disabledCount;
+        }
+        setSystemCounts(newCounts);
+        return next;
+      });
+
+      if (detailGame?.id === updated.id) {
+        setDetailGame(updated);
+      }
+      if (featuredGame?.id === updated.id) {
+        setFeaturedGame(updated);
+      }
+    },
+    [detailGame, featuredGame]
+  );
+
   const filteredGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    let baseList = initialGames;
+    let baseList = games;
     if (collectionFilter === "favorites") {
-      baseList = initialGames.filter((g) => favoritesSet.has(g.id));
+      baseList = games.filter((g) => favoritesSet.has(g.id));
     } else if (collectionFilter === "recent") {
-      const map = new Map(initialGames.map((g) => [g.id, g]));
+      const map = new Map(games.map((g) => [g.id, g]));
       baseList = recentIds
         .map((id) => map.get(id))
         .filter((g): g is GameItem => Boolean(g));
     }
 
+    const isAdmin = currentUser?.role === "admin";
+
     return baseList.filter((game) => {
-      if (selectedSystem !== "ALL" && game.system !== selectedSystem) {
+      // Moderation / Disabled filtering
+      if (game.isDisabled) {
+        // Regular users NEVER see disabled games
+        if (!isAdmin) return false;
+        // Admins only see disabled games when "Disabled" system or "ALL" is selected
+        if (selectedSystem !== "disabled" && selectedSystem !== "ALL") return false;
+      } else {
+        // Active games NEVER show under "Disabled" system
+        if (selectedSystem === "disabled") return false;
+      }
+
+      if (selectedSystem !== "ALL" && selectedSystem !== "disabled" && game.system !== selectedSystem) {
         return false;
       }
       if (selectedLetter !== "ALL" && game.firstLetter !== selectedLetter) {
@@ -652,7 +709,7 @@ export function RetroLibraryClient({
       return true;
     });
   }, [
-    initialGames,
+    games,
     collectionFilter,
     favoritesSet,
     recentIds,
@@ -660,6 +717,7 @@ export function RetroLibraryClient({
     selectedLetter,
     selectedRegion,
     searchQuery,
+    currentUser,
   ]);
 
   useEffect(() => {
@@ -1186,7 +1244,7 @@ export function RetroLibraryClient({
           onSearchChange={handleSearchChange}
           selectedSystem={selectedSystem}
           onSystemChange={handleSystemChange}
-          systemCounts={stats.systems ?? {}}
+          systemCounts={systemCounts}
           selectedLetter={selectedLetter}
           onLetterChange={handleLetterChange}
           selectedRegion={selectedRegion}
@@ -1197,7 +1255,7 @@ export function RetroLibraryClient({
           collectionFilter={collectionFilter}
           onCollectionFilterChange={handleCollectionFilterChange}
           totalFiltered={filteredGames.length}
-          totalLibrary={initialGames.length}
+          totalLibrary={games.length}
           favoritesCount={favorites.length}
           recentCount={recentIds.length}
         />
@@ -1230,6 +1288,7 @@ export function RetroLibraryClient({
                   coverStyle={coverStyle}
                   isFavorite={favoritesSet.has(game.id)}
                   isMobile={isMobileDevice}
+                  isAdmin={currentUser?.role === "admin"}
                   onToggleFavorite={toggleFavorite}
                   onSelectDetail={setDetailGame}
                   onPlay={handlePlayGame}
@@ -1265,12 +1324,14 @@ export function RetroLibraryClient({
         game={detailGame}
         isFavorite={detailGame ? favoritesSet.has(detailGame.id) : false}
         isMobile={isMobileDevice}
+        currentUser={currentUser}
         onToggleFavorite={toggleFavorite}
         onClose={() => setDetailGame(null)}
         onPlay={(game) => {
           setDetailGame(null);
           handlePlayGame(game);
         }}
+        onGameUpdated={handleGameUpdated}
       />
 
       {playingGame && (

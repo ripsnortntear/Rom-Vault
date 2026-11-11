@@ -8,6 +8,7 @@ import { normalizeSystem, getStorageRoot, safeDecodeURIComponent } from "@/lib/p
 import { getCurrentSession } from "@/lib/auth/session";
 import { query } from "@/lib/db";
 import { getCorsHeaders, handleCorsPreflight } from "@/lib/cors";
+import { getGameById } from "@/lib/scanner";
 
 interface RouteContext {
   params: Promise<{
@@ -335,6 +336,16 @@ async function handleStream(
 
     const userId = session.user.id;
     const role = session.user.role;
+
+    if (role !== "admin") {
+      const targetGame = await getGameById(id);
+      if (targetGame?.isDisabled) {
+        return NextResponse.json(
+          { error: "This game has been disabled by administrators." },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    }
 
     // Check daily download quota for non-admin users
     if (role !== "admin" && userId) {

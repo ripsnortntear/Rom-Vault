@@ -209,6 +209,17 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     playable: true,
     romExtensions: [".zip", ".7z", ".bin"],
   },
+  disabled: {
+    id: "disabled",
+    name: "Disabled Games",
+    shortLabel: "Disabled",
+    company: "Other",
+    badgeColor: "bg-zinc-700 hover:bg-zinc-600",
+    colorHex: "#71717a",
+    ejsCore: null,
+    playable: false,
+    romExtensions: [],
+  },
 };
 
 export function getSystemMeta(systemId: string): SystemMeta {

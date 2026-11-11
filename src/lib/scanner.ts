@@ -11,6 +11,7 @@ import {
 } from "@/lib/paths";
 import { getSystemMeta } from "@/lib/systems";
 import { getAllCachedMetadataMap } from "@/lib/igdb";
+import { getAllGameModerations } from "@/lib/moderation";
 
 const KNOWN_REGIONS = new Set([
   "USA",
@@ -762,7 +763,40 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
       console.warn("[scanner] Failed attaching database metadata:", metaErr);
     }
 
+    // Attach game moderation records from MariaDB
+    try {
+      const moderationMap = await getAllGameModerations();
+      if (moderationMap.size > 0) {
+        for (const game of allGames) {
+          const mod =
+            moderationMap.get(game.id) ??
+            moderationMap.get(safeDecodeURIComponent(game.id));
+          if (mod) {
+            game.isDisabled = mod.isDisabled;
+            if (mod.preferredCover) game.preferredCover = mod.preferredCover;
+            if (mod.customCoverUrl) game.customCoverUrl = mod.customCoverUrl;
+            if (mod.customTitle) {
+              game.displayTitle = mod.customTitle;
+              game.sortTitle = mod.customTitle;
+              const firstChar = mod.customTitle.charAt(0).toUpperCase();
+              game.firstLetter = /^[A-Z]$/.test(firstChar) ? firstChar : "#";
+            }
+            if (mod.customStory) game.story = mod.customStory;
+          }
+        }
+      }
+    } catch (modErr) {
+      console.warn("[scanner] Failed attaching game moderation data:", modErr);
+    }
+
     allGames.sort((a, b) => a.sortTitle.localeCompare(b.sortTitle));
+
+    const disabledCount = allGames.filter((g) => g.isDisabled).length;
+    if (disabledCount > 0) {
+      systemCounts["disabled"] = disabledCount;
+    } else {
+      delete systemCounts["disabled"];
+    }
 
     const stats: LibraryStats = {
       totalGames: allGames.length,
@@ -820,6 +854,44 @@ export function updateCachedGameMetadata(id: string, meta: Partial<GameItem>): v
       game.tags = Array.from(tagSet);
     }
     if (!game.story && meta.story) game.story = meta.story;
+  }
+}
+
+export function updateCachedGameModeration(
+  id: string,
+  updates: {
+    isDisabled?: boolean;
+    preferredCover?: string | null;
+    customCoverUrl?: string | null;
+    customTitle?: string | null;
+    customStory?: string | null;
+  }
+): void {
+  if (!cachedLibrary) return;
+  const decodedId = safeDecodeURIComponent(id);
+  const game = cachedLibrary.games.find(
+    (g) => g.id === id || safeDecodeURIComponent(g.id) === decodedId
+  );
+  if (game) {
+    if (updates.isDisabled !== undefined) game.isDisabled = updates.isDisabled;
+    if (updates.preferredCover !== undefined) game.preferredCover = updates.preferredCover;
+    if (updates.customCoverUrl !== undefined) game.customCoverUrl = updates.customCoverUrl;
+    if (updates.customTitle) {
+      game.displayTitle = updates.customTitle;
+      game.sortTitle = updates.customTitle;
+      const firstChar = updates.customTitle.charAt(0).toUpperCase();
+      game.firstLetter = /^[A-Z]$/.test(firstChar) ? firstChar : "#";
+    }
+    if (updates.customStory !== undefined && updates.customStory !== null) {
+      game.story = updates.customStory;
+    }
+
+    const disabledCount = cachedLibrary.games.filter((g) => g.isDisabled).length;
+    if (disabledCount > 0) {
+      cachedLibrary.stats.systems["disabled"] = disabledCount;
+    } else {
+      delete cachedLibrary.stats.systems["disabled"];
+    }
   }
 }
 

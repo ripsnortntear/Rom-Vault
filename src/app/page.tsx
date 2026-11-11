@@ -57,11 +57,25 @@ export default async function HomePage(): Promise<React.ReactElement> {
   const initialSeed = (Date.now() % 100000) / 100000;
   const initialUserAgent = reqHeaders?.get("user-agent") || "";
 
+  const isAdmin = session?.user?.role === "admin";
+  const visibleGames = isAdmin ? games : games.filter((g) => !g.isDisabled);
+  const visibleStats = isAdmin
+    ? stats
+    : {
+        ...stats,
+        totalGames: visibleGames.length,
+        systems: (() => {
+          const s = { ...stats.systems };
+          delete s["disabled"];
+          return s;
+        })(),
+      };
+
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#070709]" />}>
       <RetroLibraryClient
-        initialGames={games}
-        stats={stats}
+        initialGames={visibleGames}
+        stats={visibleStats}
         initialSeed={initialSeed}
         initialUser={initialUser}
         initialUserAgent={initialUserAgent}

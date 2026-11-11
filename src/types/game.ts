@@ -79,6 +79,9 @@ export interface GameItem {
   developer?: string | null;
   publisher?: string | null;
   genres?: string[];
+  isDisabled?: boolean;
+  preferredCover?: string | null;
+  customCoverUrl?: string | null;
 }
 
 export interface LibraryStats {

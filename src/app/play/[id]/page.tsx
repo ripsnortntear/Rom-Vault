@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import { getGameById } from "@/lib/scanner";
 import { isDesktopOnlySystem } from "@/lib/systems";
+import { getCurrentSession } from "@/lib/auth/session";
 import { MobileEmulatorView } from "@/components/MobileEmulatorView";
 import { PS2EmulatorView } from "@/components/PS2EmulatorView";
 import { GameCubeEmulatorView } from "@/components/GameCubeEmulatorView";
@@ -47,6 +48,13 @@ export default async function PlayPage({ params }: PlayPageProps) {
 
   if (!game) {
     notFound();
+  }
+
+  if (game.isDisabled) {
+    const session = await getCurrentSession().catch(() => null);
+    if (session?.user?.role !== "admin") {
+      notFound();
+    }
   }
 
   if (!game.playable) {

@@ -60,11 +60,32 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
+    const session = await getCurrentSession().catch(() => null);
+    const isAdmin = session?.user?.role === "admin";
     const library = await scanGameLibrary(false);
-    return NextResponse.json(library, {
+
+    const filteredGames = isAdmin
+      ? library.games
+      : library.games.filter((g) => !g.isDisabled);
+
+    const filteredSystems = { ...library.stats.systems };
+    if (!isAdmin) {
+      delete filteredSystems["disabled"];
+    }
+
+    const payload = {
+      games: filteredGames,
+      stats: {
+        ...library.stats,
+        totalGames: filteredGames.length,
+        systems: filteredSystems,
+      },
+    };
+
+    return NextResponse.json(payload, {
       status: 200,
       headers: {
-        "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+        "Cache-Control": isAdmin ? "no-store, no-cache" : "public, max-age=60, stale-while-revalidate=300",
       },
     });
   } catch (error: any) {
