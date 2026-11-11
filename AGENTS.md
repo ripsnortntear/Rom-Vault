@@ -139,6 +139,9 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Do not pass `keepalive: true` to `fetch()` when uploading payloads larger than 48 KB (such as 128 KB PS1 `.mcr` or 8.65 MB PS2 `.ps2` memory cards); Chromium and Microsoft Edge enforce a hard 64 KiB (`65,536`-byte) body limit on `keepalive` requests and immediately throw `TypeError: Failed to fetch` client-side before sending any network traffic.
 - Do not use bare navigation `<a href="...?download=1">` links to export memory cards while an emulator iframe is running; always use programmatic `Blob` + `URL.createObjectURL()` downloads so the browser does not fire `beforeunload` and abort the running WebAssembly core.
 - Do not place React hooks after conditional early returns, and do not mutate `ref.current` during render execution.
+- Do not use bcrypt (`htpasswd -B`) for FileBot web authentication; `jlesage/baseimage-gui` webauth strictly requires Apache APR1 MD5 (`htpasswd -m`).
+- Do not restart the FileBot docker container to update credentials; invoke `docker exec filebot pkill -x webauth` to reload the supervisor in ~10ms.
+- Strictly never touch, pause, or kill `/home/cfw34683/zfs_expansion_daemon.py` (PID 3505563) on `storage`.
 
 ## 11. Pre-Flight Verification
 - Typecheck & Lint: Execute `tsc --noEmit` and the configured Biome/ESLint checks; ensure zero type mismatches across App Router contracts.
@@ -167,5 +170,9 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 ## 15. Proactive Remediation & Autonomous Execution Invariant
 - Always Apply Fixes Proactively: When a defect, anti-pattern, race condition, or user-reported inefficiency is diagnosed, always implement the complete, end-to-end fix directly. Do not stop midway to ask if the user wants the fix applied.
 - Complete Verification Before Responding: Only return to the user after all code changes, unit tests, static analysis, Next.js Turbopack builds, service restarts, and repository synchronization (`sync-repo.sh --rebuild`) have fully completed and verified.
+
+## 16. Milestone Designation (`/learn` Invariant)
+- **Verified "Good Working" Copy**: Whenever the user enters the `/learn` slash command, the platform has achieved a major verified milestone.
+- **Milestone Baseline**: The current codebase state, active services, passing tests, and configuration must be marked as the official **"good working" copy**. Future feature development and refactoring must preserve or build upon these verified baselines.
 
 <!-- END:nextjs-agent-rules -->
