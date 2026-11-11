@@ -627,11 +627,11 @@ function StandardMobileEmulatorView({
         const kbEvent = new KeyboardEvent(eventType, {
           key,
           code,
-          keyCode,
-          which: keyCode,
           bubbles: true,
           cancelable: true,
         });
+        Object.defineProperty(kbEvent, "keyCode", { value: keyCode || 0, writable: false });
+        Object.defineProperty(kbEvent, "which", { value: keyCode || 0, writable: false });
         window.dispatchEvent(kbEvent);
         const gameElem = document.getElementById("game") || document.querySelector(".ejs_parent");
         if (gameElem) {
@@ -1130,18 +1130,19 @@ function StandardMobileEmulatorView({
           };
         }
 
-        // Sanitize broken or empty controlSettings from localStorage so emulator falls back to clean defaults
+        // Sanitize broken or corrupted controlSettings from localStorage so emulator falls back to clean defaults
         try {
           const ejsCore = systemMeta.ejsCore || game.system;
           const storageKey = `ejs-1-${ejsCore}-${game.title}-settings`;
-          const stored = localStorage.getItem(storageKey);
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (!parsed?.controlSettings || Object.keys(parsed.controlSettings?.[0] || {}).length === 0) {
-              localStorage.removeItem(storageKey);
-              console.log("[ControlSanitizer] Purged empty controls key:", storageKey);
+          localStorage.removeItem(storageKey);
+          // Also purge any legacy or malformed ejs control keys
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("ejs-") && k.includes(game.title)) {
+              localStorage.removeItem(k);
             }
           }
+          console.log("[ControlSanitizer] Reset controls cache for clean default initialization:", game.title);
         } catch {}
 
         // Bridge: When Emscripten mounts /data/saves IDBFS, inject cloud memory card scoped strictly to this game

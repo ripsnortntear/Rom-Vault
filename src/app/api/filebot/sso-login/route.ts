@@ -26,8 +26,11 @@ export async function GET(req: NextRequest) {
     // 3. Admin user verified -> auto-login to FileBot and set auth cookie
     const authToken = await getFilebotAuthCookie();
     if (!authToken) {
-      // Fallback: redirect to FileBot root
-      return NextResponse.redirect("https://www.oldsmarchaos.com/filebot/", 302);
+      console.error("[FileBot SSO Login]: Failed to obtain auth cookie token from FileBot container.");
+      const errorUrl = new URL("/roms/auth/login", "https://www.oldsmarchaos.com");
+      errorUrl.searchParams.set("redirect", "https://www.oldsmarchaos.com/filebot/");
+      errorUrl.searchParams.set("error", "filebot_auth_failed");
+      return NextResponse.redirect(errorUrl, 302);
     }
 
     const redirectUrl = new URL("https://www.oldsmarchaos.com/filebot/");
