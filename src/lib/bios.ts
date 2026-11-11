@@ -94,6 +94,13 @@ export function findSystemBios(system: string, requestedFileName?: string): Syst
         );
       },
     },
+    neogeo: {
+      expected: "neogeo.zip",
+      test: (name) => {
+        const l = name.toLowerCase();
+        return l === "neogeo.zip" || l.includes("neogeo");
+      },
+    },
   };
 
   const sysConfig = patterns[norm];

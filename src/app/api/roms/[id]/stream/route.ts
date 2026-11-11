@@ -105,6 +105,7 @@ function resolveRomFilePath(
         "sgg",
         "sgb",
         "mame",
+        "neogeo",
       ];
 
   // Strategy 1: Explicit fileParam resolution

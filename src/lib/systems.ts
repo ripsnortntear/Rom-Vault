@@ -198,6 +198,17 @@ export const KNOWN_SYSTEMS: Record<string, SystemMeta> = {
     playable: true,
     romExtensions: [".zip", ".chd", ".7z"],
   },
+  neogeo: {
+    id: "neogeo",
+    name: "SNK Neo Geo",
+    shortLabel: "Neo Geo",
+    company: "Other",
+    badgeColor: "bg-amber-600",
+    colorHex: "#d97706",
+    ejsCore: "fbneo",
+    playable: true,
+    romExtensions: [".zip", ".7z", ".bin"],
+  },
 };
 
 export function getSystemMeta(systemId: string): SystemMeta {
@@ -228,6 +239,7 @@ export function normalizeSystem(system: string | null | undefined): string {
   if (lower === "gc") return "gamecube";
   if (lower === "dc") return "dreamcast";
   if (lower === "arcade" || lower === "mame") return "mame";
+  if (lower === "neogeo" || lower === "neo-geo" || lower === "ng" || lower === "neo_geo") return "neogeo";
   return lower;
 }
 

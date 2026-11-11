@@ -152,6 +152,12 @@ const PLATFORM_CONFIG = {
     isDisc: false,
     label: "Arcade",
   },
+  neogeo: {
+    igdbId: 80,
+    libretroRepo: "SNK - Neo Geo",
+    isDisc: false,
+    label: "SNK Neo Geo",
+  },
 };
 
 // Help manual generator
@@ -1542,9 +1548,9 @@ async function main() {
     const artBaseDir = path.join(STORAGE_ROOT, sys, "artwork");
     const downloadedForGame = [];
 
-    // For MAME / Arcade, query ArcadeDB first to get canonical title, flyer, marquee, snaps, and video
+    // For MAME / Arcade / Neo Geo, query ArcadeDB first to get canonical title, flyer, marquee, snaps, and video
     let arcadeDbData = null;
-    if (sys.toLowerCase() === "mame" || sys.toLowerCase() === "arcade" || item.config.igdbId === 52) {
+    if (sys.toLowerCase() === "mame" || sys.toLowerCase() === "arcade" || sys.toLowerCase() === "neogeo" || item.config.igdbId === 52) {
       arcadeDbData = await fetchArcadeDbData(base);
       if (arcadeDbData?.title) {
         clean = cleanTitleForSearch(arcadeDbData.title);

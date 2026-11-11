@@ -394,8 +394,9 @@ function scanSystem(system: string): SystemScanResult {
         return false;
       }
       if (
-        lower.includes("bios") &&
-        (lower.endsWith(".bin") || lower.endsWith(".rom") || lower.endsWith(".dat"))
+        (lower.includes("bios") &&
+          (lower.endsWith(".bin") || lower.endsWith(".rom") || lower.endsWith(".dat"))) ||
+        lower === "neogeo.zip"
       ) {
         return false;
       }
@@ -736,7 +737,7 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
         for (const game of allGames) {
           const meta = metaMap.get(game.id) ?? metaMap.get(safeDecodeURIComponent(game.id));
           if (meta) {
-            if (meta.cleanTitle && (game.system === "mame" || game.displayTitle === game.baseName)) {
+            if (meta.cleanTitle && (game.system === "mame" || game.system === "neogeo" || game.displayTitle === game.baseName)) {
               game.displayTitle = meta.cleanTitle;
               game.sortTitle = meta.cleanTitle;
               const firstChar = meta.cleanTitle.charAt(0).toUpperCase();

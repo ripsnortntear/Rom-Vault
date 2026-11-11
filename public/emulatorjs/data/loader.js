@@ -79,7 +79,7 @@
         await loadStyle("emulator.min.css");
     }
     const config = {};
-    const isMameCore = window.EJS_core === "mame" || window.EJS_core === "arcade" || window.EJS_core === "mame2003_plus";
+    const isMameCore = window.EJS_core === "mame" || window.EJS_core === "arcade" || window.EJS_core === "mame2003_plus" || window.EJS_core === "fbneo" || window.EJS_core === "neogeo";
     const defaultExt = isMameCore ? ".zip" : ".chd";
     let resolvedGameUrl = window.EJS_gameUrl;
     if (typeof resolvedGameUrl === "string") {
