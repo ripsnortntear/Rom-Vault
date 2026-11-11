@@ -73,7 +73,7 @@ describe("User Account Approval & Administrator Gate Suite", () => {
   describe("approveUser", () => {
     it("transitions user from pending_approval to active and dispatches automated approval email", async () => {
       const mockUserId = "user-pending-123";
-      const mockAdminId = "admin-cfw34683";
+      const mockAdminId = "admin-super-id";
 
       (query as any).mockResolvedValueOnce([
         {
@@ -118,7 +118,7 @@ describe("User Account Approval & Administrator Gate Suite", () => {
   describe("denyUser", () => {
     it("transitions user to denied status and dispatches automated denial email with optional reason", async () => {
       const mockUserId = "user-spam-456";
-      const mockAdminId = "admin-cfw34683";
+      const mockAdminId = "admin-super-id";
       const denyReason = "Registrations are currently restricted.";
 
       (query as any).mockResolvedValueOnce([

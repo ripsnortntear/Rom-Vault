@@ -24,7 +24,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return new NextResponse(null, { status: 403, headers });
     }
 
-    // Enforce specific username restriction if requested (e.g. ?user=cfw34683)
+    // Enforce specific username restriction if requested (e.g. ?user=admin)
     const requiredUser = searchParams.get("user");
     if (requiredUser && session.user.username.toLowerCase() !== requiredUser.toLowerCase()) {
       return new NextResponse(null, { status: 403, headers });

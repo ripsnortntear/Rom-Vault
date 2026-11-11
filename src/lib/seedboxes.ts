@@ -25,6 +25,7 @@ const SEEDBOX_BASE_DIR = "/mnt/storage/oldsmarchaos.com/seedboxes";
 const NGINX_MAP_FILE = "/etc/nginx/conf.d/seedbox_ports.map";
 const START_PORT = 8201;
 const END_PORT = 8250;
+const ROOT_ADMIN_USER = (process.env.ADMIN_USERNAMES || process.env.INITIAL_ADMIN_USERNAME || "").split(",")[0]?.trim().toLowerCase();
 
 /**
  * Regenerate /etc/nginx/conf.d/seedbox_ports.map and reload Nginx
@@ -39,9 +40,9 @@ export async function syncNginxSeedboxMap(): Promise<void> {
     mapContent += `${box.username} ${box.port};\n`;
   }
 
-  // Ensure cfw34683 default is always present
-  if (!seedboxes.some((b) => b.username === "cfw34683")) {
-    mapContent += `cfw34683 8090;\n`;
+  // Ensure default root administrator mapping is present if configured
+  if (ROOT_ADMIN_USER && !seedboxes.some((b) => b.username.toLowerCase() === ROOT_ADMIN_USER)) {
+    mapContent += `${ROOT_ADMIN_USER} 8090;\n`;
   }
 
   // Write temporary file and move atomically with sudo
@@ -57,7 +58,7 @@ export async function syncNginxSeedboxMap(): Promise<void> {
 async function getNextAvailablePort(): Promise<number> {
   const usedPorts = await query<{ port: number }>("SELECT port FROM user_seedboxes");
   const portSet = new Set(usedPorts.map((r) => r.port));
-  portSet.add(8090); // default cfw34683 port
+  portSet.add(8090); // default admin port
 
   for (let p = START_PORT; p <= END_PORT; p++) {
     if (!portSet.has(p)) {
@@ -243,7 +244,7 @@ export async function deprovisionSeedbox(
       return { ok: false, error: "Seedbox not found." };
     }
 
-    if (box.username === "cfw34683") {
+    if (ROOT_ADMIN_USER && box.username.toLowerCase() === ROOT_ADMIN_USER) {
       return { ok: false, error: "Cannot deprovision primary system administrator seedbox." };
     }
 
@@ -295,8 +296,9 @@ export async function restartSeedbox(userId: string): Promise<{ ok: boolean; err
       return { ok: false, error: "Seedbox not found." };
     }
 
-    if (box.username === "cfw34683") {
-      await execAsync("docker compose -f /home/cfw34683/docker/vpntorrent/docker-compose.yml restart");
+    if (ROOT_ADMIN_USER && box.username.toLowerCase() === ROOT_ADMIN_USER) {
+      const adminCompose = process.env.ADMIN_COMPOSE_PATH || "/home/cfw34683/docker/vpntorrent/docker-compose.yml";
+      await execAsync(`docker compose -f ${adminCompose} restart`);
       return { ok: true };
     }
 

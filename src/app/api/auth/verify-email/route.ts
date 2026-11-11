@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       [tokenRecord.user_id]
     );
     const targetUser = userRows[0];
-    const isRootAdmin = targetUser?.role === "admin" || targetUser?.username?.toLowerCase() === "cfw34683";
+    const isRootAdmin = targetUser?.role === "admin";
 
     // Designated admin becomes active immediately; all user signups require admin approval
     const nextStatus = isRootAdmin ? "active" : "pending_approval";
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       [tokenRecord.user_id]
     );
     const targetUser = userRows[0];
-    const isRootAdmin = targetUser?.role === "admin" || targetUser?.username?.toLowerCase() === "cfw34683";
+    const isRootAdmin = targetUser?.role === "admin";
 
     const nextStatus = isRootAdmin ? "active" : "pending_approval";
 

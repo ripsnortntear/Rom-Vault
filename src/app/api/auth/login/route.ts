@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     const rawIdentifier = String(identifier).trim();
-    // Support mobile keyboard auto-spacing (e.g. "CFW 34683" -> "cfw34683")
+    // Support mobile keyboard auto-spacing (e.g. "User Name" -> "UserName")
     const collapsedIdentifier = rawIdentifier.replace(/\s+/g, "");
 
     // 1. IP and Account rate limit check

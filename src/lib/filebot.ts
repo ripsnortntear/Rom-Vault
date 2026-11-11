@@ -8,7 +8,8 @@ const execFileAsync = promisify(execFile);
 export const FILEBOT_HTPASSWD_PATH =
   process.env.FILEBOT_HTPASSWD_PATH || "/home/cfw34683/docker/filebot/config/webauth-htpasswd";
 export const FILEBOT_CONTAINER_NAME = process.env.FILEBOT_CONTAINER_NAME || "filebot";
-export const FILEBOT_ADMIN_USER = process.env.FILEBOT_ADMIN_USER || "cfw34683";
+export const FILEBOT_ADMIN_USER =
+  process.env.FILEBOT_ADMIN_USER || (process.env.ADMIN_USERNAMES || "").split(",")[0]?.trim() || "admin";
 export const FILEBOT_ADMIN_PASSWORD =
   process.env.FILEBOT_ADMIN_PASSWORD || process.env.DB_PASSWORD || "G234ihb72916!?";
 

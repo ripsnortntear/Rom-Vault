@@ -1014,7 +1014,7 @@ export function RetroLibraryClient({
               {isFleetMenuOpen && (() => {
                 const isAuth = !!currentUser;
                 const isAdmin = currentUser?.role === "admin";
-                const isRoot = currentUser?.username === "cfw34683";
+                const isRoot = isAdmin;
                 const hasSeedbox = isRoot || Boolean(
                   currentUser?.has_seedbox ||
                   currentUser?.hasSeedbox ||
@@ -1232,13 +1232,13 @@ export function RetroLibraryClient({
                               <a
                                 href="/tor/"
                                 className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                                title={isRoot ? "qBittorrent (main cfw34683)" : "qBittorrent (Seedbox)"}
+                                title="qBittorrent (Seedbox)"
                               >
                                 <span className="text-sm">📥</span>
                                 <div>
                                   <div className="font-bold text-[11px] leading-tight">qBittorrent</div>
                                   <div className="text-[9px] text-zinc-400 leading-tight">
-                                    {isRoot ? "main cfw34683" : "Seedbox"}
+                                    {isRoot ? "Main Seedbox" : "Seedbox"}
                                   </div>
                                 </div>
                               </a>

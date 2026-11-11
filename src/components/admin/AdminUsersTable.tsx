@@ -542,7 +542,7 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                             >
                               <RefreshCw className="w-3 h-3" />
                             </button>
-                            {user.username !== "cfw34683" && (
+                            {user.role !== "admin" && (
                               <button
                                 type="button"
                                 onClick={() => {
