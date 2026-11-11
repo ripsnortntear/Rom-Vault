@@ -381,6 +381,27 @@ export function RetroLibraryClient({
     }
   }, [currentUser]);
 
+  // Support opening User CP via URL parameter (?cp=1 or ?profile=1) or CustomEvent from SSO Header
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkCp = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (
+        params.get("cp") === "1" ||
+        params.get("profile") === "1" ||
+        window.location.hash === "#cp" ||
+        window.location.hash === "#profile"
+      ) {
+        setIsProfileModalOpen(true);
+      }
+    };
+    checkCp();
+
+    const handleOpenCp = () => setIsProfileModalOpen(true);
+    window.addEventListener("sso:open-user-cp", handleOpenCp);
+    return () => window.removeEventListener("sso:open-user-cp", handleOpenCp);
+  }, []);
+
   // Update component filter state if browser navigates back/forward
   useEffect(() => {
     const handlePopState = () => {
