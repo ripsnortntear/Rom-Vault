@@ -175,4 +175,13 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - **Verified "Good Working" Copy**: Whenever the user enters the `/learn` slash command, the platform has achieved a major verified milestone.
 - **Milestone Baseline**: The current codebase state, active services, passing tests, and configuration must be marked as the official **"good working" copy**. Future feature development and refactoring must preserve or build upon these verified baselines.
 
+## 17. Admin Game Card Moderation & Dynamic Disabled System Filter
+- **In-Card Moderation**: Accessible only to verified administrators (`role: admin`) via the Admin Moderate drawer inside `GameDetailModal.tsx`.
+- **Cover Art Selection Hierarchy**: Custom URLs take precedence, followed by preferred cover selection (`artwork_front`, `artwork_3d`, `medium_front`, `medium_disc`, `screenshot`, `screentitle`, `fanart`), falling back to default system style.
+- **Dynamic Disabled System Filter**:
+  - Disabling a game updates `rom_vault.game_moderation` and increments `systemCounts["disabled"]`.
+  - The "Disabled" filter pill in `FilterBar.tsx` MUST be suppressed when 0 games are disabled (`count === 0`).
+  - When 1 or more games are disabled, the "Disabled" pill appears only for administrators.
+  - Non-administrators must NEVER see disabled games in the catalog, stream endpoints, or gameplay routes.
+
 <!-- END:nextjs-agent-rules -->
