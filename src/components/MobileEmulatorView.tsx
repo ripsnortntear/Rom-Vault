@@ -20,11 +20,6 @@ import {
   getShaderPresetById,
   getNextShaderPreset,
 } from "@/lib/shaders";
-import {
-  extractLibretroStateFromGamepad,
-  diffGamepadStates,
-  type GamepadLike,
-} from "@/lib/xbox-controller";
 
 function deepDecode(str: string): string {
   let s = str || "";
@@ -495,47 +490,40 @@ function StandardMobileEmulatorView({
 
   const updatePadMode = useCallback(
     (_connected: boolean) => {
-      const isPs1 = game.system === "psx" || game.system === "ps1";
+      if (game.system !== "psx" && game.system !== "ps1") return;
 
-      // Keep pad1type as "standard" with "left_analog" mapping for PS1.
+      // Keep pad1type as "standard" with "left_analog" mapping.
       // Forcing "dualshock" (device 5) causes the PCSX ReARMed WASM core to transmit
       // motor handshake packets via the Gamepad Haptic API, which trips low-voltage
       // cut-offs and crashes the Bluetooth MCU on desktop controllers (Xbox/PS4/PS5/8BitDo).
-      if (window.EJS_coreSettings && isPs1) {
+      if (window.EJS_coreSettings) {
         window.EJS_coreSettings.pcsx_rearmed_pad1type = "standard";
         window.EJS_coreSettings.pcsx_rearmed_analog_to_digital = "left_analog";
       }
 
-      // Universal: input_player1_analog_dpad_mode = 1 maps Left Analog Stick to D-Pad across all retro cores
       if (window.EJS_defaultOptions) {
         window.EJS_defaultOptions["input_player1_analog_dpad_mode"] = "1";
-        if (isPs1) {
-          window.EJS_defaultOptions["input_libretro_device_p1"] = "1";
-        }
+        window.EJS_defaultOptions["input_libretro_device_p1"] = "1";
       }
 
       const emu = window.EJS_emulator;
       if (emu) {
         try {
-          if (typeof emu.setCoreSetting === "function" && isPs1) {
+          if (typeof emu.setCoreSetting === "function") {
             emu.setCoreSetting("pcsx_rearmed_pad1type", "standard");
             emu.setCoreSetting("pcsx_rearmed_analog_to_digital", "left_analog");
           }
           if (emu.gameManager) {
             const gm = emu.gameManager;
             if (typeof gm.setOption === "function") {
-              if (isPs1) {
-                gm.setOption("pcsx_rearmed_pad1type", "standard");
-                gm.setOption("pcsx_rearmed_analog_to_digital", "left_analog");
-                gm.setOption("input_libretro_device_p1", "1");
-              }
+              gm.setOption("pcsx_rearmed_pad1type", "standard");
+              gm.setOption("pcsx_rearmed_analog_to_digital", "left_analog");
               gm.setOption("input_player1_analog_dpad_mode", "1");
+              gm.setOption("input_libretro_device_p1", "1");
             }
             if (typeof gm.setVariable === "function") {
-              if (isPs1) {
-                gm.setVariable("pcsx_rearmed_pad1type", "standard");
-                gm.setVariable("pcsx_rearmed_analog_to_digital", "left_analog");
-              }
+              gm.setVariable("pcsx_rearmed_pad1type", "standard");
+              gm.setVariable("pcsx_rearmed_analog_to_digital", "left_analog");
               gm.setVariable("input_player1_analog_dpad_mode", "1");
             }
           }
@@ -629,30 +617,6 @@ function StandardMobileEmulatorView({
         return;
       }
 
-      if (e.data?.type === "VAULT_FORWARD_KEY") {
-        const { eventType, key, code, keyCode } = e.data;
-        const kbEvent = new KeyboardEvent(eventType, {
-          key,
-          code,
-          keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true,
-        });
-        window.dispatchEvent(kbEvent);
-        const container = document.querySelector("#mobile-emulator-container");
-        if (container) {
-          container.dispatchEvent(kbEvent);
-        }
-        const emu = window.EJS_emulator as any;
-        if (emu && typeof emu.keyChange === "function") {
-          try {
-            emu.keyChange(kbEvent);
-          } catch {}
-        }
-        return;
-      }
-
       if (e.data?.type === "GAMEPAD_PULSE" && e.data?.connected && bootState === "running") {
         updatePadMode(true);
       } else if (e.data?.type === "VAULT_FORCE_SAVE") {
@@ -703,104 +667,61 @@ function StandardMobileEmulatorView({
     if (bootState !== "running") return;
 
     let animId: number;
-    let prevLibretroState: Record<number, boolean> = {};
-
-    // Auto-focus emulator container on boot for immediate keyboard capture
-    const container = document.querySelector("#mobile-emulator-container") as HTMLElement;
-    if (container) {
-      container.tabIndex = 0;
-      container.focus();
-    }
-
-    // Ensure EmulatorJS keys and gamepad bindings are properly registered
-    const emu = window.EJS_emulator as any;
-    if (emu) {
-      if (typeof emu.setupKeys === "function") {
-        try { emu.setupKeys(); } catch {}
-      }
-      if (typeof emu.updateGamepadLabels === "function") {
-        try { emu.updateGamepadLabels(); } catch {}
-      }
-    }
+    const DEADZONE = 0.4;
+    const lastAxesState = { up: false, down: false, left: false, right: false };
 
     const pollPhysicalStick = () => {
       const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
-      const pad = Array.from(pads).find((p) => p && p.connected);
+      const pad = Array.from(pads).find((p) => p && p.connected && p.axes && p.axes.length >= 2);
 
       if (pad) {
-        // Auto-assign player 1 controller if not already bound
-        if (emu && Array.isArray(emu.gamepadSelection)) {
-          const padKey = `${pad.id}_${pad.index}`;
-          if (!emu.gamepadSelection[0]) {
-            emu.gamepadSelection[0] = padKey;
-            if (typeof emu.updateGamepadLabels === "function") {
-              try { emu.updateGamepadLabels(); } catch {}
-            }
-          }
+        const axisX = pad.axes[0] || 0;
+        const axisY = pad.axes[1] || 0;
+
+        const left = axisX < -DEADZONE;
+        const right = axisX > DEADZONE;
+        const up = axisY < -DEADZONE;
+        const down = axisY > DEADZONE;
+
+        if (left !== lastAxesState.left) {
+          window.dispatchEvent(
+            new KeyboardEvent(left ? "keydown" : "keyup", {
+              key: "ArrowLeft",
+              code: "ArrowLeft",
+              bubbles: true,
+            })
+          );
+          lastAxesState.left = left;
         }
-
-        const gm = emu?.gameManager;
-        const sim = (gm && typeof gm.simulateInput === "function")
-          ? gm.simulateInput.bind(gm)
-          : (gm?.functions && typeof gm.functions.simulateInput === "function")
-          ? gm.functions.simulateInput.bind(gm.functions)
-          : null;
-
-        const nextState = extractLibretroStateFromGamepad(pad as unknown as GamepadLike);
-        const deltas = diffGamepadStates(prevLibretroState, nextState);
-        if (deltas.length > 0) {
-          prevLibretroState = nextState;
-          for (const evt of deltas) {
-            const val = evt.pressed ? 1 : 0;
-            if (sim) {
-              try {
-                sim(0, evt.buttonIndex, val);
-              } catch {}
-            }
-
-            // Keyboard event fallback for D-Pad directions
-            if (evt.buttonIndex === 6) {
-              window.dispatchEvent(
-                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
-                  key: "ArrowLeft",
-                  code: "ArrowLeft",
-                  keyCode: 37,
-                  which: 37,
-                  bubbles: true,
-                })
-              );
-            } else if (evt.buttonIndex === 7) {
-              window.dispatchEvent(
-                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
-                  key: "ArrowRight",
-                  code: "ArrowRight",
-                  keyCode: 39,
-                  which: 39,
-                  bubbles: true,
-                })
-              );
-            } else if (evt.buttonIndex === 4) {
-              window.dispatchEvent(
-                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
-                  key: "ArrowUp",
-                  code: "ArrowUp",
-                  keyCode: 38,
-                  which: 38,
-                  bubbles: true,
-                })
-              );
-            } else if (evt.buttonIndex === 5) {
-              window.dispatchEvent(
-                new KeyboardEvent(evt.pressed ? "keydown" : "keyup", {
-                  key: "ArrowDown",
-                  code: "ArrowDown",
-                  keyCode: 40,
-                  which: 40,
-                  bubbles: true,
-                })
-              );
-            }
-          }
+        if (right !== lastAxesState.right) {
+          window.dispatchEvent(
+            new KeyboardEvent(right ? "keydown" : "keyup", {
+              key: "ArrowRight",
+              code: "ArrowRight",
+              bubbles: true,
+            })
+          );
+          lastAxesState.right = right;
+        }
+        if (up !== lastAxesState.up) {
+          window.dispatchEvent(
+            new KeyboardEvent(up ? "keydown" : "keyup", {
+              key: "ArrowUp",
+              code: "ArrowUp",
+              bubbles: true,
+            })
+          );
+          lastAxesState.up = up;
+        }
+        if (down !== lastAxesState.down) {
+          window.dispatchEvent(
+            new KeyboardEvent(down ? "keydown" : "keyup", {
+              key: "ArrowDown",
+              code: "ArrowDown",
+              bubbles: true,
+            })
+          );
+          lastAxesState.down = down;
         }
       }
 
@@ -808,32 +729,15 @@ function StandardMobileEmulatorView({
     };
 
     animId = requestAnimationFrame(pollPhysicalStick);
-    return () => {
-      cancelAnimationFrame(animId);
-      const gm = (window as any).EJS_emulator?.gameManager;
-      const sim = (gm && typeof gm.simulateInput === "function")
-        ? gm.simulateInput.bind(gm)
-        : null;
-      if (sim) {
-        for (const [btnStr, pressed] of Object.entries(prevLibretroState)) {
-          if (pressed) {
-            try { sim(0, Number(btnStr), 0); } catch {}
-          }
-        }
-      }
-    };
+    return () => cancelAnimationFrame(animId);
   }, [bootState]);
 
   useEffect(() => {
     if (bootState !== "running") return;
 
-    if (checkPhysicalGamepadConnected()) {
-      updatePadMode(true);
-    }
-
     const handleGamepadConnected = (e: GamepadEvent) => {
       const pad = e.gamepad;
-      if (pad) {
+      if (pad && pad.axes && pad.axes.length >= 2) {
         updatePadMode(true);
       }
       try {
@@ -875,55 +779,6 @@ function StandardMobileEmulatorView({
       window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
     };
   }, [bootState, updatePadMode]);
-
-  // Cross-device control settings synchronization
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
-
-    const pushControls = (controls: any, settings: any) => {
-      try {
-        fetch("/roms/api/users/me/controls", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            gameId: cleanGameId,
-            system: game.system,
-            controls,
-            settings,
-          }),
-        }).catch((err) => console.warn("[ControlSync] Push error:", err));
-      } catch {}
-    };
-
-    window.localStorage.setItem = function (key: string, value: string) {
-      originalSetItem(key, value);
-      if (
-        typeof key === "string" &&
-        key.startsWith("ejs-") &&
-        key.endsWith("-settings") &&
-        key !== "ejs-settings"
-      ) {
-        try {
-          const parsed = JSON.parse(value);
-          if (parsed && (parsed.controlSettings || parsed.settings)) {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-              pushControls(parsed.controlSettings, parsed.settings);
-            }, 1000);
-          }
-        } catch {}
-      }
-    };
-
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      window.localStorage.setItem = originalSetItem;
-    };
-  }, [cleanGameId, game.system]);
 
   const handleStartGame = async () => {
     if (bootState !== "idle") return;
@@ -1026,26 +881,6 @@ function StandardMobileEmulatorView({
       hasPriorCloudSaveRef.current = hasPriorSave;
       console.log("[SaveSync] Prior cloud save exists in database:", hasPriorSave);
 
-      // Pre-download cloud control settings and RetroArch preferences
-      let cloudControls: any = null;
-      let cloudSettings: any = null;
-      try {
-        const ctrlRes = await fetch(
-          `/roms/api/users/me/controls?gameId=${encodeURIComponent(cleanGameId)}&system=${encodeURIComponent(game.system)}&_t=${Date.now()}`,
-          { credentials: "include" }
-        );
-        if (ctrlRes.ok) {
-          const ctrlData = await ctrlRes.json();
-          if (ctrlData.success && ctrlData.exists) {
-            cloudControls = ctrlData.controls;
-            cloudSettings = ctrlData.settings;
-            console.log("[ControlSync] Loaded user game controls from cloud for:", cleanGameId);
-          }
-        }
-      } catch (err) {
-        console.warn("[ControlSync] Could not fetch user game controls:", err);
-      }
-
       if (typeof window !== "undefined") {
         const screenAny = (screen as unknown as { orientation?: { lock?: unknown } })?.orientation;
         if (screenAny && typeof screenAny.lock === "function") {
@@ -1093,8 +928,6 @@ function StandardMobileEmulatorView({
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
         } else if (game.system === "dreamcast") {
           window.EJS_biosUrl = "/roms/api/bios/dc_boot.bin?system=dreamcast";
-        } else if (game.system === "neogeo") {
-          window.EJS_biosUrl = "/roms/api/bios/neogeo.zip?system=neogeo";
         }
         window.EJS_gamePath = cleanFileName;
         window.EJS_disableCue = true;
@@ -1213,65 +1046,8 @@ function StandardMobileEmulatorView({
           window.EJS_defaultOptions = {
             ...(window.EJS_defaultOptions || {}),
             "save-save-interval": "30",
-            "input_player1_analog_dpad_mode": "1",
             shader: currentShader,
           };
-        }
-
-        // Apply cloud-synced controls and RetroArch settings across all platforms
-        const ejsCore = systemMeta.ejsCore || game.system;
-        const storageKey = `ejs-1-${ejsCore}-${game.title}-settings`;
-
-        window.EJS_defaultOptions = {
-          ...(window.EJS_defaultOptions || {}),
-          "input_player1_analog_dpad_mode": "1",
-          ...(cloudSettings || {}),
-        };
-
-        if (cloudControls && typeof cloudControls === "object") {
-          window.EJS_defaultControls = cloudControls;
-        }
-
-        const hasValidCustomControls =
-          cloudControls &&
-          typeof cloudControls === "object" &&
-          Object.keys(cloudControls).length > 0;
-
-        try {
-          const existingStored = localStorage.getItem(storageKey);
-          let parsedStored: any = null;
-          if (existingStored) {
-            try {
-              parsedStored = JSON.parse(existingStored);
-            } catch {}
-          }
-
-          if (hasValidCustomControls || (parsedStored && parsedStored.controlSettings && Object.keys(parsedStored.controlSettings).length > 0)) {
-            const mergedControlSettings = hasValidCustomControls
-              ? cloudControls
-              : parsedStored.controlSettings;
-
-            const mergedSettings = {
-              input_player1_analog_dpad_mode: "1",
-              ...(parsedStored?.settings || {}),
-              ...(cloudSettings || {}),
-            };
-
-            const mergedPayload = {
-              controlSettings: mergedControlSettings,
-              settings: mergedSettings,
-              cheats: parsedStored?.cheats || [],
-            };
-
-            localStorage.setItem(storageKey, JSON.stringify(mergedPayload));
-          } else {
-            // If neither cloud nor local has valid custom controls, remove any corrupt/empty mapping
-            if (existingStored && (!parsedStored?.controlSettings || Object.keys(parsedStored.controlSettings).length === 0)) {
-              localStorage.removeItem(storageKey);
-            }
-          }
-        } catch (storageErr) {
-          console.warn("[ControlSync] Pre-populating localStorage failed:", storageErr);
         }
 
         // Bridge: When Emscripten mounts /data/saves IDBFS, inject cloud memory card scoped strictly to this game

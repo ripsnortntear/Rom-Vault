@@ -26,11 +26,6 @@ import {
   getShaderPresetById,
   getNextShaderPreset,
 } from "@/lib/shaders";
-import {
-  extractLibretroStateFromGamepad,
-  diffGamepadStates,
-  type GamepadLike,
-} from "@/lib/xbox-controller";
 
 const BASE_PATH = "/roms";
 
@@ -153,36 +148,36 @@ export function EmulatorModal({
 
   const [gamepadConnected, setGamepadConnected] = useState<boolean>(false);
   const [gamepadId, setGamepadId] = useState<string | null>(null);
-  const gamepadActiveRef = useRef<boolean>(false);
-  const missedPadFramesRef = useRef<number>(0);
   const gamepadNeedsActivation = false;
 
-  // Top-level desktop gamepad polling bridge: forwards physical controller inputs
-  // into running EmulatorJS iframe via direct function call and postMessage
   useEffect(() => {
-    if (typeof window === "undefined" || !game || !game.playable) return;
+    if (typeof window === "undefined") return;
 
-    let prevLibretroState: Record<number, boolean> = {};
-    let animId: number;
+    const checkInitialPads = () => {
+      try {
+        if (navigator.getGamepads) {
+          const pads = navigator.getGamepads();
+          const first = Array.from(pads).find((p) => p && p.connected);
+          if (first) {
+            setGamepadConnected(true);
+            setGamepadId(first.id || "Controller");
+          }
+        }
+      } catch {}
+    };
 
     const handleConnected = (e: GamepadEvent) => {
-      gamepadActiveRef.current = true;
-      missedPadFramesRef.current = 0;
       setGamepadConnected(true);
-      setGamepadId(e.gamepad?.id || "Controller");
+      setGamepadId(e.gamepad.id || "Controller");
     };
 
     const handleDisconnected = () => {
       try {
-        const rawPads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const stillConnected = Array.from(rawPads).some((p) => Boolean(p && p.connected));
-        if (!stillConnected) {
-          gamepadActiveRef.current = false;
-          setGamepadConnected(false);
-          setGamepadId(null);
-        }
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const stillConnected = Array.from(pads).some((p) => p && p.connected);
+        setGamepadConnected(stillConnected);
+        if (!stillConnected) setGamepadId(null);
       } catch {
-        gamepadActiveRef.current = false;
         setGamepadConnected(false);
         setGamepadId(null);
       }
@@ -190,94 +185,13 @@ export function EmulatorModal({
 
     window.addEventListener("gamepadconnected", handleConnected);
     window.addEventListener("gamepaddisconnected", handleDisconnected);
-
-    const pollDesktopGamepad = () => {
-      let rawPads: ReadonlyArray<GamepadLike | null> = [];
-      try {
-        if (navigator.getGamepads) {
-          rawPads = navigator.getGamepads() as unknown as ReadonlyArray<GamepadLike | null>;
-        }
-      } catch {}
-
-      const pad = Array.from(rawPads).find((p) => Boolean(p && p.connected));
-
-      if (pad) {
-        missedPadFramesRef.current = 0;
-        if (!gamepadActiveRef.current) {
-          gamepadActiveRef.current = true;
-          setGamepadConnected(true);
-          setGamepadId(pad.id || "Controller");
-        }
-
-        const nextState = extractLibretroStateFromGamepad(pad);
-        const deltas = diffGamepadStates(prevLibretroState, nextState);
-        if (deltas.length > 0) {
-          prevLibretroState = nextState;
-          const iframeWin = iframeRef.current?.contentWindow as any;
-          for (const evt of deltas) {
-            const val = evt.pressed ? 1 : 0;
-            // 1. Direct same-origin call for zero-latency execution
-            try {
-              const gm = iframeWin?.EJS_emulator?.gameManager;
-              if (gm && typeof gm.simulateInput === "function") {
-                gm.simulateInput(0, evt.buttonIndex, val);
-              } else if (gm?.functions && typeof gm.functions.simulateInput === "function") {
-                gm.functions.simulateInput(0, evt.buttonIndex, val);
-              }
-            } catch {}
-
-            // 2. Cross-window postMessage fallback
-            try {
-              iframeWin?.postMessage(
-                {
-                  type: "VAULT_MP_P1_INPUT",
-                  buttonIndex: evt.buttonIndex,
-                  value: val,
-                },
-                "*"
-              );
-            } catch {}
-          }
-        }
-      } else {
-        missedPadFramesRef.current++;
-        // Allow a 120-frame (2-second) grace window before assuming disconnected
-        if (missedPadFramesRef.current > 120 && gamepadActiveRef.current) {
-          gamepadActiveRef.current = false;
-          setGamepadConnected(false);
-          setGamepadId(null);
-        }
-      }
-
-      animId = requestAnimationFrame(pollDesktopGamepad);
-    };
-
-    animId = requestAnimationFrame(pollDesktopGamepad);
+    checkInitialPads();
 
     return () => {
-      cancelAnimationFrame(animId);
       window.removeEventListener("gamepadconnected", handleConnected);
       window.removeEventListener("gamepaddisconnected", handleDisconnected);
-
-      const iframeWin = iframeRef.current?.contentWindow as any;
-      if (iframeWin) {
-        for (const [btnStr, pressed] of Object.entries(prevLibretroState)) {
-          if (pressed) {
-            try {
-              iframeWin.postMessage(
-                {
-                  type: "VAULT_MP_P1_INPUT",
-                  buttonIndex: Number(btnStr),
-                  value: 0,
-                },
-                "*"
-              );
-            } catch {}
-          }
-        }
-      }
     };
-  }, [game]);
+  }, []);
 
   const resetHideTimer = useCallback(() => {
     if (hideBarsTimerRef.current) {
@@ -543,61 +457,19 @@ export function EmulatorModal({
       if (e.key === "F11") {
         e.preventDefault();
         toggleFullscreen();
-        return;
       } else if (e.key === "Escape" && !document.fullscreenElement && !(document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement) {
         handleExit();
-        return;
-      }
-
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-
-      if (iframeRef.current?.contentWindow) {
-        try {
-          iframeRef.current.contentWindow.postMessage(
-            {
-              type: "VAULT_FORWARD_KEY",
-              eventType: e.type,
-              key: e.key,
-              code: e.code,
-              keyCode: e.keyCode || e.which,
-            },
-            "*"
-          );
-        } catch {}
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-
-      if (iframeRef.current?.contentWindow) {
-        try {
-          iframeRef.current.contentWindow.postMessage(
-            {
-              type: "VAULT_FORWARD_KEY",
-              eventType: e.type,
-              key: e.key,
-              code: e.code,
-              keyCode: e.keyCode || e.which,
-            },
-            "*"
-          );
-        } catch {}
       }
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
 
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
     };
   }, [handleExit, toggleFullscreen]);
 
@@ -706,16 +578,6 @@ export function EmulatorModal({
             <span><strong className="text-zinc-200">1 / 3</strong> L2 / R2</span>
             <span><strong className="text-zinc-200">Enter</strong> Start</span>
             <span><strong className="text-zinc-200">Backspace</strong> Select</span>
-          </>
-        );
-      case "mame":
-      case "neogeo":
-        return (
-          <>
-            <span><strong className="text-zinc-200">Arrows</strong> Joystick</span>
-            <span><strong className="text-zinc-200">Z / X / A / S</strong> A / B / C / D Buttons</span>
-            <span><strong className="text-zinc-200">R-Shift</strong> Insert Coin</span>
-            <span><strong className="text-zinc-200">Enter</strong> Player 1 Start</span>
           </>
         );
       default:
@@ -1172,12 +1034,6 @@ export function EmulatorModal({
         </div>
 
         <div
-          onClick={() => {
-            try {
-              iframeRef.current?.focus();
-              iframeRef.current?.contentWindow?.focus();
-            } catch {}
-          }}
           className={`bg-black flex items-center justify-center ${
             isFullscreen
               ? "absolute inset-0 w-full h-full z-0"
@@ -1193,10 +1049,6 @@ export function EmulatorModal({
               className="w-full h-full border-0"
               allow="autoplay; fullscreen; gamepad; cross-origin-isolated"
               onLoad={() => {
-                try {
-                  iframeRef.current?.focus();
-                  iframeRef.current?.contentWindow?.focus();
-                } catch {}
                 if (iframeRef.current?.contentWindow) {
                   try {
                     iframeRef.current.contentWindow.postMessage(
