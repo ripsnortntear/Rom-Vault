@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         status: "pending_approval",
-        message: "Your email has been verified! Your account is now pending administrator approval (cfw34683). An admin will review and approve or deny your account within 24 hours. You will receive an automated email once a decision is made.",
+        message: "Your email has been verified! Your account is now pending administrator approval. An admin will review and approve or deny your account within 24 hours. You will receive an automated email once a decision is made.",
       });
     }
 

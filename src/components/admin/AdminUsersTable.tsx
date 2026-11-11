@@ -285,7 +285,7 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                 </span>
               </div>
               <div className="text-xs text-amber-200/90 mt-0.5">
-                All signups must be reviewed and approved by administrator cfw34683 within 24 hours. Automated emails will be dispatched to users upon decision.
+                All signups must be reviewed and approved by an administrator within 24 hours. Automated emails will be dispatched to users upon decision.
               </div>
             </div>
           </div>

@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 
     if (user.account_status === "pending_approval") {
       return NextResponse.json(
-        { error: "Your email is verified, but your account is pending administrator approval (cfw34683). An admin will review and approve or deny your account within 24 hours. You will receive an automated confirmation email once approved." },
+        { error: "Your email is verified, but your account is pending administrator approval. An admin will review and approve or deny your account within 24 hours. You will receive an automated confirmation email once approved." },
         { status: 403 }
       );
     }

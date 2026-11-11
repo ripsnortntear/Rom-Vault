@@ -100,7 +100,7 @@ export default async function AdminOverviewPage() {
                 </span>
               </div>
               <div className="text-xs text-amber-200/90">
-                All signups must be approved by administrator cfw34683 within 24 hours. Automated emails will be dispatched to users upon decision.
+                All signups must be approved by an administrator within 24 hours. Automated emails will be dispatched to users upon decision.
               </div>
             </div>
           </div>

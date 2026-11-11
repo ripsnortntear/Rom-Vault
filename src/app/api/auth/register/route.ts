@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: "Account created successfully! Please check your email to verify your address. Once verified, an administrator (cfw34683) will review and approve your account within 24 hours.",
+        message: "Account created successfully! Please check your email to verify your address. Once verified, an administrator will review and approve your account within 24 hours.",
       },
       { status: 201 }
     );

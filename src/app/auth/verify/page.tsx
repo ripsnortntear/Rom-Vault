@@ -17,7 +17,7 @@ function VerifyContent(): React.ReactElement {
     if (statusParam === "pending_approval") {
       setState("pending_approval");
       setMessage(
-        "Your email address has been verified! Your account is now pending administrator approval (cfw34683). An admin will review and approve or deny your account within 24 hours. You will receive an automated email as soon as a decision is made."
+        "Your email address has been verified! Your account is now pending administrator approval. An admin will review and approve or deny your account within 24 hours. You will receive an automated email as soon as a decision is made."
       );
       return;
     }
@@ -105,7 +105,7 @@ function VerifyContent(): React.ReactElement {
               <span>Pending Administrator Approval</span>
             </div>
             <p className="text-sm text-zinc-300 mb-6 leading-relaxed">
-              Your email has been verified successfully! All new registrations must be approved by the administrator (<strong>cfw34683</strong>) before access is granted. An admin will review and approve or deny your account within <strong>24 hours</strong>.
+              Your email has been verified successfully! All new registrations must be approved by an administrator before access is granted. An admin will review and approve or deny your account within <strong>24 hours</strong>.
             </p>
             <p className="text-xs text-zinc-400 mb-6 bg-zinc-950/60 p-3 rounded-xl border border-white/5">
               📧 You will receive an automated email confirmation as soon as your account is reviewed.

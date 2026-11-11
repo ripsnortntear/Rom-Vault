@@ -39,18 +39,18 @@ export async function sendVerificationEmail(
 ): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
   const verifyUrl = `${APP_URL}/auth/verify?token=${encodeURIComponent(verificationToken)}`;
 
-  const subject = "Verify your ROM Vault account";
+  const subject = "Verify your OldsmarChaos account";
 
   const plainText = `Hello ${username},
 
-Welcome to ROM Vault and the OldsmarChaos platform! Please verify your email address.
+Welcome to the OldsmarChaos platform! Please verify your email address.
 
 Click the link below or copy and paste it into your browser:
 ${verifyUrl}
 
-This verification link will expire in 24 hours. Once your email is verified, your account registration will be reviewed by administrator cfw34683 for approval within 24 hours. You will receive an automated email as soon as a decision is made.
+This verification link will expire in 24 hours. Once your email is verified, your account registration will be reviewed by an administrator for approval within 24 hours. You will receive an automated email as soon as a decision is made.
 
-If you did not create a ROM Vault account, you can safely ignore this email.
+If you did not create an OldsmarChaos account, you can safely ignore this email.
 
 Best regards,
 The OldsmarChaos Team
@@ -80,24 +80,24 @@ ${APP_URL}
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">ROM <span style="color: #fca5a5;">VAULT</span></div>
+      <div class="logo">OLDSMAR<span style="color: #fca5a5;">CHAOS</span></div>
     </div>
     <div class="content">
       <h1>Verify Email Address</h1>
       <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
-      <p>Welcome to <strong>OldsmarChaos &amp; ROM Vault</strong>! To proceed with your account registration, please verify your email address below.</p>
+      <p>Welcome to <strong>OldsmarChaos</strong>! To proceed with your account registration, please verify your email address below.</p>
       <div class="button-container">
         <a href="${verifyUrl}" class="btn" target="_blank">Verify Email Address</a>
       </div>
       <p>Or paste this link into your browser:</p>
       <div class="link-box">${verifyUrl}</div>
       <p style="margin-top: 24px; font-size: 13px; color: #a1a1aa; line-height: 1.5;">
-        <strong>Next Step:</strong> Once verified, your account will be reviewed by administrator <strong>cfw34683</strong> for approval (typically within 24 hours). You will receive an automated email notification once approved.
+        <strong>Next Step:</strong> Once verified, your account will be reviewed by an administrator for approval (typically within 24 hours). You will receive an automated email notification once approved.
       </p>
       <p style="margin-top: 12px; font-size: 12px; color: #71717a;">This verification link is valid for 24 hours. If you did not create this account, please disregard this message.</p>
     </div>
     <div class="footer">
-      ROM Vault &bull; Multi-Console Retro Archive &bull; <a href="${APP_URL}" style="color: #ef4444; text-decoration: none;">ROM Vault</a>
+      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="https://www.oldsmarchaos.com" style="color: #ef4444; text-decoration: none;">oldsmarchaos.com</a>
     </div>
   </div>
 </body>
@@ -231,7 +231,7 @@ export async function sendAccountApprovedEmail(
 
   const plainText = `Hello ${username},
 
-Great news! Your OldsmarChaos account registration has been reviewed and approved by administrator cfw34683.
+Great news! Your OldsmarChaos account registration has been reviewed and approved by an administrator.
 
 You can now log in to access the ROM Vault, Minecraft server, Jellyfin media, and other platform services:
 ${loginUrl}
@@ -240,7 +240,6 @@ If you have any questions or encounter any issues, please reply to this email or
 
 Best regards,
 OldsmarChaos Administration
-cfw34683
 `;
 
   const html = `
@@ -271,7 +270,7 @@ cfw34683
     <div class="content">
       <div class="badge">Registration Approved</div>
       <h1>Welcome to the Vault, ${escapeHtml(username)}!</h1>
-      <p>Your account request has been reviewed and <strong>approved</strong> by administrator <strong>cfw34683</strong>.</p>
+      <p>Your account request has been reviewed and <strong>approved</strong> by an administrator.</p>
       <p>Your access is now fully active across the ROM Vault, dedicated Minecraft Server, and platform tools.</p>
       <div class="button-container">
         <a href="${loginUrl}" class="btn" target="_blank">Sign In Now</a>
@@ -320,7 +319,7 @@ export async function sendAccountDeniedEmail(
 
 Thank you for your interest in OldsmarChaos.
 
-Your account registration request was reviewed by administrator cfw34683 and was not approved at this time.
+Your account registration request was reviewed by an administrator and was not approved at this time.
 ${reason ? `Reason: ${reason}\n` : ""}
 If you believe this decision was made in error or have additional questions, please reach out to our team at support@oldsmarchaos.com.
 
@@ -354,7 +353,7 @@ OldsmarChaos Administration
     <div class="content">
       <h1>Account Registration Status</h1>
       <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
-      <p>Your request to register an account on the OldsmarChaos platform was reviewed by administrator <strong>cfw34683</strong> and was not approved at this time.</p>
+      <p>Your request to register an account on the OldsmarChaos platform was reviewed by an administrator and was not approved at this time.</p>
       ${reason ? `<div class="reason-box"><strong>Administrator Note:</strong> ${escapeHtml(reason)}</div>` : ""}
       <p>If you believe this decision was made in error or wish to appeal, please contact us at <a href="mailto:support@oldsmarchaos.com" style="color: #ef4444;">support@oldsmarchaos.com</a>.</p>
     </div>
