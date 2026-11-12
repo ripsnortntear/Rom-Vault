@@ -158,3 +158,94 @@ export async function syncJellyfinUser(
     return { success: false, error: err.message || String(err) };
   }
 }
+
+/**
+ * Generate a valid Jellyfin user session token using QuickConnect flow
+ */
+export async function getJellyfinSsoSession(username: string): Promise<{
+  success: boolean;
+  serverId?: string;
+  userId?: string;
+  accessToken?: string;
+  error?: string;
+}> {
+  try {
+    if (!JELLYFIN_API_KEY) {
+      return { success: false, error: "Jellyfin API key is not configured" };
+    }
+
+    const cleanUsername = username.trim().toLowerCase();
+    const users = await getJellyfinUsers();
+    let targetUser = users.find((u) => u.Name.toLowerCase() === cleanUsername);
+
+    if (!targetUser) {
+      const syncRes = await syncJellyfinUser(username);
+      if (!syncRes.success || !syncRes.userId) {
+        return { success: false, error: "Failed to provision user in Jellyfin" };
+      }
+      const updatedUsers = await getJellyfinUsers();
+      targetUser = updatedUsers.find((u) => u.Name.toLowerCase() === cleanUsername);
+    }
+
+    if (!targetUser) {
+      return { success: false, error: "User not found in Jellyfin" };
+    }
+
+    // 1. Initiate QuickConnect
+    const initRes = await fetch(`${JELLYFIN_URL}/QuickConnect/Initiate`, {
+      method: "POST",
+      headers: {
+        Authorization: 'MediaBrowser Client="Jellyfin Web", Device="Chrome", DeviceId="oldsmar-sso", Version="10.8.0"',
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!initRes.ok) {
+      throw new Error(`QuickConnect Initiate failed: ${initRes.status}`);
+    }
+
+    const initData = await initRes.json();
+    const { Secret, Code } = initData;
+
+    // 2. Authorize QuickConnect using admin token
+    const authRes = await fetch(
+      `${JELLYFIN_URL}/QuickConnect/Authorize?code=${encodeURIComponent(Code)}&userId=${encodeURIComponent(targetUser.Id)}`,
+      {
+        method: "POST",
+        headers: getHeaders(),
+        cache: "no-store",
+      }
+    );
+
+    if (!authRes.ok) {
+      throw new Error(`QuickConnect Authorize failed: ${authRes.status}`);
+    }
+
+    // 3. Authenticate with QuickConnect to retrieve access token
+    const tokenRes = await fetch(`${JELLYFIN_URL}/Users/AuthenticateWithQuickConnect`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: 'MediaBrowser Client="Jellyfin Web", Device="Chrome", DeviceId="oldsmar-sso", Version="10.8.0"',
+      },
+      body: JSON.stringify({ Secret }),
+      cache: "no-store",
+    });
+
+    if (!tokenRes.ok) {
+      throw new Error(`AuthenticateWithQuickConnect failed: ${tokenRes.status}`);
+    }
+
+    const tokenData = await tokenRes.json();
+    return {
+      success: true,
+      serverId: tokenData.ServerId || "0659c9d0372d4749b0b18b137f7c7d23",
+      userId: targetUser.Id,
+      accessToken: tokenData.AccessToken,
+    };
+  } catch (err: any) {
+    console.error(`[Jellyfin SSO Error for "${username}"]:`, err.message || err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
