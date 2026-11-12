@@ -72,23 +72,24 @@ function RegisterForm(): React.ReactElement {
 
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-red-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-600/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10">
         <div className="flex flex-col items-center mb-8 text-center">
           <Link
             href="/"
             className="flex items-center gap-3 group transition transform hover:scale-[1.02] mb-3"
+            title="OldsmarChaos Portal Home"
           >
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/40">
-              <Gamepad2 className="w-7 h-7 text-white" />
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-cyan-400/30 text-2xl font-black text-white">
+              ⚡
             </div>
-            <span className="text-2xl font-black tracking-tight text-white">
-              ROM <span className="text-red-500">VAULT</span>
+            <span className="text-2xl font-black tracking-wider text-white font-mono">
+              OLDSMAR<span className="text-cyan-400">CHAOS</span>
             </span>
           </Link>
-          <p className="text-xs text-zinc-400">
-            Create an account to browse thousands of retro classics &amp; save games to the cloud
+          <p className="text-xs text-zinc-400 max-w-sm">
+            Create a unified account for ROM Vault, Forums, Minecraft, Jellyfin &amp; fleet services
           </p>
         </div>
 
@@ -103,7 +104,7 @@ function RegisterForm(): React.ReactElement {
                 {successInfo}
               </p>
               <div className="bg-zinc-950 p-4 rounded-xl border border-white/10 text-xs text-zinc-400 mb-6 text-left">
-                An activation link was sent to <strong className="text-zinc-200">{email}</strong> via Zoho Mail. Click the link in the message to activate your account.
+                An activation link was sent to <strong className="text-zinc-200">{email}</strong>. Click the link in the message to activate your account.
               </div>
               <Link
                 href={loginHref}
@@ -230,7 +231,7 @@ function RegisterForm(): React.ReactElement {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-600/30 transition transform active:scale-98 cursor-pointer disabled:opacity-50"
+                  className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white shadow-lg shadow-cyan-600/25 transition transform active:scale-98 cursor-pointer disabled:opacity-50"
                 >
                   {isLoading ? (
                     <>
@@ -239,7 +240,7 @@ function RegisterForm(): React.ReactElement {
                     </>
                   ) : (
                     <>
-                      <span>Register</span>
+                      <span>Create OldsmarChaos Account</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -250,7 +251,7 @@ function RegisterForm(): React.ReactElement {
                 Already have an account?{" "}
                 <Link
                   href={loginHref}
-                  className="font-bold text-red-400 hover:text-red-300 transition underline underline-offset-4"
+                  className="font-bold text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4"
                 >
                   Sign In
                 </Link>
@@ -266,7 +267,7 @@ function RegisterForm(): React.ReactElement {
           >
             <span>&larr;</span> Return to OldsmarChaos Home
           </a>
-          <span>ROM Vault &bull; Multi-Console Retro Archive</span>
+          <span>OldsmarChaos Unified Authentication &bull; Chaos in Harmony</span>
         </div>
       </div>
     </div>

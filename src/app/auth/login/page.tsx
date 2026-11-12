@@ -63,22 +63,26 @@ function LoginForm(): React.ReactElement {
         <Link
           href="/"
           className="flex items-center gap-3 group transition transform hover:scale-[1.02] mb-3"
+          title="OldsmarChaos Portal Home"
         >
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-lg shadow-red-600/40">
-            <Gamepad2 className="w-7 h-7 text-white" />
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-cyan-400/30 text-2xl font-black text-white">
+            ⚡
           </div>
-          <span className="text-2xl font-black tracking-tight text-white">
-            ROM <span className="text-red-500">VAULT</span>
+          <span className="text-2xl font-black tracking-wider text-white font-mono">
+            OLDSMAR<span className="text-cyan-400">CHAOS</span>
           </span>
         </Link>
-        <p className="text-xs text-zinc-400">
-          Sign in to access your retro gaming library &amp; cloud saves
+        <p className="text-xs text-zinc-400 max-w-sm">
+          Unified Single Sign-On across OldsmarChaos, ROM Vault, Forums &amp; fleet services
         </p>
       </div>
 
       {/* Card */}
       <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
-        <h1 className="text-xl font-bold text-white mb-6">Sign In</h1>
+        <h1 className="text-xl font-bold text-white mb-1.5">Sign In</h1>
+        <p className="text-xs text-zinc-400 mb-6">
+          Enter your unified account credentials to continue
+        </p>
 
         {/* Contextual Desktop Browser & Acceleration Warning Banners */}
         {mounted && !isMobile && (
@@ -187,7 +191,7 @@ function LoginForm(): React.ReactElement {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-600/30 transition transform active:scale-98 cursor-pointer disabled:opacity-50"
+            className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-600 via-blue-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white shadow-lg shadow-cyan-600/25 transition transform active:scale-98 cursor-pointer disabled:opacity-50"
           >
             {isLoading ? (
               <>
@@ -196,7 +200,7 @@ function LoginForm(): React.ReactElement {
               </>
             ) : (
               <>
-                <span>Sign In</span>
+                <span>Sign In to OldsmarChaos</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -207,7 +211,7 @@ function LoginForm(): React.ReactElement {
           Don&apos;t have an account?{" "}
           <Link
             href={searchParams.get("redirect") ? `/auth/register?redirect=${encodeURIComponent(searchParams.get("redirect")!)}` : "/auth/register"}
-            className="font-bold text-red-400 hover:text-red-300 transition underline underline-offset-4"
+            className="font-bold text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4"
           >
             Create Account
           </Link>
@@ -221,7 +225,7 @@ function LoginForm(): React.ReactElement {
         >
           <span>&larr;</span> Return to OldsmarChaos Home
         </a>
-        <span>ROM Vault &bull; Multi-Console Retro Archive</span>
+        <span>OldsmarChaos Unified Authentication &bull; Chaos in Harmony</span>
       </div>
     </div>
   );
@@ -230,7 +234,7 @@ function LoginForm(): React.ReactElement {
 export default function LoginPage(): React.ReactElement {
   return (
     <div className="min-h-screen bg-[#070709] text-zinc-100 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-red-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-600/10 rounded-full blur-[140px] pointer-events-none" />
       <Suspense fallback={<Loader2 className="w-8 h-8 text-red-500 animate-spin" />}>
         <LoginForm />
       </Suspense>
