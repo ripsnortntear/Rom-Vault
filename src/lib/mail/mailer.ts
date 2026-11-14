@@ -1,12 +1,20 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com/roms";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.oldsmarchaos.com/roms";
 const SMTP_HOST = process.env.SMTP_HOST || "smtp.zoho.com";
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_SECURE = process.env.SMTP_SECURE === "true" || SMTP_PORT === 465;
-const SMTP_USER = process.env.SMTP_USER || "support@your-domain.com";
+const SMTP_USER = process.env.SMTP_USER || "support@oldsmarchaos.com";
 const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || `"ROM Vault Support" <${SMTP_USER}>`;
+const SMTP_FROM = process.env.SMTP_FROM || `"OldsmarChaos Support" <${SMTP_USER}>`;
+
+export const ADMIN_NOTIFICATION_EMAILS: string[] = (
+  process.env.ADMIN_NOTIFICATION_EMAILS ||
+  "cfw34683@gmail.com,admin@oldsmarchaos.com"
+)
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 // Lazy-loaded transporter
 let transporter: Transporter | null = null;
@@ -381,6 +389,146 @@ OldsmarChaos Administration
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`[ZohoMailer] Failed sending account denied email to ${toEmail}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Send an alert to administrators when a new user registers and requires review/approval.
+ * Dispatches to both cfw34683@gmail.com and admin@oldsmarchaos.com.
+ * Strictly avoids putting the administrator's name anywhere in the email.
+ */
+export async function sendAdminRegistrationNotificationEmail(newUser: {
+  username: string;
+  email: string;
+  registeredAt?: Date | string;
+  ipAddress?: string;
+  status?: string;
+  isEmailVerified?: boolean;
+}): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
+  const approvalUrl = `${APP_URL}/admin/users`;
+  const statusText = newUser.status || (newUser.isEmailVerified ? "Email Confirmed - Ready for Approval" : "Pending Administrator Approval");
+  const subject = newUser.isEmailVerified
+    ? `[OldsmarChaos] Account Email Verified - Ready for Approval: ${newUser.username}`
+    : `[OldsmarChaos] New Account Registration - Approval Required: ${newUser.username}`;
+
+  const regDate = newUser.registeredAt
+    ? new Date(newUser.registeredAt).toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        dateStyle: "full",
+        timeStyle: "medium",
+      }) + " EST"
+    : new Date().toLocaleString("en-US", { timeZone: "America/New_York" }) + " EST";
+
+  const plainText = `Hello,
+
+A new user account has registered on the OldsmarChaos platform and requires administrator review.
+
+Account Details:
+- Username: ${newUser.username}
+- Email Address: ${newUser.email}
+- Registered At: ${regDate}
+- IP Address: ${newUser.ipAddress || "Unknown"}
+- Status: ${statusText}
+
+To review, approve, or deny this account, visit the OldsmarChaos User Management dashboard:
+${approvalUrl}
+
+Best regards,
+OldsmarChaos Automated Administration
+https://www.oldsmarchaos.com
+`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(subject)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #070709; color: #e4e4e7; margin: 0; padding: 24px; }
+    .container { max-width: 580px; margin: 0 auto; background-color: #121216; border: 1px solid rgba(0, 240, 255, 0.25); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); }
+    .header { background: linear-gradient(135deg, #090e1a 0%, #0369a1 50%, #00f0ff 100%); padding: 28px; text-align: center; }
+    .logo { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff; text-transform: uppercase; }
+    .content { padding: 32px 28px; }
+    h1 { font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 0; margin-bottom: 8px; }
+    .badge { display: inline-block; background: rgba(0, 240, 255, 0.15); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.35); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; margin-bottom: 20px; }
+    p { font-size: 14px; line-height: 1.6; color: #a1a1aa; margin-bottom: 20px; }
+    .info-card { background: #090a0f; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 18px; margin: 20px 0; }
+    .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 13px; }
+    .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .info-label { color: #71717a; font-weight: 500; }
+    .info-val { color: #f4f4f5; font-weight: 600; }
+    .button-container { text-align: center; margin: 30px 0 20px 0; }
+    .btn { display: inline-block; background: linear-gradient(135deg, #00f0ff 0%, #0284c7 100%); color: #070913 !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 32px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 240, 255, 0.35); }
+    .link-box { word-break: break-all; background-color: #070709; border: 1px solid rgba(255, 255, 255, 0.08); padding: 10px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #00f0ff; text-align: center; }
+    .footer { border-top: 1px solid rgba(255, 255, 255, 0.08); padding: 20px 28px; font-size: 12px; color: #71717a; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">OLDSMAR<span style="color: #070913;">CHAOS</span></div>
+    </div>
+    <div class="content">
+      <div class="badge">Approval Required</div>
+      <h1>New User Registration</h1>
+      <p>A new user account has registered on the OldsmarChaos platform and requires administrator approval.</p>
+      
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-label">Username:</span>
+          <span class="info-val" style="color: #00f0ff;">${escapeHtml(newUser.username)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Email Address:</span>
+          <span class="info-val">${escapeHtml(newUser.email)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Registered At:</span>
+          <span class="info-val">${escapeHtml(regDate)}</span>
+        </div>
+        ${newUser.ipAddress ? `
+        <div class="info-row">
+          <span class="info-label">IP Address:</span>
+          <span class="info-val" style="font-family: monospace;">${escapeHtml(newUser.ipAddress)}</span>
+        </div>` : ""}
+        <div class="info-row">
+          <span class="info-label">Account Status:</span>
+          <span class="info-val" style="color: #fbbf24;">${escapeHtml(statusText)}</span>
+        </div>
+      </div>
+
+      <div class="button-container">
+        <a href="${approvalUrl}" class="btn" target="_blank">Review &amp; Approve Account</a>
+      </div>
+      <p style="font-size: 12px; color: #71717a; text-align: center; margin-bottom: 6px;">Direct Dashboard Link:</p>
+      <div class="link-box">${approvalUrl}</div>
+    </div>
+    <div class="footer">
+      OldsmarChaos Automated Administration &bull; <a href="https://www.oldsmarchaos.com" style="color: #00f0ff; text-decoration: none;">oldsmarchaos.com</a>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+  if (!SMTP_PASS) {
+    console.warn(`[ZohoMailer] SMTP_PASS not set. Simulated admin notification email for ${newUser.username} to ${ADMIN_NOTIFICATION_EMAILS.join(", ")}.`);
+    return { success: true, simulated: true };
+  }
+
+  try {
+    const info = await getTransporter().sendMail({
+      from: SMTP_FROM,
+      to: ADMIN_NOTIFICATION_EMAILS,
+      subject,
+      text: plainText,
+      html,
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`[ZohoMailer] Failed sending admin registration notification email to ${ADMIN_NOTIFICATION_EMAILS.join(", ")}:`, error);
     throw error;
   }
 }

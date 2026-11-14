@@ -11,6 +11,8 @@ vi.mock("@/lib/mail/mailer", () => ({
   sendVerificationEmail: vi.fn().mockResolvedValue({ success: true }),
   sendAccountApprovedEmail: vi.fn().mockResolvedValue({ success: true }),
   sendAccountDeniedEmail: vi.fn().mockResolvedValue({ success: true }),
+  sendAdminRegistrationNotificationEmail: vi.fn().mockResolvedValue({ success: true }),
+  ADMIN_NOTIFICATION_EMAILS: ["cfw34683@gmail.com", "admin@oldsmarchaos.com"],
 }));
 
 // Mock Jellyfin & FileBot sync
@@ -29,6 +31,10 @@ vi.mock("@/lib/auth/rate-limit", () => ({
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+vi.mock("@/lib/memory-cards", () => ({
+  ensureDefaultCard: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock crypto tokens
 vi.mock("@/lib/auth/crypto", async (importOriginal) => {
   const actual: any = await importOriginal();
@@ -45,7 +51,12 @@ vi.mock("@/lib/auth/crypto", async (importOriginal) => {
 });
 
 import { query, execute } from "@/lib/db";
-import { sendAccountApprovedEmail, sendAccountDeniedEmail } from "@/lib/mail/mailer";
+import {
+  sendAccountApprovedEmail,
+  sendAccountDeniedEmail,
+  sendAdminRegistrationNotificationEmail,
+  ADMIN_NOTIFICATION_EMAILS,
+} from "@/lib/mail/mailer";
 import { approveUser, denyUser, getPendingUsersCount } from "@/lib/community";
 
 describe("User Account Approval & Administrator Gate Suite", () => {
@@ -150,6 +161,42 @@ describe("User Account Approval & Administrator Gate Suite", () => {
         "spam@example.com",
         "spambot9000",
         denyReason
+      );
+    });
+  });
+
+  describe("Admin Registration Notification Hook", () => {
+    it("configures dual admin email recipients (cfw34683@gmail.com and admin@oldsmarchaos.com)", () => {
+      expect(ADMIN_NOTIFICATION_EMAILS).toContain("cfw34683@gmail.com");
+      expect(ADMIN_NOTIFICATION_EMAILS).toContain("admin@oldsmarchaos.com");
+      expect(ADMIN_NOTIFICATION_EMAILS.length).toBe(2);
+    });
+
+    it("verifies registration route invokes sendAdminRegistrationNotificationEmail with new user details", async () => {
+      const { POST: registerPost } = await import("@/app/api/auth/register/route");
+
+      (query as any).mockResolvedValueOnce([]); // No existing user
+      (query as any).mockResolvedValueOnce([{ count: 1 }]); // Has admin already
+      (execute as any).mockResolvedValue({ affectedRows: 1 });
+
+      const req = new Request("http://localhost/roms/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: "newgamer2026",
+          email: "gamer@example.com",
+          password: "SecurePassword123!",
+        }),
+      });
+
+      const res = await registerPost(req as any);
+      expect(res.status).toBe(201);
+
+      expect(sendAdminRegistrationNotificationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          username: "newgamer2026",
+          email: "gamer@example.com",
+        })
       );
     });
   });

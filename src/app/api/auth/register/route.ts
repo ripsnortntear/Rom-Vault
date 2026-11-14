@@ -10,7 +10,7 @@ import {
   generateUUID,
 } from "@/lib/auth/crypto";
 import { checkRateLimit, recordRateLimitEvent, getClientIp } from "@/lib/auth/rate-limit";
-import { sendVerificationEmail } from "@/lib/mail/mailer";
+import { sendVerificationEmail, sendAdminRegistrationNotificationEmail } from "@/lib/mail/mailer";
 import { ensureDefaultCard } from "@/lib/memory-cards";
 import { syncJellyfinUser } from "@/lib/jellyfin";
 import { syncFilebotUser } from "@/lib/filebot";
@@ -168,6 +168,18 @@ export async function POST(req: NextRequest) {
         },
         { status: 201 }
       );
+    }
+
+    // 7. Dispatch approval alert emails to both cfw34683@gmail.com and admin@oldsmarchaos.com
+    try {
+      await sendAdminRegistrationNotificationEmail({
+        username: cleanUsername,
+        email: normalizedEmail,
+        registeredAt: new Date(),
+        ipAddress: ip,
+      });
+    } catch (adminMailErr) {
+      console.error("[Register] Failed to send admin registration notification email:", adminMailErr);
     }
 
     return NextResponse.json(

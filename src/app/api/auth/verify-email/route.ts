@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, execute } from "@/lib/db";
 import { hashToken } from "@/lib/auth/crypto";
+import { sendAdminRegistrationNotificationEmail } from "@/lib/mail/mailer";
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,9 +37,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Check user role and username
-    const userRows = await query<{ id: string; role: string; username: string }>(
-      "SELECT id, role, username FROM users WHERE id = ?",
+    // Check user role, username, and email
+    const userRows = await query<{ id: string; role: string; username: string; email: string }>(
+      "SELECT id, role, username, email FROM users WHERE id = ?",
       [tokenRecord.user_id]
     );
     const targetUser = userRows[0];
@@ -56,6 +57,19 @@ export async function GET(req: NextRequest) {
     await execute("DELETE FROM auth_tokens WHERE id = ?", [tokenRecord.id]);
 
     if (nextStatus === "pending_approval") {
+      if (targetUser) {
+        try {
+          await sendAdminRegistrationNotificationEmail({
+            username: targetUser.username,
+            email: targetUser.email || "",
+            registeredAt: new Date(),
+            isEmailVerified: true,
+          });
+        } catch (adminErr) {
+          console.error("[VerifyEmail GET] Admin notification error:", adminErr);
+        }
+      }
+
       return NextResponse.redirect(
         new URL("/roms/auth/verify?status=pending_approval", req.url)
       );
@@ -100,8 +114,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Verification token has expired. Please sign up or request a new one." }, { status: 400 });
     }
 
-    const userRows = await query<{ id: string; role: string; username: string }>(
-      "SELECT id, role, username FROM users WHERE id = ?",
+    const userRows = await query<{ id: string; role: string; username: string; email: string }>(
+      "SELECT id, role, username, email FROM users WHERE id = ?",
       [tokenRecord.user_id]
     );
     const targetUser = userRows[0];
@@ -117,6 +131,19 @@ export async function POST(req: NextRequest) {
     await execute("DELETE FROM auth_tokens WHERE id = ?", [tokenRecord.id]);
 
     if (nextStatus === "pending_approval") {
+      if (targetUser) {
+        try {
+          await sendAdminRegistrationNotificationEmail({
+            username: targetUser.username,
+            email: targetUser.email || "",
+            registeredAt: new Date(),
+            isEmailVerified: true,
+          });
+        } catch (adminErr) {
+          console.error("[VerifyEmail POST] Admin notification error:", adminErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         status: "pending_approval",

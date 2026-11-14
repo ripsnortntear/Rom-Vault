@@ -43,6 +43,7 @@ describe("Cross-Device Favorites Synchronization Suite", () => {
         download_count_today: 0,
       },
     ]);
+    mockQuery.mockResolvedValueOnce([]);
 
     const req = new NextRequest("http://localhost/roms/api/users/me");
     const res = await getMe(req);
