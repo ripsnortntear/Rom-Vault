@@ -1287,20 +1287,6 @@ export function RetroLibraryClient({
                             {isRoot && (
                               <>
                                 <a
-                                  href="/ai/"
-                                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
-                                  title="Root Only"
-                                >
-                                  <span className="text-sm">🤖</span>
-                                  <div>
-                                    <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
-                                      WebsiteAI
-                                      <span className="text-[8px] bg-pink-500/20 text-pink-400 border border-pink-500/30 px-1 rounded font-mono">ROOT</span>
-                                    </div>
-                                    <div className="text-[9px] text-zinc-400 leading-tight">Website AI</div>
-                                  </div>
-                                </a>
-                                <a
                                   href="/operations"
                                   className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
                                   title="Root Only"
