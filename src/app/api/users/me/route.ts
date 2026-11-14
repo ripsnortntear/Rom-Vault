@@ -18,9 +18,26 @@ export async function GET(req: NextRequest) {
 
     const profile = profiles[0];
 
+    const seedboxRows = await query<{ id: string; port: number; status: string }>(
+      "SELECT id, port, status FROM user_seedboxes WHERE user_id = ? AND status = 'active' LIMIT 1",
+      [session.user.id]
+    );
+    const activeSeedbox = seedboxRows[0] || null;
+    const isRootAdmin = session.user.username.toLowerCase() === "cfw34683";
+    const hasSeedbox = session.user.role === "admin" && (isRootAdmin || !!activeSeedbox);
+
     return NextResponse.json({
       authenticated: true,
-      user: session.user,
+      user: {
+        ...session.user,
+        has_seedbox: hasSeedbox,
+        hasSeedbox: hasSeedbox,
+        seedbox: activeSeedbox
+          ? { port: activeSeedbox.port, status: activeSeedbox.status }
+          : isRootAdmin
+          ? { port: 8090, status: "active" }
+          : null,
+      },
       profile: profile
         ? {
             displayName: profile.display_name,

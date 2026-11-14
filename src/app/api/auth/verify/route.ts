@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
+import { query } from "@/lib/db";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
@@ -28,6 +29,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const requiredUser = searchParams.get("user");
     if (requiredUser && session.user.username.toLowerCase() !== requiredUser.toLowerCase()) {
       return new NextResponse(null, { status: 403, headers });
+    }
+
+    // Enforce seedbox authorization: ONLY admins with an active seedbox or primary root admin (cfw34683)
+    const requireSeedbox = searchParams.get("seedbox") === "true";
+    if (requireSeedbox) {
+      if (session.user.role !== "admin") {
+        return new NextResponse(null, { status: 403, headers });
+      }
+      const isRootAdmin = session.user.username.toLowerCase() === "cfw34683";
+      if (!isRootAdmin) {
+        const seedboxRows = await query<{ id: string }>(
+          "SELECT id FROM user_seedboxes WHERE user_id = ? AND status = 'active' LIMIT 1",
+          [session.user.id]
+        );
+        if (seedboxRows.length === 0) {
+          return new NextResponse(null, { status: 403, headers });
+        }
+      }
     }
 
     return new NextResponse(null, {
