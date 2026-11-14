@@ -17,6 +17,22 @@ const PUBLIC_PREFIXES = [
   "/favicon.ico",
 ];
 
+function applyHtmlNoCacheHeaders(response: NextResponse, pathname: string): NextResponse {
+  if (
+    !pathname.includes("/_next/static") &&
+    !pathname.includes("/api/roms/") &&
+    !pathname.includes("/api/media/")
+  ) {
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+    );
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+  }
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -30,7 +46,8 @@ export async function proxy(request: NextRequest) {
     (prefix) => pathname.startsWith(prefix) || pathname.startsWith(`/roms${prefix}`)
   );
   if (isPublic || request.method === "OPTIONS") {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    return applyHtmlNoCacheHeaders(response, pathname);
   }
 
   // 2. Identify administrative protected paths
@@ -58,6 +75,7 @@ export async function proxy(request: NextRequest) {
     }
 
     const response = NextResponse.redirect(loginUrl, 307);
+    applyHtmlNoCacheHeaders(response, pathname);
     if (shouldClearCookies) {
       response.cookies.delete("session_token");
       response.cookies.delete(SESSION_COOKIE_NAME);
@@ -185,11 +203,12 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set("if-range", ifRange);
   }
 
-  return NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   });
+  return applyHtmlNoCacheHeaders(response, pathname);
 }
 
 export const config = {
