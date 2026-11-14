@@ -11,6 +11,7 @@ const PUBLIC_PREFIXES = [
   "/emulatorjs",
   "/tabstationtoo",
   "/api/bios",
+  "/api/media",
   "/api/shoutbox",
   "/api/multiplayer",
   "/_next",
@@ -42,9 +43,15 @@ export async function proxy(request: NextRequest) {
   }
 
   // Allow public authentication routes, static assets, and other preflight requests
-  const isPublic = PUBLIC_PREFIXES.some(
-    (prefix) => pathname.startsWith(prefix) || pathname.startsWith(`/roms${prefix}`)
-  );
+  const isMediaRom =
+    pathname.startsWith("/api/media/roms/") ||
+    pathname.startsWith("/roms/api/media/roms/");
+
+  const isPublic =
+    !isMediaRom &&
+    PUBLIC_PREFIXES.some(
+      (prefix) => pathname.startsWith(prefix) || pathname.startsWith(`/roms${prefix}`)
+    );
   if (isPublic || request.method === "OPTIONS") {
     const response = NextResponse.next();
     return applyHtmlNoCacheHeaders(response, pathname);

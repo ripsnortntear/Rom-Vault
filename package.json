@@ -20,7 +20,8 @@
     "sync-tabstationtoo": "node scripts/sync-tabstationtoo.mjs",
     "verify-tabstationtoo": "node scripts/sync-tabstationtoo.mjs --verify",
     "sync-gambatte": "node scripts/sync-gambatte.mjs",
-    "verify-gambatte": "node scripts/sync-gambatte.mjs --verify"
+    "verify-gambatte": "node scripts/sync-gambatte.mjs --verify",
+    "sync-forums": "php /var/www/html/forums/bin/populate-romvault.php && php /var/www/html/forums/bin/sync-jellyfin.php"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

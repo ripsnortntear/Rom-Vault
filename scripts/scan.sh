@@ -37,6 +37,11 @@ if [ "${HTTP_CODE}" -eq 200 ]; then
   else
     echo "${BODY}"
   fi
+
+  if [ -f "/var/www/html/forums/bin/populate-romvault.php" ]; then
+    echo "[*] Synchronizing new games to XenForo forums under WebsiteAI..."
+    php /var/www/html/forums/bin/populate-romvault.php || true
+  fi
 else
   echo "[-] Scan failed with HTTP status ${HTTP_CODE}:" >&2
   echo "${BODY}" >&2
