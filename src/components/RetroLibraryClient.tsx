@@ -1060,10 +1060,10 @@ export function RetroLibraryClient({
                     </div>
 
                     {!isAuth ? (
-                      /* 1. Guest / Logged Out: Minecraft & Video Tools */
+                      /* 1. Guest / Logged Out: Minecraft, Video Tools & System Status */
                       <div className="space-y-1 text-xs">
                         <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Public Services</div>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-3 gap-1.5">
                           <a
                             href="/minecraft"
                             className="flex items-center gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 hover:text-white transition border border-white/5"
@@ -1081,7 +1081,23 @@ export function RetroLibraryClient({
                             <span className="text-base">⚡</span>
                             <div>
                               <div className="font-bold text-[11px] leading-tight">Video Tools</div>
-                              <div className="text-[9px] text-zinc-400 leading-tight">Converters & Utilities</div>
+                              <div className="text-[9px] text-zinc-400 leading-tight">Utilities</div>
+                            </div>
+                          </a>
+                          <a
+                            href="https://oldsmarchaoscom.betteruptime.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 hover:text-white transition border border-white/5"
+                            title="Live 90-Day System Status & Reliability (BetterStack)"
+                          >
+                            <span className="text-base">🟢</span>
+                            <div>
+                              <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                                Status
+                                <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 rounded font-mono">100%</span>
+                              </div>
+                              <div className="text-[9px] text-zinc-400 leading-tight">90d Uptime</div>
                             </div>
                           </a>
                         </div>
@@ -1091,7 +1107,7 @@ export function RetroLibraryClient({
                       <div className="space-y-2 text-xs">
                         <div className="space-y-1">
                           <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Tools & Code</div>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                             <a
                               href="/tools"
                               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
@@ -1120,6 +1136,22 @@ export function RetroLibraryClient({
                               <div>
                                 <div className="font-bold text-[11px] leading-tight">GitLab</div>
                                 <div className="text-[9px] text-zinc-400 leading-tight">Git Repos</div>
+                              </div>
+                            </a>
+                            <a
+                              href="https://oldsmarchaoscom.betteruptime.com/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                              title="Live 90-Day System Status & Reliability (BetterStack)"
+                            >
+                              <span className="text-sm">🟢</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                                  Status
+                                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 rounded font-mono">100%</span>
+                                </div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">90d Uptime</div>
                               </div>
                             </a>
                           </div>
@@ -1176,7 +1208,7 @@ export function RetroLibraryClient({
                       <div className="space-y-2 text-xs">
                         <div className="space-y-1">
                           <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-1">Tools & Code</div>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                             <a
                               href="/tools"
                               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
@@ -1205,6 +1237,22 @@ export function RetroLibraryClient({
                               <div>
                                 <div className="font-bold text-[11px] leading-tight">GitLab</div>
                                 <div className="text-[9px] text-zinc-400 leading-tight">Git Repos</div>
+                              </div>
+                            </a>
+                            <a
+                              href="https://oldsmarchaoscom.betteruptime.com/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
+                              title="Live 90-Day System Status & Reliability (BetterStack)"
+                            >
+                              <span className="text-sm">🟢</span>
+                              <div>
+                                <div className="font-bold text-[11px] leading-tight flex items-center gap-1">
+                                  Status
+                                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 rounded font-mono">100%</span>
+                                </div>
+                                <div className="text-[9px] text-zinc-400 leading-tight">90d Uptime</div>
                               </div>
                             </a>
                           </div>
