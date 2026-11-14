@@ -162,7 +162,10 @@ export async function syncJellyfinUser(
 /**
  * Generate a valid Jellyfin user session token using QuickConnect flow
  */
-export async function getJellyfinSsoSession(username: string): Promise<{
+export async function getJellyfinSsoSession(
+  username: string,
+  deviceId?: string
+): Promise<{
   success: boolean;
   serverId?: string;
   userId?: string;
@@ -191,11 +194,13 @@ export async function getJellyfinSsoSession(username: string): Promise<{
       return { success: false, error: "User not found in Jellyfin" };
     }
 
+    const targetDeviceId = deviceId || `oldsmar-sso-${targetUser.Id.slice(0, 8)}`;
+
     // 1. Initiate QuickConnect
     const initRes = await fetch(`${JELLYFIN_URL}/QuickConnect/Initiate`, {
       method: "POST",
       headers: {
-        Authorization: 'MediaBrowser Client="Jellyfin Web", Device="Chrome", DeviceId="oldsmar-sso", Version="10.8.0"',
+        Authorization: `MediaBrowser Client="Jellyfin Web", Device="Browser", DeviceId="${targetDeviceId}", Version="10.8.0"`,
         "Content-Type": "application/json",
       },
       cache: "no-store",
@@ -227,7 +232,7 @@ export async function getJellyfinSsoSession(username: string): Promise<{
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: 'MediaBrowser Client="Jellyfin Web", Device="Chrome", DeviceId="oldsmar-sso", Version="10.8.0"',
+        Authorization: `MediaBrowser Client="Jellyfin Web", Device="Browser", DeviceId="${targetDeviceId}", Version="10.8.0"`,
       },
       body: JSON.stringify({ Secret }),
       cache: "no-store",

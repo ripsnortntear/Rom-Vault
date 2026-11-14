@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const ssoRes = await getJellyfinSsoSession(session.user.username);
+    const deviceId = req.nextUrl.searchParams.get("deviceId") || undefined;
+    const ssoRes = await getJellyfinSsoSession(session.user.username, deviceId);
     if (!ssoRes.success || !ssoRes.accessToken) {
       return NextResponse.json(
         { success: false, error: ssoRes.error || "Failed to generate Jellyfin session" },
@@ -26,6 +27,9 @@ export async function GET(req: NextRequest) {
           AccessToken: ssoRes.accessToken,
           UserId: ssoRes.userId,
           ManualAddress: "https://www.oldsmarchaos.com/jellyfin",
+          LocalAddress: "https://www.oldsmarchaos.com/jellyfin",
+          RemoteAddress: "https://www.oldsmarchaos.com/jellyfin",
+          manualAddressOnly: true,
           LastConnectionMode: 1,
         },
       ],
