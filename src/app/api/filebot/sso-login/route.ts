@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     response.cookies.set({
       name: "auth",
       value: authToken,
-      path: "/filebot/",
+      path: "/filebot",
       maxAge: 31536000, // 1 year
       httpOnly: true,
       secure: true,
