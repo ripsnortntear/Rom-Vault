@@ -22,7 +22,10 @@ export function ScoreShareButtons({ scoreId, scoreText }: ScoreShareButtonsProps
   };
 
   const handleShare = async () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://www.oldsmarchaos.com";
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).origin : "https://your-domain.example.com");
     const shareUrl = `${origin}/roms/scores/${scoreId}`;
 
     if (navigator.share) {

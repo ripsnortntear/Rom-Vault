@@ -6,7 +6,7 @@ import { normalizeSystem } from "./systems";
 export { normalizeSystem };
 
 export const BASE_PATH = "/roms";
-export const DEFAULT_STORAGE_ROOT = "/mnt/storage/oldsmarchaos.com/roms";
+export const DEFAULT_STORAGE_ROOT = "/path/to/roms";
 
 export function getWorkspaceRoot(): string {
   const cwd = process.cwd();

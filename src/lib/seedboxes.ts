@@ -21,7 +21,7 @@ export interface UserSeedbox {
   updatedAt: string;
 }
 
-const SEEDBOX_BASE_DIR = "/mnt/storage/oldsmarchaos.com/seedboxes";
+const SEEDBOX_BASE_DIR = process.env.SEEDBOX_BASE_DIR || "/path/to/seedboxes";
 const NGINX_MAP_FILE = "/etc/nginx/conf.d/seedbox_ports.map";
 const START_PORT = 8201;
 const END_PORT = 8250;
@@ -123,15 +123,16 @@ export async function provisionSeedbox(
     const cleanUsername = user.username.replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase();
     const port = await getNextAvailablePort();
     const boxId = generateUUID();
-    const userDir = path.join(SEEDBOX_BASE_DIR, cleanUsername);
+    const userDir = path.join(/*turbopackIgnore: true*/ SEEDBOX_BASE_DIR, cleanUsername);
     const downloadsDir = path.join(userDir, "downloads");
     const configDir = path.join(userDir, "config", "qBittorrent");
     const gluetunDir = path.join(userDir, "gluetun");
-    const zfsDataset = `storage/oldsmarchaos.com/seedboxes/${cleanUsername}`;
+    const zfsPool = process.env.ZFS_SEEDBOX_POOL || "storage/seedboxes";
+    const zfsDataset = `${zfsPool}/${cleanUsername}`;
     const vpnContainer = `gluetun-${cleanUsername}`;
     const qbtContainer = `qbittorrent-${cleanUsername}`;
 
-    // 3. Create ZFS Dataset with Hard Quota under /mnt/storage/oldsmarchaos.com
+    // 3. Create ZFS Dataset with Hard Quota under storage
     console.log(`[Seedbox] Creating ZFS dataset ${zfsDataset} with quota ${quotaGb}G...`);
     await execAsync(`sudo mkdir -p ${SEEDBOX_BASE_DIR}`);
     await execAsync(
@@ -249,7 +250,7 @@ export async function deprovisionSeedbox(
     }
 
     const cleanUsername = box.username.replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase();
-    const userDir = path.join(SEEDBOX_BASE_DIR, cleanUsername);
+    const userDir = path.join(/*turbopackIgnore: true*/ SEEDBOX_BASE_DIR, cleanUsername);
     const composeFile = path.join(userDir, "docker-compose.yml");
 
     // 1. Stop and remove containers
@@ -297,7 +298,7 @@ export async function restartSeedbox(userId: string): Promise<{ ok: boolean; err
     }
 
     if (ROOT_ADMIN_USER && box.username.toLowerCase() === ROOT_ADMIN_USER) {
-      const adminCompose = process.env.ADMIN_COMPOSE_PATH || "/home/cfw34683/docker/vpntorrent/docker-compose.yml";
+      const adminCompose = process.env.ADMIN_COMPOSE_PATH || "/path/to/docker/vpntorrent/docker-compose.yml";
       await execAsync(`docker compose -f ${adminCompose} restart`);
       return { ok: true };
     }

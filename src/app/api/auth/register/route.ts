@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 7. Dispatch approval alert emails to both cfw34683@gmail.com and admin@oldsmarchaos.com
+    // 7. Dispatch approval alert emails to configured administrative recipients
     try {
       await sendAdminRegistrationNotificationEmail({
         username: cleanUsername,

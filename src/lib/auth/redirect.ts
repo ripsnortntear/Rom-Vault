@@ -23,10 +23,18 @@ export function getSafeRedirectUrl(param: string | null | undefined): string {
     return decoded;
   }
 
-  // Safe absolute URLs for authorized OldsmarChaos domains
+  // Safe absolute URLs for authorized domains
   try {
     const url = new URL(decoded);
-    const allowedHosts = ["oldsmarchaos.com", "www.oldsmarchaos.com", "localhost", "127.0.0.1"];
+    const appHost = process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : null;
+    const envAllowed = process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(",").map(h => h.trim().toLowerCase()) : [];
+    const allowedHosts = [
+      ...(appHost ? [appHost] : []),
+      ...envAllowed,
+      "your-domain.example.com",
+      "localhost",
+      "127.0.0.1",
+    ];
     if (allowedHosts.includes(url.hostname)) {
       return url.pathname + url.search + url.hash;
     }

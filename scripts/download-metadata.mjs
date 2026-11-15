@@ -40,7 +40,7 @@ const STEAMGRIDDB_API_KEY = process.env.STEAMGRIDDB_API_KEY;
 const THEGAMESDB_API_KEY = process.env.THEGAMESDB_API_KEY;
 
 const STORAGE_ROOT =
-  process.env.STORAGE_ROOT || "/mnt/storage/oldsmarchaos.com/roms";
+  process.env.STORAGE_ROOT || "/path/to/roms";
 
 // Platform mapping for IGDB and Libretro
 const PLATFORM_CONFIG = {
@@ -1376,7 +1376,7 @@ async function main() {
     dbPool = mysql.createPool({
       host: process.env.DB_HOST || "127.0.0.1",
       port: parseInt(process.env.DB_PORT || "3306", 10),
-      user: process.env.DB_USER || "cfw34683",
+      user: process.env.DB_USER || "rom_vault_user",
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || "rom_vault",
       waitForConnections: true,

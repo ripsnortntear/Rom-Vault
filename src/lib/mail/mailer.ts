@@ -1,16 +1,16 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.oldsmarchaos.com/roms";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.example.com/roms";
 const SMTP_HOST = process.env.SMTP_HOST || "smtp.zoho.com";
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_SECURE = process.env.SMTP_SECURE === "true" || SMTP_PORT === 465;
-const SMTP_USER = process.env.SMTP_USER || "support@oldsmarchaos.com";
+const SMTP_USER = process.env.SMTP_USER || "support@example.com";
 const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || `"OldsmarChaos Support" <${SMTP_USER}>`;
+const SMTP_FROM = process.env.SMTP_FROM || `"Support" <${SMTP_USER}>`;
 
 export const ADMIN_NOTIFICATION_EMAILS: string[] = (
   process.env.ADMIN_NOTIFICATION_EMAILS ||
-  "cfw34683@gmail.com,admin@oldsmarchaos.com"
+  "admin@example.com,support@example.com"
 )
   .split(",")
   .map((e) => e.trim().toLowerCase())
@@ -105,7 +105,7 @@ ${APP_URL}
       <p style="margin-top: 12px; font-size: 12px; color: #71717a;">This verification link is valid for 24 hours. If you did not create this account, please disregard this message.</p>
     </div>
     <div class="footer">
-      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="https://www.oldsmarchaos.com" style="color: #ef4444; text-decoration: none;">oldsmarchaos.com</a>
+      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="${new URL(APP_URL).origin}" style="color: #ef4444; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>
@@ -244,7 +244,7 @@ Great news! Your OldsmarChaos account registration has been reviewed and approve
 You can now log in to access the ROM Vault, Minecraft server, Jellyfin media, and other platform services:
 ${loginUrl}
 
-If you have any questions or encounter any issues, please reply to this email or contact support@oldsmarchaos.com.
+If you have any questions or encounter any issues, please reply to this email or contact ${SMTP_USER}.
 
 Best regards,
 OldsmarChaos Administration
@@ -286,7 +286,7 @@ OldsmarChaos Administration
       <p style="font-size: 13px; color: #71717a;">Direct link: <a href="${loginUrl}" style="color: #34d399;">${loginUrl}</a></p>
     </div>
     <div class="footer">
-      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="https://www.oldsmarchaos.com" style="color: #34d399; text-decoration: none;">oldsmarchaos.com</a>
+      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="${new URL(APP_URL).origin}" style="color: #34d399; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>
@@ -329,7 +329,7 @@ Thank you for your interest in OldsmarChaos.
 
 Your account registration request was reviewed by an administrator and was not approved at this time.
 ${reason ? `Reason: ${reason}\n` : ""}
-If you believe this decision was made in error or have additional questions, please reach out to our team at support@oldsmarchaos.com.
+If you believe this decision was made in error or have additional questions, please reach out to our team at ${SMTP_USER}.
 
 Best regards,
 OldsmarChaos Administration
@@ -363,10 +363,10 @@ OldsmarChaos Administration
       <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
       <p>Your request to register an account on the OldsmarChaos platform was reviewed by an administrator and was not approved at this time.</p>
       ${reason ? `<div class="reason-box"><strong>Administrator Note:</strong> ${escapeHtml(reason)}</div>` : ""}
-      <p>If you believe this decision was made in error or wish to appeal, please contact us at <a href="mailto:support@oldsmarchaos.com" style="color: #ef4444;">support@oldsmarchaos.com</a>.</p>
+      <p>If you believe this decision was made in error or wish to appeal, please contact us at <a href="mailto:${SMTP_USER}" style="color: #ef4444;">${SMTP_USER}</a>.</p>
     </div>
     <div class="footer">
-      OldsmarChaos Administration &bull; <a href="https://www.oldsmarchaos.com" style="color: #ef4444; text-decoration: none;">oldsmarchaos.com</a>
+      OldsmarChaos Administration &bull; <a href="${new URL(APP_URL).origin}" style="color: #ef4444; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>
@@ -395,7 +395,7 @@ OldsmarChaos Administration
 
 /**
  * Send an alert to administrators when a new user registers and requires review/approval.
- * Dispatches to both cfw34683@gmail.com and admin@oldsmarchaos.com.
+ * Dispatches to configured administrator email addresses.
  * Strictly avoids putting the administrator's name anywhere in the email.
  */
 export async function sendAdminRegistrationNotificationEmail(newUser: {
@@ -436,7 +436,7 @@ ${approvalUrl}
 
 Best regards,
 OldsmarChaos Automated Administration
-https://www.oldsmarchaos.com
+${new URL(APP_URL).origin}
 `;
 
   const html = `
@@ -506,7 +506,7 @@ https://www.oldsmarchaos.com
       <div class="link-box">${approvalUrl}</div>
     </div>
     <div class="footer">
-      OldsmarChaos Automated Administration &bull; <a href="https://www.oldsmarchaos.com" style="color: #00f0ff; text-decoration: none;">oldsmarchaos.com</a>
+      OldsmarChaos Automated Administration &bull; <a href="${new URL(APP_URL).origin}" style="color: #00f0ff; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>

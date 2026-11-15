@@ -52,7 +52,7 @@ build_and_verify:
     - echo "[*] Restoring .next/cache from local Nginx WebDAV proxy (${CACHE_ARCHIVE})..."
     - mkdir -p .next
     - >
-      if curl -s -k -f -H "Host: www.oldsmarchaos.com" "${CACHE_ARCHIVE}" -o /tmp/next-cache.tar.gz; then
+      if curl -s -k -f -H "Host: ${CACHE_HOST:-${CI_SERVER_HOST:-localhost}}" "${CACHE_ARCHIVE}" -o /tmp/next-cache.tar.gz; then
         echo "[✓] Cached .next/cache archive successfully downloaded from Nginx proxy. Extracting...";
         tar -xzf /tmp/next-cache.tar.gz -C . && rm -f /tmp/next-cache.tar.gz;
       else
@@ -73,7 +73,7 @@ build_and_verify:
       if [ -d ".next/cache" ]; then
         echo "[*] Archiving and uploading .next/cache to local Nginx WebDAV proxy...";
         tar -czf /tmp/next-cache.tar.gz .next/cache &&
-        curl -s -k -f -X PUT -H "Host: www.oldsmarchaos.com" --data-binary @/tmp/next-cache.tar.gz "${CACHE_ARCHIVE}" &&
+        curl -s -k -f -X PUT -H "Host: ${CACHE_HOST:-${CI_SERVER_HOST:-localhost}}" --data-binary @/tmp/next-cache.tar.gz "${CACHE_ARCHIVE}" &&
         rm -f /tmp/next-cache.tar.gz &&
         echo "[✓] Successfully uploaded .next/cache archive to Nginx WebDAV proxy!";
       fi

@@ -37,7 +37,7 @@ loadEnv();
 const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 const STORAGE_ROOT =
-  process.env.STORAGE_ROOT || "/mnt/storage/oldsmarchaos.com/roms";
+  process.env.STORAGE_ROOT || "/path/to/roms";
 
 const IGDB_PLATFORM_MAP = {
   nes: 18,
@@ -249,7 +249,7 @@ async function main() {
     const pool = mysql.createPool({
       host: process.env.DB_HOST || "127.0.0.1",
       port: parseInt(process.env.DB_PORT || "3306", 10),
-      user: process.env.DB_USER || "cfw34683",
+      user: process.env.DB_USER || "rom_vault_user",
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || "rom_vault",
     });

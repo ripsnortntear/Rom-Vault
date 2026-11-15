@@ -31,13 +31,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return new NextResponse(null, { status: 403, headers });
     }
 
-    // Enforce seedbox authorization: ONLY admins with an active seedbox or primary root admin (cfw34683)
+    // Enforce seedbox authorization: ONLY admins with an active seedbox or primary root admin
     const requireSeedbox = searchParams.get("seedbox") === "true";
     if (requireSeedbox) {
       if (session.user.role !== "admin") {
         return new NextResponse(null, { status: 403, headers });
       }
-      const isRootAdmin = session.user.username.toLowerCase() === "cfw34683";
+      const rootAdminUser = (process.env.ROOT_ADMIN_USER || "admin").toLowerCase();
+      const isRootAdmin = session.user.username.toLowerCase() === rootAdminUser;
       if (!isRootAdmin) {
         const seedboxRows = await query<{ id: string }>(
           "SELECT id FROM user_seedboxes WHERE user_id = ? AND status = 'active' LIMIT 1",

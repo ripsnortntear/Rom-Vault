@@ -28,7 +28,12 @@ const nextConfig: NextConfig = {
       {
         source: "/api/:path*",
         headers: [
-          { key: "Access-Control-Allow-Origin", value: "https://oldsmarchaos.com" },
+          {
+            key: "Access-Control-Allow-Origin",
+            value: process.env.ALLOWED_ORIGINS
+              ? process.env.ALLOWED_ORIGINS.split(",")[0].trim()
+              : (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).origin : "https://your-domain.example.com"),
+          },
           { key: "Access-Control-Allow-Credentials", value: "true" },
           { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, OPTIONS" },
           { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, Range, X-Requested-With" },

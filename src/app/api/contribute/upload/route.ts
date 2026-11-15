@@ -229,6 +229,7 @@ function isSafeExternalImageUrl(rawUrl: string): URL | null {
       return null;
     }
     const host = parsed.hostname.toLowerCase();
+    const serverHost = process.env.ALLOWED_HOST || (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : "");
     if (
       host === "localhost" ||
       host === "127.0.0.1" ||
@@ -239,8 +240,7 @@ function isSafeExternalImageUrl(rawUrl: string): URL | null {
       host.endsWith(".internal") ||
       host.endsWith(".arpa") ||
       host.endsWith(".lan") ||
-      host === "oldsmarchaos.com" ||
-      host.endsWith(".oldsmarchaos.com") ||
+      (serverHost && (host === serverHost || host.endsWith("." + serverHost))) ||
       !host.includes(".") ||
       host.startsWith("[") ||
       host.includes(":") ||

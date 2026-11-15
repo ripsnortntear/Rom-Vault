@@ -61,7 +61,8 @@ export default async function ScorePage(props: ScorePageProps) {
   const game = await getGameById(score.gameId);
   const gameTitle = game?.displayTitle || score.gameId;
   const playerName = score.user.displayName || score.user.username;
-  const shareText = `I just scored ${score.score.toLocaleString()} on ${gameTitle} (${score.system.toUpperCase()}) on ROM Vault! Can you beat it? https://www.oldsmarchaos.com/roms/scores/${score.id}`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.example.com/roms";
+  const shareText = `I just scored ${score.score.toLocaleString()} on ${gameTitle} (${score.system.toUpperCase()}) on ROM Vault! Can you beat it? ${appUrl}/scores/${score.id}`;
 
   const backdropUrl =
     game?.media.fanart ?? game?.media.artworkFront ?? game?.media.screenshot ?? null;

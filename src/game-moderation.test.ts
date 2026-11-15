@@ -107,7 +107,7 @@ describe("Game Card Moderation & Disabled System Suite", () => {
   });
 
   it("prioritizes customCoverUrl over preferredCover and style", () => {
-    const customUrl = "https://images.oldsmarchaos.com/custom-smb.jpg";
+    const customUrl = "https://images.example.com/custom-smb.jpg";
     const moderated: GameItem = {
       ...sampleGame,
       preferredCover: "screentitle",

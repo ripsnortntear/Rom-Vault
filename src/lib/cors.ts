@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const envOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim().toLowerCase()).filter(Boolean)
+  : [];
+
+export const PRIMARY_ORIGIN =
+  envOrigins[0] ||
+  (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).origin : "https://your-domain.example.com");
+
 export const ALLOWED_ORIGINS = new Set([
-  "https://oldsmarchaos.com",
-  "https://www.oldsmarchaos.com",
+  ...(envOrigins.length > 0 ? envOrigins : [PRIMARY_ORIGIN]),
   ...(process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test"
     ? [
         "http://localhost:3000",
@@ -36,7 +43,7 @@ export function getCorsHeaders(
     headers["Vary"] = "Origin";
   } else {
     // Default to primary trusted origin
-    headers["Access-Control-Allow-Origin"] = "https://oldsmarchaos.com";
+    headers["Access-Control-Allow-Origin"] = PRIMARY_ORIGIN;
   }
 
   return headers;
@@ -72,7 +79,7 @@ export function handleCorsPreflight(
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Vary", "Origin");
   } else {
-    headers.set("Access-Control-Allow-Origin", "https://oldsmarchaos.com");
+    headers.set("Access-Control-Allow-Origin", PRIMARY_ORIGIN);
   }
 
   return new NextResponse(null, {

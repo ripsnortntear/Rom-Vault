@@ -12,7 +12,7 @@ vi.mock("@/lib/mail/mailer", () => ({
   sendAccountApprovedEmail: vi.fn().mockResolvedValue({ success: true }),
   sendAccountDeniedEmail: vi.fn().mockResolvedValue({ success: true }),
   sendAdminRegistrationNotificationEmail: vi.fn().mockResolvedValue({ success: true }),
-  ADMIN_NOTIFICATION_EMAILS: ["cfw34683@gmail.com", "admin@oldsmarchaos.com"],
+  ADMIN_NOTIFICATION_EMAILS: ["admin@example.com", "support@example.com"],
 }));
 
 // Mock Jellyfin & FileBot sync
@@ -166,9 +166,9 @@ describe("User Account Approval & Administrator Gate Suite", () => {
   });
 
   describe("Admin Registration Notification Hook", () => {
-    it("configures dual admin email recipients (cfw34683@gmail.com and admin@oldsmarchaos.com)", () => {
-      expect(ADMIN_NOTIFICATION_EMAILS).toContain("cfw34683@gmail.com");
-      expect(ADMIN_NOTIFICATION_EMAILS).toContain("admin@oldsmarchaos.com");
+    it("configures dual admin email recipients", () => {
+      expect(ADMIN_NOTIFICATION_EMAILS).toContain("admin@example.com");
+      expect(ADMIN_NOTIFICATION_EMAILS).toContain("support@example.com");
       expect(ADMIN_NOTIFICATION_EMAILS.length).toBe(2);
     });
 

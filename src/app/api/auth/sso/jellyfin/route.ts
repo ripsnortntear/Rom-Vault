@@ -18,17 +18,21 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "your-domain.example.com";
+    const protocol = req.headers.get("x-forwarded-proto") || "https";
+    const jellyfinAddress = process.env.JELLYFIN_PUBLIC_URL || `${protocol}://${host}/jellyfin`;
+
     const credentials = {
       Servers: [
         {
           Id: ssoRes.serverId || "0659c9d0372d4749b0b18b137f7c7d23",
-          Name: "OldsmarChaos Media",
+          Name: process.env.JELLYFIN_SERVER_NAME || "Media Server",
           DateLastAccessed: Date.now(),
           AccessToken: ssoRes.accessToken,
           UserId: ssoRes.userId,
-          ManualAddress: "https://www.oldsmarchaos.com/jellyfin",
-          LocalAddress: "https://www.oldsmarchaos.com/jellyfin",
-          RemoteAddress: "https://www.oldsmarchaos.com/jellyfin",
+          ManualAddress: jellyfinAddress,
+          LocalAddress: jellyfinAddress,
+          RemoteAddress: jellyfinAddress,
           manualAddressOnly: true,
           LastConnectionMode: 1,
         },

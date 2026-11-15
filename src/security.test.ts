@@ -39,6 +39,7 @@ import {
   getCorsHeaders,
   applyCorsHeaders,
   handleCorsPreflight,
+  PRIMARY_ORIGIN,
 } from "./lib/cors";
 import { getClientIp, getTrustedClientIp } from "./lib/ip";
 import { submitScoreSchema } from "./lib/score-validation";
@@ -212,8 +213,8 @@ describe("Security URL Validation", () => {
   });
 
   it("accepts safe http and https protocols", () => {
-    expect(isSafeHttpUrl("https://oldsmarchaos.com/proof.png")).toBe(true);
-    expect(isSafeHttpUrl("http://oldsmarchaos.com/proof.png")).toBe(true);
+    expect(isSafeHttpUrl("https://example.com/proof.png")).toBe(true);
+    expect(isSafeHttpUrl("http://example.com/proof.png")).toBe(true);
     expect(getSafeHttpUrl("https://example.com/screenshot.jpg")).toBe("https://example.com/screenshot.jpg");
   });
 
@@ -359,13 +360,12 @@ describe("Avatar Protocol & Scheme Sanitization (SEC-07)", () => {
 
 describe("CORS Origin Validation and Preflight Handling (SEC-08)", () => {
   it("allows trusted production domains", () => {
-    expect(isAllowedOrigin("https://oldsmarchaos.com")).toBe(true);
-    expect(isAllowedOrigin("https://www.oldsmarchaos.com")).toBe(true);
+    expect(isAllowedOrigin(PRIMARY_ORIGIN)).toBe(true);
   });
 
   it("rejects untrusted third-party origins", () => {
     expect(isAllowedOrigin("https://evil-attacker.com")).toBe(false);
-    expect(isAllowedOrigin("https://phishing.oldsmarchaos.com.attacker.com")).toBe(false);
+    expect(isAllowedOrigin("https://phishing.example.com.attacker.com")).toBe(false);
     expect(isAllowedOrigin("null")).toBe(false);
     expect(isAllowedOrigin("")).toBe(false);
     expect(isAllowedOrigin(undefined)).toBe(false);
@@ -373,10 +373,10 @@ describe("CORS Origin Validation and Preflight Handling (SEC-08)", () => {
 
   it("dynamically reflects trusted origin with credentials and Vary header", () => {
     const req = new Request("http://localhost/api/test", {
-      headers: { origin: "https://www.oldsmarchaos.com" },
+      headers: { origin: PRIMARY_ORIGIN },
     });
     const headers = getCorsHeaders(req);
-    expect(headers["Access-Control-Allow-Origin"]).toBe("https://www.oldsmarchaos.com");
+    expect(headers["Access-Control-Allow-Origin"]).toBe(PRIMARY_ORIGIN);
     expect(headers["Access-Control-Allow-Credentials"]).toBe("true");
     expect(headers["Vary"]).toBe("Origin");
   });
@@ -386,7 +386,7 @@ describe("CORS Origin Validation and Preflight Handling (SEC-08)", () => {
       headers: { origin: "https://untrusted-site.com" },
     });
     const headers = getCorsHeaders(req);
-    expect(headers["Access-Control-Allow-Origin"]).toBe("https://oldsmarchaos.com");
+    expect(headers["Access-Control-Allow-Origin"]).toBe(PRIMARY_ORIGIN);
     expect(headers["Access-Control-Allow-Credentials"]).toBeUndefined();
     expect(headers["Vary"]).toBeUndefined();
   });
@@ -394,11 +394,11 @@ describe("CORS Origin Validation and Preflight Handling (SEC-08)", () => {
   it("handles preflight OPTIONS requests cleanly with 204 No Content", () => {
     const req = new Request("http://localhost/api/test", {
       method: "OPTIONS",
-      headers: { origin: "https://oldsmarchaos.com" },
+      headers: { origin: PRIMARY_ORIGIN },
     });
     const res = handleCorsPreflight(req);
     expect(res.status).toBe(204);
-    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://oldsmarchaos.com");
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(PRIMARY_ORIGIN);
     expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
     expect(res.headers.get("Access-Control-Max-Age")).toBe("86400");
   });

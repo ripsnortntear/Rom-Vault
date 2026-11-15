@@ -3,7 +3,7 @@ import path from "path";
 import crypto from "crypto";
 
 const ROOT_DIR = "/var/www/html/roms";
-const STORAGE_ROOT = "/mnt/storage/oldsmarchaos.com/roms";
+const STORAGE_ROOT = process.env.STORAGE_ROOT || "/path/to/roms";
 
 const env = fs.readFileSync(path.join(ROOT_DIR, ".env.local"), "utf8");
 const cid = env.match(/TWITCH_CLIENT_ID=(.*)/)[1].trim();

@@ -1085,7 +1085,7 @@ export function RetroLibraryClient({
                             </div>
                           </a>
                           <a
-                            href="https://oldsmarchaoscom.betteruptime.com/"
+                            href={process.env.NEXT_PUBLIC_STATUS_PAGE_URL || "https://status.example.com"}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-200 hover:text-white transition border border-white/5"
@@ -1139,7 +1139,7 @@ export function RetroLibraryClient({
                               </div>
                             </a>
                             <a
-                              href="https://oldsmarchaoscom.betteruptime.com/"
+                              href={process.env.NEXT_PUBLIC_STATUS_PAGE_URL || "https://status.example.com"}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"
@@ -1240,7 +1240,7 @@ export function RetroLibraryClient({
                               </div>
                             </a>
                             <a
-                              href="https://oldsmarchaoscom.betteruptime.com/"
+                              href={process.env.NEXT_PUBLIC_STATUS_PAGE_URL || "https://status.example.com"}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/10 text-zinc-200 hover:text-white transition"

@@ -123,7 +123,7 @@ export default async function Image(props: { params: Promise<{ id: string }> }) 
           </div>
 
           <div style={{ fontSize: "18px", color: "#71717a", fontWeight: 600 }}>
-            oldsmarchaos.com/roms
+            {process.env.NEXT_PUBLIC_APP_DOMAIN ? `${process.env.NEXT_PUBLIC_APP_DOMAIN}/roms` : "ROM Vault"}
           </div>
         </div>
       </div>

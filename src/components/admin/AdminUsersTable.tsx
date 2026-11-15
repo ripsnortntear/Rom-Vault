@@ -894,10 +894,10 @@ export function AdminUsersTable({ initialUsers }: AdminUsersTableProps) {
                 </li>
                 <li>
                   <strong className="text-white">ZFS Dataset</strong> at{" "}
-                  <code className="text-blue-300">/mnt/storage/oldsmarchaos.com/seedboxes/{provisionModalUser.username}/downloads</code>.
+                  <code className="text-blue-300">/path/to/seedboxes/{provisionModalUser.username}/downloads</code>.
                 </li>
                 <li>
-                  Integrated into <code className="text-emerald-300">oldsmarchaos.com/tor/</code> so they see only their torrents.
+                  Integrated into <code className="text-emerald-300">/tor/</code> so they see only their torrents.
                 </li>
               </ul>
             </div>

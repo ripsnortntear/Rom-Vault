@@ -12,7 +12,7 @@ import mysql from "mysql2/promise";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
-const STORAGE_ROOT = "/mnt/storage/oldsmarchaos.com/roms";
+const STORAGE_ROOT = process.env.STORAGE_ROOT || "/path/to/roms";
 
 function loadEnv() {
   const envPath = path.join(ROOT_DIR, ".env.local");

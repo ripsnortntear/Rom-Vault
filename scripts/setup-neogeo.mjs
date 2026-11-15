@@ -25,8 +25,8 @@ function loadEnvFile(filePath) {
 loadEnvFile(path.join(ROMS_DIR, ".env.local"));
 loadEnvFile(path.join(ROMS_DIR, ".env"));
 
-const NEOGEO_ROMS_DIR = "/mnt/storage/oldsmarchaos.com/roms/neogeo/roms";
-const NEOGEO_ARTWORK_DIR = "/mnt/storage/oldsmarchaos.com/roms/neogeo/artwork";
+const NEOGEO_ROMS_DIR = process.env.NEOGEO_ROMS_DIR || (process.env.STORAGE_ROOT ? `${process.env.STORAGE_ROOT}/neogeo/roms` : "/path/to/roms/neogeo/roms");
+const NEOGEO_ARTWORK_DIR = process.env.NEOGEO_ARTWORK_DIR || (process.env.STORAGE_ROOT ? `${process.env.STORAGE_ROOT}/neogeo/artwork` : "/path/to/roms/neogeo/artwork");
 
 // Ensure artwork subdirectories exist
 const ART_DIRS = {
@@ -96,7 +96,7 @@ async function main() {
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || "127.0.0.1",
     port: parseInt(process.env.DB_PORT || "3306"),
-    user: process.env.DB_USER || "cfw34683",
+    user: process.env.DB_USER || "rom_vault_user",
     password: process.env.DB_PASSWORD || "G234ihb72916!?",
     database: process.env.DB_NAME || "rom_vault",
   });

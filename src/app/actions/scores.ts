@@ -58,7 +58,7 @@ export async function submitHighScoreAction(data: {
       revalidateTag(`game-social-${validated.data.gameId}`, "max");
     } catch {}
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.oldsmarchaos.com/roms";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.example.com/roms";
     const shareUrl = `${appUrl}/scores/${scoreId}`;
 
     return {

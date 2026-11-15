@@ -16,11 +16,11 @@ describe("Storage Root Resolution", () => {
     }
   });
 
-  it("defines storage root as /mnt/storage/oldsmarchaos.com/roms", () => {
-    expect(DEFAULT_STORAGE_ROOT).toBe("/mnt/storage/oldsmarchaos.com/roms");
+  it("defines default storage root", () => {
+    expect(DEFAULT_STORAGE_ROOT).toBe("/path/to/roms");
   });
 
-  it("resolves to /mnt/storage/oldsmarchaos.com/roms by default", () => {
+  it("resolves to default storage root", () => {
     const root = getStorageRoot();
     expect(root).toBe(DEFAULT_STORAGE_ROOT);
   });

@@ -854,7 +854,7 @@ export function AdminScriptsPanel() {
               <span>Filesystem ROM Library Scanner</span>
             </h2>
             <p className="text-xs text-zinc-400 mt-1">
-              Scans <code>/mnt/storage/oldsmarchaos.com/roms</code> to index new ROMs, update multi-disc hierarchies, and broadcast newly indexed titles to the community shoutbox.
+              Scans the filesystem storage pool to index new ROMs, update multi-disc hierarchies, and broadcast newly indexed titles to the community shoutbox.
             </p>
           </div>
 

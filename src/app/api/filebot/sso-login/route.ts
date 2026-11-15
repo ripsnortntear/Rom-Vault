@@ -5,19 +5,20 @@ import { getFilebotAuthCookie } from "@/lib/filebot";
 export async function GET(req: NextRequest) {
   try {
     const session = await getCurrentSession();
+    const origin = req.nextUrl.origin;
 
-    // 1. Not logged in to OldsmarChaos SSO -> redirect to login page
+    // 1. Not logged in to SSO -> redirect to login page
     if (!session || !session.user) {
-      const loginUrl = new URL("/roms/auth/login", "https://www.oldsmarchaos.com");
-      loginUrl.searchParams.set("redirect", "https://www.oldsmarchaos.com/filebot/");
+      const loginUrl = new URL("/roms/auth/login", origin);
+      loginUrl.searchParams.set("redirect", `${origin}/filebot/`);
       return NextResponse.redirect(loginUrl, 302);
     }
 
     // 2. Logged in, but NOT an admin -> redirect back to referer or home
     if (session.user.role !== "admin") {
       const referer = req.headers.get("referer");
-      let target = "https://www.oldsmarchaos.com/";
-      if (referer && referer.includes("oldsmarchaos.com") && !referer.includes("/filebot")) {
+      let target = `${origin}/`;
+      if (referer && !referer.includes("/filebot")) {
         target = referer;
       }
       return NextResponse.redirect(target, 302);
@@ -27,13 +28,13 @@ export async function GET(req: NextRequest) {
     const authToken = await getFilebotAuthCookie();
     if (!authToken) {
       console.error("[FileBot SSO Login]: Failed to obtain auth cookie token from FileBot container.");
-      const errorUrl = new URL("/roms/auth/login", "https://www.oldsmarchaos.com");
-      errorUrl.searchParams.set("redirect", "https://www.oldsmarchaos.com/filebot/");
+      const errorUrl = new URL("/roms/auth/login", origin);
+      errorUrl.searchParams.set("redirect", `${origin}/filebot/`);
       errorUrl.searchParams.set("error", "filebot_auth_failed");
       return NextResponse.redirect(errorUrl, 302);
     }
 
-    const redirectUrl = new URL("https://www.oldsmarchaos.com/filebot/");
+    const redirectUrl = new URL(`${origin}/filebot/`);
     const response = NextResponse.redirect(redirectUrl, 302);
 
     response.cookies.set({
@@ -49,6 +50,6 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (err) {
     console.error("[FileBot SSO Login Route Error]:", err);
-    return NextResponse.redirect("https://www.oldsmarchaos.com/", 302);
+    return NextResponse.redirect(new URL("/", req.nextUrl.origin), 302);
   }
 }

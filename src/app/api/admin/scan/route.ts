@@ -20,7 +20,7 @@ async function handleScan(request: NextRequest): Promise<NextResponse> {
         id: "1",
         username: "system_admin",
         role: "admin",
-        email: "admin@oldsmarchaos.com",
+        email: process.env.ADMIN_EMAIL || "admin@example.com",
         account_status: "active",
         displayName: "System Admin",
         avatarUrl: null,

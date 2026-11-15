@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
       [session.user.id]
     );
     const activeSeedbox = seedboxRows[0] || null;
-    const isRootAdmin = session.user.username.toLowerCase() === "cfw34683";
+    const rootAdminUser = (process.env.ROOT_ADMIN_USER || "admin").toLowerCase();
+    const isRootAdmin = session.user.username.toLowerCase() === rootAdminUser;
     const hasSeedbox = session.user.role === "admin" && (isRootAdmin || !!activeSeedbox);
 
     return NextResponse.json({

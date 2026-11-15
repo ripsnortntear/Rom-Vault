@@ -35,9 +35,9 @@ describe("OldsmarChaos SSO Redirect Flow & Safety Suite", () => {
   });
 
   it("extracts relative paths from authorized absolute URLs (e.g. from Nginx auth gateways)", () => {
-    expect(getSafeRedirectUrl("https://www.oldsmarchaos.com/")).toBe("/");
-    expect(getSafeRedirectUrl("https://oldsmarchaos.com/charm")).toBe("/charm");
-    expect(getSafeRedirectUrl("https://www.oldsmarchaos.com/operations?filter=all")).toBe("/operations?filter=all");
+    expect(getSafeRedirectUrl("https://your-domain.example.com/")).toBe("/");
+    expect(getSafeRedirectUrl("https://your-domain.example.com/charm")).toBe("/charm");
+    expect(getSafeRedirectUrl("https://your-domain.example.com/operations?filter=all")).toBe("/operations?filter=all");
     expect(getSafeRedirectUrl("http://localhost:3000/tools")).toBe("/tools");
   });
 
@@ -45,7 +45,7 @@ describe("OldsmarChaos SSO Redirect Flow & Safety Suite", () => {
     expect(getSafeRedirectUrl("//evil.com")).toBe("/");
     expect(getSafeRedirectUrl("//evil.com/phish")).toBe("/");
     expect(getSafeRedirectUrl("https://evil.com/attacker")).toBe("/");
-    expect(getSafeRedirectUrl("https://attacker.oldsmarchaos.com.fake/")).toBe("/");
+    expect(getSafeRedirectUrl("https://attacker.example.com.fake/")).toBe("/");
     expect(getSafeRedirectUrl("javascript:alert(1)")).toBe("/");
     expect(getSafeRedirectUrl("data:text/html,attack")).toBe("/");
   });

@@ -297,7 +297,9 @@ export function GameSocialProvider({
   // Share High Score
   const handleShareScore = async (score: GameHighScore) => {
     const origin =
-      typeof window !== "undefined" ? window.location.origin : "https://www.oldsmarchaos.com";
+      typeof window !== "undefined"
+        ? window.location.origin
+        : (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).origin : "https://your-domain.example.com");
     const shareUrl = `${origin}/roms/scores/${score.id}`;
     const shareText = `I just scored ${score.score.toLocaleString()} on ${gameTitle} (${system.toUpperCase()}) on ROM Vault! Can you beat it? ${shareUrl}`;
 
