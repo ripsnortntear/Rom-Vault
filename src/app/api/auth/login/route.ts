@@ -152,10 +152,12 @@ export async function POST(req: NextRequest) {
       console.error("[Login] Background Jellyfin sync error:", syncErr);
     });
 
-    // Auto-provision or sync password with FileBot in the background
-    syncFilebotUser(user.username, password).catch((filebotErr) => {
-      console.error("[Login] Background FileBot sync error:", filebotErr);
-    });
+    // Auto-provision or sync password with FileBot in the background (admin accounts only)
+    if (user.role === "admin") {
+      syncFilebotUser(user.username, password).catch((filebotErr) => {
+        console.error("[Login] Background FileBot sync error:", filebotErr);
+      });
+    }
 
     return NextResponse.json({
       success: true,

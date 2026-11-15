@@ -30,11 +30,21 @@ export async function syncFilebotUser(
   }
 
   try {
-    // Use Apache MD5 / APR1 format (-m) as required by jlesage/baseimage-gui webauth daemon
+    // 1. Fast-path check: Check if current credentials already verify in htpasswd.
+    // If they do, do not touch the file or signal webauth, preserving all active user sessions!
+    try {
+      await execFileAsync("/usr/bin/htpasswd", ["-v", "-b", FILEBOT_HTPASSWD_PATH, cleanUsername, password]);
+      return { success: true };
+    } catch {
+      // Credentials not in file or password changed -> proceed to write update
+    }
+
+    // 2. Use Apache MD5 / APR1 format (-m) as required by jlesage/baseimage-gui webauth daemon
     await execFileAsync("/usr/bin/htpasswd", ["-m", "-b", FILEBOT_HTPASSWD_PATH, cleanUsername, password]);
 
-    // Signal webauth daemon inside filebot container to reload password database
-    execFileAsync("docker", ["exec", FILEBOT_CONTAINER_NAME, "pkill", "-x", "webauth"]).catch(() => {});
+    // 3. Signal webauth daemon inside filebot container to reload password database
+    // killall -SIGHUP is the official jlesage mechanism (via /opt/base/bin/webauth-user)
+    execFileAsync("docker", ["exec", FILEBOT_CONTAINER_NAME, "killall", "-SIGHUP", "webauth"]).catch(() => {});
 
     return { success: true };
   } catch (err: any) {
