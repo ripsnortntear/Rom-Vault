@@ -151,7 +151,7 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Do not use bare navigation `<a href="...?download=1">` links to export memory cards while an emulator iframe is running; always use programmatic `Blob` + `URL.createObjectURL()` downloads so the browser does not fire `beforeunload` and abort the running WebAssembly core.
 - Do not place React hooks after conditional early returns, and do not mutate `ref.current` during render execution.
 - Do not use bcrypt (`htpasswd -B`) for FileBot web authentication; `jlesage/baseimage-gui` webauth strictly requires Apache APR1 MD5 (`htpasswd -m`).
-- Do not restart the FileBot docker container to update credentials; invoke `docker exec filebot pkill -x webauth` to reload the supervisor in ~10ms.
+- Do not restart the FileBot docker container to update credentials. Verify existing credentials first via `/usr/bin/htpasswd -v -b` to prevent unnecessary file writes, and reload webauth only upon actual password changes via `docker exec filebot killall -SIGHUP webauth` to avoid wiping in-memory session tokens or dropping `/tmp/webauth.sock`.
 - Do not permanently delete arcade clones without testing for parent presence; if a parent set is missing, the best regional clone must be retained to avoid losing unique games.
 - Do not treat multi-disc sets (Discs 1–4) or BIOS processors as duplicate ROMs during 1G1R scans.
 - Strictly never touch, pause, or kill `/home/cfw34683/zfs_expansion_daemon.py` (PID 3505563) on `storage`.
