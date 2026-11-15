@@ -17,6 +17,8 @@
     "download-metadata": "node scripts/download-metadata.mjs",
     "audit-metadata": "node scripts/download-metadata.mjs --audit",
     "prune-orphans": "node scripts/download-metadata.mjs --prune-orphans",
+    "audit-1g1r": "node scripts/cleanup-1g1r.mjs --audit",
+    "cleanup-1g1r": "node scripts/cleanup-1g1r.mjs",
     "sync-tabstationtoo": "node scripts/sync-tabstationtoo.mjs",
     "verify-tabstationtoo": "node scripts/sync-tabstationtoo.mjs --verify",
     "sync-gambatte": "node scripts/sync-gambatte.mjs",

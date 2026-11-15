@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ROM Vault (https://your-domain.com/roms) is a high-performance web-based retro gaming preservation portal and in-browser emulation system built with Next.js 16 (App Router), React 19, and TypeScript. All code must strictly match the versions and conventions defined in package.json, discarding legacy patterns from Next.js 13–15.
 
 ## 1. Project Overview & Architecture
-- Archive: >8,220 games across 15 retro platforms (~1.25 TB across Sony PS1/PS2, Nintendo NES–GCN, and Sega systems) paired with in-browser WebGL/WASM/WebAudio emulation, cloud-synchronized memory cards, and IGDB metadata enrichment.
+- Archive: >7,250 clean 1G1R (1 Game 1 ROM) titles across 18 retro console and arcade platforms (curated from over 14,044 ROM files, multi-disc containers, and CHD archives) paired with in-browser WebGL/WASM/WebAudio emulation, cloud-synchronized memory cards, and IGDB metadata enrichment.
 - Frontend: Next.js 16 App Router, React 19, Tailwind CSS, Lucide icons, Framer Motion.
 - Backend Service: Node.js 26 service running under systemd (retro-gaming.service on port 39254), reverse-proxied behind Apache/Nginx at /roms.
 - Database: MariaDB (rom_vault) managed via connection pooling in `src/lib/db.ts` for user accounts, sessions, user-scoped virtual memory cards, and persistent IGDB cache (`game_metadata`).
@@ -122,6 +122,17 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Hero Spotlight Media Fallback Hierarchy: In hero cards and featured spotlights, preview media MUST follow a strict multi-tier fallback progression: Gameplay Video (`game.media.video`) -> In-game Screenshot (`game.media.screenshot`) -> Title Screen (`game.media.screenTitle`) -> Alternative Artwork / Fanart (`game.media.artworkFront`, `game.media.artwork3d`) -> Styled Badge Placeholder. All media tags must hook `onError` handlers to gracefully degrade forward at runtime without breaking layout or displaying empty black boxes.
 - Community Asset Contribution Policies: The Contribution Center (`/roms/contribute`) enforces strict intake rules: gameplay video submissions MUST strictly be YouTube URLs (to eliminate server transcode load and bandwidth exhaustion), whereas image submissions accept direct uploads and external URLs across PNG, JPG, JPEG, WEBP, GIF, BMP, TIFF, SVG, and AVIF (with MIME-sniffing for extensionless CDN URLs). The system selector pills bar must dynamically hide platforms that have 0 remaining missing assets.
 - Community Social & Modal Layout Balance: In `GameDetailModal.tsx`, the comments section (`GameSocialSection`) is nested at the bottom of the left column underneath media switch buttons (`2D Box`, `Screenshots`, etc.) with a slim custom scrollbar (`.custom-scrollbar`), leaving the right column uncluttered for metadata, star ratings, and play actions. High score permalinks (`/roms/scores/[id]`) generate dynamic branded social preview cards via server-rendered `src/app/scores/[id]/opengraph-image.tsx` using `ImageResponse`.
+- 1G1R (1 Game 1 ROM) Archive Curation & Clone Isolation Invariants:
+  - The storage pool enforces a strict 1G1R curation policy across all 18 retro platforms to eliminate duplicate game cards in the library catalog.
+  - Console Systems Safeguards: All console platforms (`gb`, `gba`, `gbc`, `snes`, `n64`, `gamecube`, `dreamcast`, `ps1`, `ps2`, `sms`, `sgg`, `sgb`, `sega32x`, `genesis`, `saturn`) are strictly curated. Apparent duplicate basenames must NEVER be stripped if they represent legitimate multi-disc releases (e.g. Discs 1–4, Arcade/Simulation discs), core platform BIOS files (e.g., Sega 32X master/slave processors), or distinct titles sharing a name produced by different developers across publishers.
+  - Arcade Clone Isolation: In arcade sets (`mame`, `neogeo`), clone variants (bootlegs, regional clones, revisions) must be isolated into dedicated `clones_backup/` folders rather than permanent deletion.
+  - Missing Parent Fallback Rule: If a canonical parent ROM is absent from the storage pool, the highest-ranking English/regional clone (e.g., `sf2ceub`, `gapluse`, `daytona93`) MUST be retained as the designated parent so no unique playable game is lost.
+  - Multi-Layer Catalog Synchronization: Any 1G1R curation changes must be reflected across physical storage directories, `gamelist.xml` (with `.bak.pre_1g1r` preserved), and MariaDB `game_metadata`.
+- XenForo Forum Synchronization & Public Artwork Media Routes:
+  - `src/proxy.ts` allows public, unauthenticated access to artwork media endpoints under `/api/media/` while strictly keeping `/api/media/roms/` and `/api/roms/` under authenticated session guards.
+  - `scripts/scan.sh` triggers automated XenForo thread and media population via `/var/www/html/forums/bin/populate-romvault.php` under the `WebsiteAI` system account following successful catalog rescans.
+- Dual Admin Registration Approval Workflow:
+  - New user registrations dispatch asynchronous email notifications to both primary administrators, requiring administrative approval in MariaDB before account activation.
 - Universal Multi-Disc Hot-Swapping (`DiscSwapMenu.tsx`): Allows cycling secondary discs (e.g. *Final Fantasy VII* Discs 1–3) dynamically on both desktop and mobile without unmounting memory card buffers or resetting emulated RAM.
 
 ## 10. Strict Anti-Patterns ("Do Not")
@@ -141,6 +152,8 @@ Form Actions & Saves: Implement mutations in `"use server"` files (`src/app/acti
 - Do not place React hooks after conditional early returns, and do not mutate `ref.current` during render execution.
 - Do not use bcrypt (`htpasswd -B`) for FileBot web authentication; `jlesage/baseimage-gui` webauth strictly requires Apache APR1 MD5 (`htpasswd -m`).
 - Do not restart the FileBot docker container to update credentials; invoke `docker exec filebot pkill -x webauth` to reload the supervisor in ~10ms.
+- Do not permanently delete arcade clones without testing for parent presence; if a parent set is missing, the best regional clone must be retained to avoid losing unique games.
+- Do not treat multi-disc sets (Discs 1–4) or BIOS processors as duplicate ROMs during 1G1R scans.
 - Strictly never touch, pause, or kill `/home/cfw34683/zfs_expansion_daemon.py` (PID 3505563) on `storage`.
 
 ## 11. Pre-Flight Verification
