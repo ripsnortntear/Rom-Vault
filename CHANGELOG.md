@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
 ### Added
 - **Startup ROM Library Pre-Warming (`src/instrumentation.ts`)**: Added Next.js `register()` startup hook to automatically pre-warm `scanGameLibrary()` on server boot, paired with `inFlightScan` deduplication in `src/lib/scanner.ts` so first-time visitors after a service restart do not wait on a cold filesystem scan.
 - **Contribution Center Direct Video Uploads & Multi-Asset Batch Staging (`/contribute`, `/api/contribute/upload`)**: Expanded `ContributeClient.tsx` and `/api/contribute/upload` to accept direct gameplay video uploads (`.mp4`, `.webm`, `.mov`, `.m4v`, `.mkv`, `.avi` up to `150 MB`, with automatic `ffmpeg` H.264/AAC MP4 transcoding) alongside YouTube links, plus per-category staging (`queuedAssets`) so contributors can stage multiple assets on a game card before submitting in one batch.
