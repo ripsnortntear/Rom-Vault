@@ -1,189 +1,170 @@
-# ROM Vault (`retro-gaming-interface`)
+<div align="center">
 
-High-performance retro gaming preservation portal and in-browser multi-console emulation platform built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, and **Tailwind CSS**. Designed for high-throughput streaming and responsive in-browser emulation behind an Nginx or Apache reverse proxy at `/roms` on port `39254`.
+# 🕹️ ROM Vault
+
+**High-performance retro gaming preservation portal, 1G1R archive manager, and in-browser WebAssembly emulation suite.**
+
+[![Release](https://img.shields.io/badge/release-v0.2.1-00f0ff?style=for-the-badge)](https://github.com/ripsnortntear/Rom-Vault/releases/tag/v0.2.1)
+[![Next.js](https://img.shields.io/badge/Next.js-16.4-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-20232a?style=for-the-badge&logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-Pool-003545?style=for-the-badge&logo=mariadb)](https://mariadb.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
+
+[Wiki](https://github.com/ripsnortntear/Rom-Vault/wiki) · [Changelog](CHANGELOG.md) · [Setup Guide](docs/SETUP.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md)
+
+</div>
 
 ---
 
 > [!IMPORTANT]
-> **Notice on Generalized URLs & Configuration Placeholders**:
-> All domain names (`https://your-domain.example.com`, `https://roms.example.com`), hostnames (`127.0.0.1`), IP addresses, email addresses (`admin@example.com`, `support@example.com`), credentials (`your_database_password_here`), and storage paths in this documentation and example configuration files are generalized templates. Replace them with your actual deployment targets and production secrets.
+> **Generalized Configuration Templates**:
+> All domain names (`https://your-domain.example.com`), hostnames (`127.0.0.1`), credentials, and storage paths (`/path/to/roms/`) in this repository are generalized templates. Configure your own production values in `.env.local`.
 
 ---
 
-## 🎮 Key Features
+## ✨ Highlights
 
-- **Multi-Console In-Browser Emulation**:
-  - **EmulatorJS**: WebAssembly cores for Nintendo NES, SNES, N64, Game Boy, Game Boy Color, Game Boy Advance, Sega Master System, Sega Genesis, and Sony PlayStation 1 (`pcsx_rearmed`).
-  - **TabStationToo**: High-performance PCSX2 WebAssembly and WebGL 2.0 port for PlayStation 2 emulation.
-- **Cloud-Synchronized Virtual Memory Cards**:
-  - Full binary support for PS1 (`.mcr`, 128 KB), PS2 (`.ps2`, 8 MB + ECC), and cartridge systems (`.srm`).
-  - Up to 5 user-customizable memory card slots per platform with background auto-sync.
-  - Seamless guest fallback binaries for unauthenticated sessions.
-- **HTTP 206 Partial Content Streaming**:
-  - Optimized byte-range streaming for disc archives (`.chd`, `.iso`, `.bin`) and MP4 video preview loops directly from the storage pool.
-- **Rich Media & Metadata Enrichment**:
-  - Multi-layer artwork displays (2D front box art, 3D boxes, cartridge media, transparent title logos, screenshots, and 60 FPS video loops).
-  - Automated IGDB / Twitch OAuth metadata caching.
-- **Community & Social Features**:
-  - Global game high-score leaderboards with screenshot/video proof verification.
-  - User reviews, star ratings, and community comment threads.
-- **Enterprise-Grade Security Hardening**:
-  - Next.js 16 root `proxy.ts` request filtering and authentication gate.
-  - Cryptographically signed HMAC-SHA256 session tokens with stateful MariaDB revocation enforcement (`auth_tokens`).
-  - Anti-spoofing client IP resolution and brute-force rate limiting.
-  - Atomic rescan mutex lock preventing disk I/O DoS.
-  - Strict CORS origin whitelisting and preflight handling.
+| Capability | Details |
+| :--- | :--- |
+| **18 Emulated Platforms** | In-browser WebGL/WASM/WebAudio emulation via **EmulatorJS** (Libretro), **TabStationToo** (PCSX2 WASM for PS2), **Gecko** (Dolphin WASM for GameCube), and **Gambatte-GameVault** (GB/GBC Link Cable). |
+| **2P WebRTC Netplay Rooms** | Couch-play screen/input streaming across all **18 systems on Desktop** (including TabStationToo PS2) and **12 curated systems on Mobile**, plus dual-instance **GB/GBC/GBA Virtual Link Cable** over WebRTC DataChannels. |
+| **Cloud Memory Cards & Universal Saves** | Up to **5 cloud-synced slots per platform** for PS1 (`.mcr`, 128 KB) and PS2 (`.ps2`, 8 MB + ECC), plus automatic MariaDB-backed `.srm` / `.state` sync (`navigator.sendBeacon` on unload). |
+| **Community Asset Contribution Center (`/contribute`)** | Multi-asset batch staging per game card with magic-byte verification, image URL/file intake, YouTube links, and **direct video uploads up to 150 MB** (auto-transcoded to MP4 via `ffmpeg`). |
+| **Instant Startup & HTTP 206 Streaming** | `src/instrumentation.ts` pre-warms the ROM catalog on boot (`inFlightScan` deduplication), while disc images (`.chd`, `.iso`, `.rvz`) and preview MP4s stream via zero-copy HTTP 206 byte-ranges. |
+| **1G1R Curation & IGDB/ArcadeDB Enrichment** | Automated 1G1R parent/clone cleanup (`scripts/cleanup-1g1r.mjs`), MAME `gamelist.xml` parsing, multi-layer artwork, and strict sequel/prequel IGDB matching. |
+| **Security & Auth Hardening** | Next.js 16 root `proxy.ts` HMAC-SHA256 + MariaDB stateful session validation, brute-force rate limiting, path-traversal whitelists, and Xbox USB haptic power-down safeguards. |
 
 ---
 
-## 📁 Repository & Storage Directory Structure
+## 🎮 Supported Platforms (18 Systems)
+
+| Family | Systems | Engine / Core |
+| :--- | :--- | :--- |
+| **Nintendo** | `NES`, `SNES`, `N64`, `GB`, `GBC`, `SGB`, `GBA`, `GameCube` | EmulatorJS (`fceumm`, `snes9x`, `mupen64plus_next`, `gambatte`, `mgba`) + **Gecko** (GameCube) |
+| **Sony** | `PS1`, `PS2` | EmulatorJS (`pcsx_rearmed`) + **TabStationToo** (PCSX2 WASM) |
+| **Sega** | `Master System`, `Game Gear`, `Genesis / Mega Drive`, `Sega 32X`, `Saturn`, `Dreamcast` | EmulatorJS (`smsplus`, `genesis_plus_gx`, `picodrive`, `yabause`, `flycast`) |
+| **Arcade** | `MAME`, `SNK Neo Geo` | EmulatorJS (`mame2003_plus`, `fbneo`) |
+
+---
+
+## 📁 Project & Storage Structure
 
 ```text
-/var/www/html/roms/                 # Application root directory
-├── deploy/
-│   ├── install-ubuntu.sh           # Automated Ubuntu systemd deployment script
-│   ├── nginx-roms.conf             # Nginx reverse proxy configuration template
-│   └── retro-gaming.service        # Systemd unit file (port 39254)
-├── docs/                           # Extended technical documentation & Wiki
-│   ├── ARCHITECTURE.md             # System architecture & emulation pipelines
-│   ├── MEMORY_CARDS.md             # Virtual memory card formats & sync APIs
-│   ├── SECURITY.md                 # Security controls & vulnerability audit notes
-│   └── SETUP.md                    # In-depth production installation guide
-├── migrations/
-│   ├── 001_init_auth.sql           # Users, sessions, and community schema
-│   └── 002_user_memory_cards.sql   # Virtual memory cards multi-slot schema
-├── public/                         # Static assets and WebAssembly emulator cores
+roms/
+├── deploy/                         # Ubuntu systemd unit & Nginx reverse proxy templates
+├── docs/                           # Architecture, Setup, Memory Cards, and Security docs
+├── migrations/                     # MariaDB SQL migrations (auth, saves, memory cards, CACC)
+├── public/                         # Static assets, EmulatorJS cores, TabStationToo, Gecko
+├── scripts/                        # 1G1R audit/cleanup, IGDB/ArcadeDB metadata, scan automation
 ├── src/
-│   ├── app/                        # Next.js App Router (Pages, APIs, Server Actions)
-│   ├── components/                 # React 19 Client & Server Components
-│   ├── lib/                        # Server-only utilities (DB pool, auth, scanner)
-│   └── proxy.ts                    # Next.js 16 root proxy (auth & header hygiene)
-├── audit-scan.sh                   # Static security scanner
-└── sync-repo.sh                    # Automated build verification & sync script
+│   ├── app/                        # Next.js 16 App Router pages, API routes, & Server Actions
+│   ├── components/                 # Client UI (Library, Emulator, 2P Rooms, CACC, Admin)
+│   ├── lib/                        # Server-only DB pool, auth, scanner, IGDB, contributions
+│   ├── instrumentation.ts          # Startup ROM library cache pre-warming hook
+│   └── proxy.ts                    # Next.js 16 root proxy (auth gate & header hygiene)
+└── vendor/                         # Tracked upstream submodules (TabStationToo, Gambatte-GameVault)
 ```
 
-### ROM Storage Pool Layout (e.g. `/path/to/roms/`)
+<details>
+<summary><strong>Storage Pool Layout (<code>STORAGE_ROOT=/path/to/roms</code>)</strong></summary>
 
 ```text
 /path/to/roms/
-├── psx/
+├── <system>/
 │   ├── artwork/
+│   │   ├── artwork_front/          # 2D front box art (.jpg, .png)
 │   │   ├── artwork_3d/             # 3D box renders (.png, .webp)
-│   │   ├── artwork_front/          # 2D front covers (.jpg, .png)
-│   │   ├── logo/                   # Transparent title logos (.png)
-│   │   ├── screenshot/             # High-res screenshots (.jpg, .png)
-│   │   └── video/                  # 30-second gameplay video previews (.mp4)
-│   └── roms/
-│       └── *.chd                   # PlayStation CHD compressed disc images
-├── ps2/
-│   ├── artwork/
-│   └── roms/
-│       └── *.chd, *.iso            # PlayStation 2 disc archives
-├── nintendo/
-│   ├── nes/
-│   ├── snes/
-│   ├── gba/
-│   └── n64/
-└── saves/                          # Global fallback saves (*.srm)
+│   │   ├── logo/                   # Transparent title logos / marquees (.png)
+│   │   ├── medium_front/           # Cartridge / disc art (.png)
+│   │   ├── screenshot/             # In-game screenshots (.jpg, .png)
+│   │   ├── screentitle/            # Title screens (.jpg, .png)
+│   │   ├── story/                  # Game overviews (.txt)
+│   │   └── video/                  # Gameplay preview loops (.mp4)
+│   └── roms/                       # Curated 1G1R ROMs, CHDs, ISOs, & BIOS archives
+└── saves/                          # Per-user virtual memory cards & cloud saves
 ```
+
+</details>
 
 ---
 
-## 🚀 Quick Setup & Deployment
+## 🚀 Quick Start & Deployment
 
-For a detailed step-by-step walkthrough, see [`docs/SETUP.md`](docs/SETUP.md).
+For the complete production walkthrough, see [`docs/SETUP.md`](docs/SETUP.md) or the [Wiki](https://github.com/ripsnortntear/Rom-Vault/wiki).
 
-### 1. Configure Environment Variables
+### 1. Environment & Database
 
 ```bash
 cp .env.example .env.local
 chmod 600 .env.local
-nano .env.local
-```
+# Set DB_USER, DB_PASSWORD, DB_NAME, SESSION_SECRET (32+ chars), STORAGE_ROOT, NEXT_PUBLIC_APP_URL
 
-Ensure you configure:
-- `DB_USER`, `DB_PASSWORD`, `DB_NAME` (MariaDB credentials)
-- `SESSION_SECRET` (Secure random string, minimum 32 characters)
-- `STORAGE_ROOT` (Absolute path to your ROM storage pool)
-- `NEXT_PUBLIC_APP_URL` (`https://your-domain.example.com/roms`)
-
-### 2. Run Database Migrations
-
-```bash
 mysql -u rom_vault_user -p rom_vault < migrations/001_init_auth.sql
 mysql -u rom_vault_user -p rom_vault < migrations/002_user_memory_cards.sql
 ```
 
-### 3. Automated Ubuntu Systemd Setup
+### 2. Install, Build & Run
 
 ```bash
-chmod +x deploy/install-ubuntu.sh
-./deploy/install-ubuntu.sh
+npm ci
+npm run build
+chmod +x deploy/install-ubuntu.sh && ./deploy/install-ubuntu.sh
 ```
 
-This installs dependencies via `npm ci`, builds the Next.js bundle, and starts `retro-gaming.service` on port `39254`.
+### 3. Nginx Reverse Proxy (COOP/COEP + CACC Exemption)
 
-### 4. Configure Nginx Reverse Proxy
-
-Add the location block from `deploy/nginx-roms.conf` inside your server block (e.g., `/etc/nginx/sites-available/your-domain.example.com`):
+Emulator routes require `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` for WASM `SharedArrayBuffer`, while `/roms/contribute` and `/roms/admin` use `location ^~` blocks without `COEP` so third-party YouTube preview embeds connect cleanly:
 
 ```nginx
+location ^~ /roms/contribute {
+    proxy_pass http://127.0.0.1:39254;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_buffering off;
+    client_max_body_size 0;
+}
+
 location ^~ /roms {
     proxy_pass http://127.0.0.1:39254;
     proxy_http_version 1.1;
-
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection 'upgrade';
+    proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Embedder-Policy "credentialless" always;
     proxy_buffering off;
-    proxy_read_timeout 300s;
-    proxy_cache_bypass $http_upgrade;
-    client_max_body_size 50M;
+    client_max_body_size 0;
 }
-```
-
-Reload Nginx:
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
 
 ## 🧪 Testing & Verification
 
-Run the hermetic test suite and static security scanner:
-
 ```bash
-# Run Vitest unit & regression tests (hermetic, zero DB dependency)
+# Run all 24 Vitest suites (188 hermetic tests)
 npm test
 
-# Run TypeScript compilation check
-npx tsc --noEmit
+# Type-check & production build
+npx tsc --noEmit && npm run build
 
-# Run automated static security vulnerability scanner
+# Static security audit
 ./audit-scan.sh
-
-# Test Next.js production build
-npm run build
 ```
 
 ---
 
-## 📚 Technical Documentation & Wiki
+## 📚 Documentation
 
-Explore the detailed technical documentation:
-- 📖 [**Setup & Installation Guide**](docs/SETUP.md): Step-by-step MariaDB, systemd, and Nginx setup.
-- 🏛️ [**Architecture & Emulation Design**](docs/ARCHITECTURE.md): Deep dive into WebAssembly emulation, Next.js 16 proxying, and streaming.
-- 🛡️ [**Security & Hardening**](docs/SECURITY.md): Threat model, session revocation, and input sanitization guidelines.
-- 💾 [**Memory Cards & Cloud Saves**](docs/MEMORY_CARDS.md): Memory card binary formats (`.mcr`, `.ps2`, `.srm`) and cloud sync protocols.
+- 📖 [**Setup & Installation Guide**](docs/SETUP.md) — MariaDB, systemd, and Nginx setup
+- 🏛️ [**Architecture & Pipelines**](docs/ARCHITECTURE.md) — Next.js 16 proxying, streaming, & WASM emulation
+- 🛡️ [**Security & Hardening**](docs/SECURITY.md) — Threat model, session revocation, & input sanitization
+- 💾 [**Memory Cards & Cloud Saves**](docs/MEMORY_CARDS.md) — `.mcr`, `.ps2`, and `.srm` specifications
+- 🌐 [**GitHub Wiki**](https://github.com/ripsnortntear/Rom-Vault/wiki) — Extended operational guides
 
 ---
 
 ## 📄 License
 
-This software is released under the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE).
