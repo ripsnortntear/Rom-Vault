@@ -388,14 +388,105 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Handle Gameplay Video contribution — ONLY ACCEPT YOUTUBE LINKS
+    // 2. Handle Gameplay Video contribution — Direct video upload OR YouTube link
     if (assetType === "video") {
       const youtubeUrl = String(formData.get("youtubeUrl") || formData.get("mediaUrl") || "").trim();
+      const videoFile = formData.get("file");
+
+      if (videoFile instanceof File && videoFile.size > 0) {
+        const MAX_VIDEO_BYTES = 150 * 1024 * 1024; // 150 MB
+        if (videoFile.size > MAX_VIDEO_BYTES) {
+          return NextResponse.json(
+            { ok: false, error: "Video file exceeds the 150 MB maximum upload limit." },
+            { status: 400 }
+          );
+        }
+
+        const origExt = path.extname(videoFile.name || "").toLowerCase();
+        const allowedVideoExts = new Set([".mp4", ".m4v", ".webm", ".mov", ".mkv", ".avi"]);
+        const isVideoMime = (videoFile.type || "").toLowerCase().startsWith("video/");
+        if (!allowedVideoExts.has(origExt) && !isVideoMime) {
+          return NextResponse.json(
+            { ok: false, error: "Unsupported video format. Please upload MP4, WebM, MOV, M4V, MKV, or AVI." },
+            { status: 400 }
+          );
+        }
+
+        let videoBuffer: Buffer = Buffer.from(await videoFile.arrayBuffer());
+
+        // Transcode non-MP4 containers to standard H.264/AAC MP4 for universal browser & scanner compatibility
+        if (origExt !== ".mp4" && origExt !== ".m4v") {
+          const tmpId = crypto.randomBytes(8).toString("hex");
+          const tmpIn = path.join(os.tmpdir(), `cacc_vid_in_${tmpId}${origExt || ".bin"}`);
+          const tmpOut = path.join(os.tmpdir(), `cacc_vid_out_${tmpId}.mp4`);
+          try {
+            await fsp.writeFile(tmpIn, videoBuffer);
+            await execFileAsync(
+              "ffmpeg",
+              [
+                "-y",
+                "-i",
+                tmpIn,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-movflags",
+                "+faststart",
+                tmpOut,
+              ],
+              { timeout: 120000 }
+            );
+            videoBuffer = await fsp.readFile(tmpOut);
+          } catch (convErr: any) {
+            return NextResponse.json(
+              {
+                ok: false,
+                error: `Failed converting uploaded video to MP4: ${convErr?.message || "Invalid video file."}`,
+              },
+              { status: 400 }
+            );
+          } finally {
+            await fsp.unlink(tmpIn).catch(() => {});
+            await fsp.unlink(tmpOut).catch(() => {});
+          }
+        }
+
+        const submission = await submitAssetContribution({
+          userId: String(session.user.id),
+          username: String(session.user.username),
+          displayName: session.user.displayName ? String(session.user.displayName) : null,
+          system,
+          baseName: canonicalBaseName,
+          gameTitle,
+          category: "video",
+          buffer: videoBuffer,
+          fileExt: ".mp4",
+        });
+
+        return NextResponse.json({
+          ok: true,
+          status: "pending",
+          submission,
+          assetType,
+          points: submission.points,
+          contributor: session.user.displayName || session.user.username,
+        });
+      }
+
       if (!youtubeUrl) {
         return NextResponse.json(
           {
             ok: false,
-            error: "Please enter a YouTube link (only YouTube links are accepted for gameplay videos).",
+            error: "Please upload a video file (.mp4, .webm, .mov, .m4v) or paste a YouTube link.",
           },
           { status: 400 }
         );
@@ -407,7 +498,7 @@ export async function POST(request: NextRequest) {
           {
             ok: false,
             error:
-              "Invalid video link. Only YouTube links (youtube.com/watch?v=... or youtu.be/...) are accepted for gameplay videos.",
+              "Invalid video link. Only YouTube links (youtube.com/watch?v=... or youtu.be/...) are accepted, or upload a video file directly.",
           },
           { status: 400 }
         );

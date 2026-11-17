@@ -75,6 +75,7 @@ function getBaseGameKey(baseName: string): string {
 
 let cachedLibrary: GameLibraryResponse | null = null;
 let cachedSignature = "";
+let inFlightScan: Promise<GameLibraryResponse> | null = null;
 
 function getSystemSignature(system: string): string {
   try {
@@ -397,7 +398,9 @@ function scanSystem(system: string): SystemScanResult {
       if (
         (lower.includes("bios") &&
           (lower.endsWith(".bin") || lower.endsWith(".rom") || lower.endsWith(".dat"))) ||
-        lower === "neogeo.zip"
+        lower === "neogeo.zip" ||
+        lower === "v4bios.zip" ||
+        lower === "hng64.zip"
       ) {
         return false;
       }
@@ -702,15 +705,20 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
     return cachedLibrary;
   }
 
-  if (forceRefresh) {
-    if (!acquireScanLock()) {
-      const err = new Error("A filesystem rescan is already in progress.");
-      err.name = "ScanConflictError";
-      throw err;
-    }
+  if (!forceRefresh && inFlightScan) {
+    return inFlightScan;
   }
 
-  try {
+  const runScan = async (): Promise<GameLibraryResponse> => {
+    if (forceRefresh) {
+      if (!acquireScanLock()) {
+        const err = new Error("A filesystem rescan is already in progress.");
+        err.name = "ScanConflictError";
+        throw err;
+      }
+    }
+
+    try {
     const allGames: GameItem[] = [];
     const combinedRegions: Record<string, number> = {};
     const systemCounts: Record<string, number> = {};
@@ -833,6 +841,16 @@ export async function scanGameLibrary(forceRefresh = false): Promise<GameLibrary
       releaseScanLock();
     }
   }
+  };
+
+  if (!forceRefresh) {
+    inFlightScan = runScan().finally(() => {
+      inFlightScan = null;
+    });
+    return inFlightScan;
+  }
+
+  return runScan();
 }
 
 export function updateCachedGameMetadata(id: string, meta: Partial<GameItem>): void {

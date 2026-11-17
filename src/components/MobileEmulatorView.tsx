@@ -1008,6 +1008,8 @@ function StandardMobileEmulatorView({
           window.EJS_biosUrl = "/roms/api/bios/scph5501.bin?system=psx";
         } else if (game.system === "dreamcast") {
           window.EJS_biosUrl = "/roms/api/bios/dc_boot.bin?system=dreamcast";
+        } else if (game.system === "neogeo") {
+          window.EJS_biosUrl = "/roms/api/bios/neogeo.zip?system=neogeo";
         }
         window.EJS_gamePath = cleanFileName;
         window.EJS_disableCue = true;

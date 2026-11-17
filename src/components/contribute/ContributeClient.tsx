@@ -138,8 +138,8 @@ export const ASSET_CATEGORIES: AssetCategoryDef[] = [
     label: "Gameplay Video",
     shortLabel: "Video",
     points: 25,
-    accept: ".mp4",
-    description: "YouTube gameplay link (ONLY youtube.com or youtu.be links accepted)",
+    accept: ".mp4,.webm,.mov,.m4v,.mkv,.avi,video/mp4,video/webm,video/quicktime",
+    description: "Upload a gameplay video (.mp4, .webm, .mov) or paste a YouTube link",
     isAvailable: (g) => Boolean(g.media.video),
     getPreviewUrl: (g) => g.media.video,
   },
@@ -211,6 +211,28 @@ function extractClientYoutubeId(rawUrl: string): string | null {
   }
 }
 
+interface StagedAssetDraft {
+  file: File | null;
+  previewObjectUrl: string | null;
+  mediaUrl: string;
+  storyText: string;
+}
+
+function isDraftPopulated(
+  cat: AssetCategoryKey,
+  draft: StagedAssetDraft | undefined,
+  initialStory: string
+): boolean {
+  if (!draft) return false;
+  if (cat === "story") {
+    return Boolean(
+      draft.file ||
+        (draft.storyText.trim().length > 0 && draft.storyText !== initialStory)
+    );
+  }
+  return Boolean(draft.file || draft.mediaUrl.trim().length > 0);
+}
+
 export function ContributeClient({
   initialGames,
   initialUser,
@@ -240,16 +262,62 @@ export function ContributeClient({
   // Modal state
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
   const [activeCategory, setActiveCategory] = useState<AssetCategoryKey>("artwork_front");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
-  const [mediaUrlInput, setMediaUrlInput] = useState<string>("");
-  const [storyDraft, setStoryDraft] = useState<string>("");
+  const [queuedAssets, setQueuedAssets] = useState<
+    Partial<Record<AssetCategoryKey, StagedAssetDraft>>
+  >({});
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const currentDraft = queuedAssets[activeCategory];
+  const selectedFile = currentDraft?.file ?? null;
+  const previewObjectUrl = currentDraft?.previewObjectUrl ?? null;
+  const mediaUrlInput = currentDraft?.mediaUrl ?? "";
+  const storyDraft = currentDraft?.storyText ?? (activeGame?.story || "");
+
+  const updateActiveDraft = (
+    updater: (prev: StagedAssetDraft) => StagedAssetDraft
+  ) => {
+    const fallbackStory = activeGame?.story || "";
+    setQueuedAssets((prev) => {
+      const existing: StagedAssetDraft = prev[activeCategory] ?? {
+        file: null,
+        previewObjectUrl: null,
+        mediaUrl: "",
+        storyText: fallbackStory,
+      };
+      return {
+        ...prev,
+        [activeCategory]: updater(existing),
+      };
+    });
+  };
+
+  const clearCategoryDraft = (cat: AssetCategoryKey) => {
+    setQueuedAssets((prev) => {
+      const existing = prev[cat];
+      if (existing?.previewObjectUrl) {
+        URL.revokeObjectURL(existing.previewObjectUrl);
+      }
+      const next = { ...prev };
+      delete next[cat];
+      return next;
+    });
+  };
+
+  const clearAllDrafts = () => {
+    setQueuedAssets((prev) => {
+      for (const draft of Object.values(prev)) {
+        if (draft?.previewObjectUrl) {
+          URL.revokeObjectURL(draft.previewObjectUrl);
+        }
+      }
+      return {};
+    });
+  };
 
   // Fast O(1) lookup set for pending slots: `${system}__${baseName.toLowerCase()}__${category}`
   const pendingSlotMap = useMemo(() => {
@@ -416,15 +484,9 @@ export function ContributeClient({
   }, [filteredGames, safePage]);
 
   const openModal = (game: GameItem, preferredCat?: AssetCategoryKey) => {
+    clearAllDrafts();
     setActiveGame(game);
-    setSelectedFile(null);
-    setMediaUrlInput("");
-    if (previewObjectUrl) {
-      URL.revokeObjectURL(previewObjectUrl);
-      setPreviewObjectUrl(null);
-    }
     setUploadStatus(null);
-    setStoryDraft(game.story || "");
 
     if (preferredCat) {
       setActiveCategory(preferredCat);
@@ -437,116 +499,176 @@ export function ContributeClient({
   };
 
   const closeModal = () => {
+    clearAllDrafts();
     setActiveGame(null);
-    setSelectedFile(null);
-    setMediaUrlInput("");
-    if (previewObjectUrl) {
-      URL.revokeObjectURL(previewObjectUrl);
-      setPreviewObjectUrl(null);
-    }
     setUploadStatus(null);
   };
 
   const handleFileChange = (file: File | null) => {
-    if (previewObjectUrl) {
-      URL.revokeObjectURL(previewObjectUrl);
-      setPreviewObjectUrl(null);
-    }
-    setSelectedFile(file);
-    if (file) {
-      setMediaUrlInput("");
-    }
+    const nextPreview =
+      file &&
+      (file.type.startsWith("image/") ||
+        file.type.startsWith("video/") ||
+        /\.(mp4|webm|mov|m4v)$/i.test(file.name))
+        ? URL.createObjectURL(file)
+        : null;
+
+    updateActiveDraft((prev) => {
+      if (prev.previewObjectUrl) {
+        URL.revokeObjectURL(prev.previewObjectUrl);
+      }
+      return {
+        ...prev,
+        file,
+        previewObjectUrl: nextPreview,
+        mediaUrl: file ? "" : prev.mediaUrl,
+      };
+    });
     setUploadStatus(null);
-    if (file && file.type.startsWith("image/")) {
-      setPreviewObjectUrl(URL.createObjectURL(file));
-    }
   };
+
+  const stagedEntries = useMemo(() => {
+    if (!activeGame) return [];
+    const initialStory = activeGame.story || "";
+    return ASSET_CATEGORIES.filter((cat) =>
+      isDraftPopulated(cat.key, queuedAssets[cat.key], initialStory)
+    );
+  }, [activeGame, queuedAssets]);
+
+  const totalStagedPoints = useMemo(
+    () => stagedEntries.reduce((sum, cat) => sum + cat.points, 0),
+    [stagedEntries]
+  );
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeGame) return;
 
-    setUploading(true);
-    setUploadStatus(null);
+    const initialStory = activeGame.story || "";
+    const targets =
+      stagedEntries.length > 0
+        ? stagedEntries
+        : [
+            ASSET_CATEGORIES.find((c) => c.key === activeCategory) ||
+              ASSET_CATEGORIES[0],
+          ];
 
-    try {
-      const formData = new FormData();
-      formData.append("system", activeGame.system);
-      formData.append("baseName", activeGame.baseName);
-      formData.append("gameTitle", activeGame.displayTitle);
-      formData.append("assetType", activeCategory);
-
-      if (activeCategory === "story") {
-        if (selectedFile) {
-          formData.append("file", selectedFile);
-        } else {
-          formData.append("storyText", storyDraft);
+    // Pre-validate every queued target before uploading
+    for (const catDef of targets) {
+      const draft = queuedAssets[catDef.key];
+      if (catDef.key === "story") {
+        const text = draft?.storyText ?? initialStory;
+        if (!draft?.file && !text.trim()) {
+          setActiveCategory("story");
+          setUploadStatus({
+            type: "error",
+            message: "Please enter a story description or choose a .txt file.",
+          });
+          return;
         }
-      } else if (activeCategory === "video") {
-        const ytId = extractClientYoutubeId(mediaUrlInput);
-        if (!ytId) {
+      } else if (catDef.key === "video") {
+        const ytId = extractClientYoutubeId(draft?.mediaUrl || "");
+        if (!draft?.file && !ytId) {
+          setActiveCategory("video");
           setUploadStatus({
             type: "error",
             message:
-              "Only valid YouTube links (https://www.youtube.com/watch?v=... or https://youtu.be/...) are accepted for gameplay videos.",
+              "Please upload a video file (.mp4, .webm, .mov, .m4v) or paste a valid YouTube link.",
           });
-          setUploading(false);
           return;
         }
-        formData.append("youtubeUrl", mediaUrlInput.trim());
       } else {
-        const trimmedUrl = mediaUrlInput.trim();
-        if (trimmedUrl) {
-          formData.append("imageUrl", trimmedUrl);
-        } else if (selectedFile) {
-          formData.append("file", selectedFile);
-        } else {
+        if (!draft?.file && !(draft?.mediaUrl || "").trim()) {
+          setActiveCategory(catDef.key);
           setUploadStatus({
             type: "error",
-            message: "Please choose an image file or paste a direct image URL.",
+            message: `Please choose an image file or paste a direct image URL for ${catDef.label}.`,
           });
-          setUploading(false);
           return;
         }
       }
+    }
 
-      const res = await fetch("/roms/api/contribute/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
+    setUploading(true);
+    setUploadStatus(null);
 
-      if (!res.ok || !data.ok) {
-        setUploadStatus({
-          type: "error",
-          message: data.error || "Upload failed.",
-        });
-        setUploading(false);
-        return;
+    const succeededCats: typeof targets = [];
+    const errors: string[] = [];
+
+    try {
+      for (const catDef of targets) {
+        const draft = queuedAssets[catDef.key];
+        const formData = new FormData();
+        formData.append("system", activeGame.system);
+        formData.append("baseName", activeGame.baseName);
+        formData.append("gameTitle", activeGame.displayTitle);
+        formData.append("assetType", catDef.key);
+
+        if (catDef.key === "story") {
+          if (draft?.file) {
+            formData.append("file", draft.file);
+          } else {
+            formData.append("storyText", draft?.storyText ?? "");
+          }
+        } else if (catDef.key === "video") {
+          if (draft?.file) {
+            formData.append("file", draft.file);
+          } else {
+            formData.append("youtubeUrl", (draft?.mediaUrl || "").trim());
+          }
+        } else {
+          const trimmedUrl = (draft?.mediaUrl || "").trim();
+          if (trimmedUrl) {
+            formData.append("imageUrl", trimmedUrl);
+          } else if (draft?.file) {
+            formData.append("file", draft.file);
+          }
+        }
+
+        try {
+          const res = await fetch("/roms/api/contribute/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            errors.push(`${catDef.label}: ${data.error || "Upload failed."}`);
+            continue;
+          }
+
+          succeededCats.push(catDef);
+          clearCategoryDraft(catDef.key);
+
+          const newSlot: PendingAssetSlot = {
+            system: activeGame.system,
+            baseName: activeGame.baseName,
+            category: catDef.key,
+            username: String(initialUser?.displayName || initialUser?.username || "You"),
+            createdAt: new Date().toISOString(),
+          };
+          setPendingSlots((prev) => [newSlot, ...prev]);
+
+          if (data.submission) {
+            setUserSubmissions((prev) => [data.submission, ...prev]);
+          }
+        } catch (err: any) {
+          errors.push(
+            `${catDef.label}: ${err?.message || "Network error while uploading asset."}`
+          );
+        }
       }
 
-      // Add newly staged submission to pendingSlots & userSubmissions
-      const newSlot: PendingAssetSlot = {
-        system: activeGame.system,
-        baseName: activeGame.baseName,
-        category: activeCategory,
-        username: String(initialUser?.displayName || initialUser?.username || "You"),
-        createdAt: new Date().toISOString(),
-      };
-      setPendingSlots((prev) => [newSlot, ...prev]);
-
-      if (data.submission) {
-        setUserSubmissions((prev) => [data.submission, ...prev]);
-      }
-
-      // Update user's pending count on leaderboard
-      if (initialUser?.id) {
+      if (succeededCats.length > 0 && initialUser?.id) {
         const uid = String(initialUser.id);
+        const addedCount = succeededCats.length;
         setLeaderboard((prev) => {
           const exists = prev.some((e) => e.userId === uid);
           if (exists) {
             return prev.map((e) =>
-              e.userId === uid ? { ...e, pendingCount: e.pendingCount + 1 } : e
+              e.userId === uid
+                ? { ...e, pendingCount: e.pendingCount + addedCount }
+                : e
             );
           }
           return [
@@ -561,7 +683,7 @@ export function ContributeClient({
               avatarUrl: null,
               totalPoints: 0,
               approvedCount: 0,
-              pendingCount: 1,
+              pendingCount: addedCount,
               imagesCount: 0,
               videosCount: 0,
               storiesCount: 0,
@@ -571,25 +693,27 @@ export function ContributeClient({
         });
       }
 
-      setSelectedFile(null);
-      setMediaUrlInput("");
-      if (previewObjectUrl) {
-        URL.revokeObjectURL(previewObjectUrl);
-        setPreviewObjectUrl(null);
+      const succeededPts = succeededCats.reduce((sum, c) => sum + c.points, 0);
+      if (errors.length === 0 && succeededCats.length > 0) {
+        const label =
+          succeededCats.length === 1
+            ? succeededCats[0].label
+            : `${succeededCats.length} assets (${succeededCats.map((c) => c.shortLabel).join(", ")})`;
+        setUploadStatus({
+          type: "success",
+          message: `${label} submitted for Admin Verification! Once approved, it will go live in the Vault and award +${succeededPts} pts on the Contributors Leaderboard.`,
+        });
+      } else if (succeededCats.length > 0 && errors.length > 0) {
+        setUploadStatus({
+          type: "error",
+          message: `Submitted ${succeededCats.length} asset(s) (+${succeededPts} pts), but failed on: ${errors.join(" | ")}`,
+        });
+      } else if (errors.length > 0) {
+        setUploadStatus({
+          type: "error",
+          message: errors.join(" | "),
+        });
       }
-
-      const catDef =
-        ASSET_CATEGORIES.find((c) => c.key === activeCategory) ||
-        ASSET_CATEGORIES[0];
-      setUploadStatus({
-        type: "success",
-        message: `${catDef.label} submitted for Admin Verification! Once approved, it will go live in the Vault and award +${catDef.points} pts on the Contributors Leaderboard.`,
-      });
-    } catch (err: any) {
-      setUploadStatus({
-        type: "error",
-        message: err?.message || "Network error while uploading asset.",
-      });
     } finally {
       setUploading(false);
     }
@@ -1391,29 +1515,35 @@ export function ContributeClient({
                       cat.key
                     );
                     const isSelected = activeCategory === cat.key;
+                    const isStaged = isDraftPopulated(
+                      cat.key,
+                      queuedAssets[cat.key],
+                      activeGame.story || ""
+                    );
                     return (
                       <button
                         key={cat.key}
                         type="button"
                         onClick={() => {
                           setActiveCategory(cat.key);
-                          setSelectedFile(null);
-                          setMediaUrlInput("");
-                          if (previewObjectUrl) {
-                            URL.revokeObjectURL(previewObjectUrl);
-                            setPreviewObjectUrl(null);
-                          }
                           setUploadStatus(null);
                         }}
                         className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex items-center justify-between gap-2 ${
                           isSelected
                             ? "bg-red-600/20 border-red-500 text-white"
+                            : isStaged
+                            ? "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/50 text-emerald-100"
                             : "bg-zinc-900/80 hover:bg-zinc-900 border-white/10 text-zinc-300"
                         }`}
                       >
                         <div className="min-w-0">
-                          <div className="text-xs font-bold truncate">
-                            {cat.label}
+                          <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                            <span className="truncate">{cat.label}</span>
+                            {isStaged && (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-300 text-[9px] font-extrabold uppercase shrink-0">
+                                Staged
+                              </span>
+                            )}
                           </div>
                           <div className="text-[10px] font-mono text-amber-400">
                             +{cat.points} pts
@@ -1516,7 +1646,13 @@ export function ContributeClient({
                       <textarea
                         rows={6}
                         value={storyDraft}
-                        onChange={(e) => setStoryDraft(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateActiveDraft((prev) => ({
+                            ...prev,
+                            storyText: val,
+                          }));
+                        }}
                         placeholder="Write or paste the game's story, synopsis, arcade history, or gameplay overview here..."
                         className="w-full p-3.5 rounded-xl bg-zinc-950 border border-white/10 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-red-500/60"
                       />
@@ -1526,24 +1662,35 @@ export function ContributeClient({
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-bold text-zinc-200">
-                            YouTube Gameplay Link
+                            Option A: Paste YouTube Gameplay Link
                           </label>
                           <span className="px-2 py-0.5 rounded bg-red-600/20 border border-red-500/40 text-[10px] font-extrabold text-red-300 uppercase">
-                            YouTube Links Only
+                            YouTube or File Upload
                           </span>
                         </div>
                         <input
                           type="url"
                           value={mediaUrlInput}
                           onChange={(e) => {
-                            setMediaUrlInput(e.target.value);
+                            const val = e.target.value;
+                            updateActiveDraft((prev) => {
+                              if (val.trim() && prev.previewObjectUrl) {
+                                URL.revokeObjectURL(prev.previewObjectUrl);
+                              }
+                              return {
+                                ...prev,
+                                mediaUrl: val,
+                                file: val.trim() ? null : prev.file,
+                                previewObjectUrl: val.trim() ? null : prev.previewObjectUrl,
+                              };
+                            });
                             setUploadStatus(null);
                           }}
                           placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
                           className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-white/15 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                         />
                         <p className="text-[11px] text-zinc-400">
-                          Paste a YouTube gameplay video link. Only <code className="text-zinc-200">youtube.com</code> and <code className="text-zinc-200">youtu.be</code> URLs are accepted.
+                          Paste a <code className="text-zinc-200">youtube.com</code> / <code className="text-zinc-200">youtu.be</code> link, or upload a video file below.
                         </p>
                       </div>
 
@@ -1551,14 +1698,27 @@ export function ContributeClient({
                         const ytId = extractClientYoutubeId(mediaUrlInput);
                         if (ytId) {
                           return (
-                            <div className="rounded-xl overflow-hidden border border-emerald-500/40 bg-black aspect-video max-h-60 mx-auto">
-                              <iframe
-                                src={`https://www.youtube-nocookie.com/embed/${ytId}`}
-                                title="YouTube Gameplay Preview"
-                                className="w-full h-full"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
+                            <div className="space-y-1.5">
+                              <div className="rounded-xl overflow-hidden border border-emerald-500/40 bg-black aspect-video max-h-60 mx-auto">
+                                <iframe
+                                  src={`https://www.youtube.com/embed/${ytId}`}
+                                  title="YouTube Gameplay Preview"
+                                  className="w-full h-full"
+                                  referrerPolicy="strict-origin-when-cross-origin"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              </div>
+                              <div className="text-center">
+                                <a
+                                  href={`https://www.youtube.com/watch?v=${ytId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] font-semibold text-zinc-400 hover:text-white underline"
+                                >
+                                  Open on YouTube ↗
+                                </a>
+                              </div>
                             </div>
                           );
                         }
@@ -1567,13 +1727,67 @@ export function ContributeClient({
                             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300 font-semibold flex items-center gap-2">
                               <AlertCircle className="w-4 h-4 shrink-0" />
                               <span>
-                                Only valid YouTube links (<code className="text-white">youtube.com/watch?v=...</code> or <code className="text-white">youtu.be/...</code>) are accepted.
+                                Only valid YouTube links (<code className="text-white">youtube.com/watch?v=...</code> or <code className="text-white">youtu.be/...</code>) are accepted here.
                               </span>
                             </div>
                           );
                         }
                         return null;
                       })()}
+
+                      <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider text-zinc-500 font-bold">
+                        <div className="flex-1 h-px bg-white/10" />
+                        <span>OR UPLOAD VIDEO FILE</span>
+                        <div className="flex-1 h-px bg-white/10" />
+                      </div>
+
+                      {/* Option B: Drag & Drop Video File Upload */}
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const dropped = e.dataTransfer.files?.[0] || null;
+                          if (dropped) handleFileChange(dropped);
+                        }}
+                        className="border-2 border-dashed border-white/15 hover:border-red-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-zinc-950/60 flex flex-col items-center justify-center gap-2"
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={activeCategoryDef.accept}
+                          onChange={(e) =>
+                            handleFileChange(e.target.files?.[0] || null)
+                          }
+                          className="hidden"
+                        />
+                        {selectedFile ? (
+                          <div className="space-y-2 w-full">
+                            {previewObjectUrl && (
+                              <video
+                                src={previewObjectUrl}
+                                controls
+                                playsInline
+                                preload="metadata"
+                                className="max-h-52 mx-auto rounded-lg bg-black"
+                              />
+                            )}
+                            <p className="text-xs font-bold text-emerald-400">
+                              {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB — Ready to submit)
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-7 h-7 text-red-400" />
+                            <p className="text-xs font-bold text-zinc-200">
+                              Click to choose a video file or drag &amp; drop here
+                            </p>
+                            <p className="text-[11px] text-zinc-400">
+                              MP4, WebM, MOV, M4V, MKV, AVI (max 150 MB)
+                            </p>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -1587,14 +1801,17 @@ export function ContributeClient({
                           value={mediaUrlInput}
                           onChange={(e) => {
                             const val = e.target.value;
-                            setMediaUrlInput(val);
-                            if (val.trim()) {
-                              setSelectedFile(null);
-                              if (previewObjectUrl) {
-                                URL.revokeObjectURL(previewObjectUrl);
-                                setPreviewObjectUrl(null);
+                            updateActiveDraft((prev) => {
+                              if (val.trim() && prev.previewObjectUrl) {
+                                URL.revokeObjectURL(prev.previewObjectUrl);
                               }
-                            }
+                              return {
+                                ...prev,
+                                mediaUrl: val,
+                                file: val.trim() ? null : prev.file,
+                                previewObjectUrl: val.trim() ? null : prev.previewObjectUrl,
+                              };
+                            });
                             setUploadStatus(null);
                           }}
                           placeholder="https://example.com/artwork/image (supports any image format or extensionless CDN URL)"
@@ -1689,6 +1906,43 @@ export function ContributeClient({
                   </div>
                 )}
 
+                {stagedEntries.length > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-emerald-300">
+                      <span>
+                        Staged for Submission ({stagedEntries.length})
+                      </span>
+                      <span className="font-mono text-amber-300">
+                        +{totalStagedPoints} pts total
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {stagedEntries.map((cat) => (
+                        <span
+                          key={cat.key}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-emerald-500/30 text-[11px] font-semibold text-zinc-100"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setActiveCategory(cat.key)}
+                            className="hover:underline cursor-pointer"
+                          >
+                            {cat.shortLabel} (+{cat.points})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => clearCategoryDraft(cat.key)}
+                            title={`Remove ${cat.label}`}
+                            className="text-zinc-400 hover:text-red-400 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
@@ -1706,6 +1960,10 @@ export function ContributeClient({
                     <span>
                       {uploading
                         ? "Submitting for Verification..."
+                        : stagedEntries.length > 1
+                        ? `Submit ${stagedEntries.length} Assets (+${totalStagedPoints} pts)`
+                        : stagedEntries.length === 1
+                        ? `Submit ${stagedEntries[0].label} (+${stagedEntries[0].points} pts)`
                         : `Submit ${activeCategoryDef.label} (+${activeCategoryDef.points} pts)`}
                     </span>
                   </button>

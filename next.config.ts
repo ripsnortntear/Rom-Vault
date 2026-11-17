@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   basePath: "/roms",
+  experimental: {
+    proxyClientMaxBodySize: "160mb",
+  },
   images: {
     unoptimized: true,
   },

@@ -428,9 +428,10 @@ export function AdminModerationClient({
                         </div>
                       ) : isVideo && getYoutubeIdFromUrl(item.sourceUrl) ? (
                         <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${getYoutubeIdFromUrl(item.sourceUrl)}`}
+                          src={`https://www.youtube.com/embed/${getYoutubeIdFromUrl(item.sourceUrl)}`}
                           title={`${item.gameTitle} YouTube Preview`}
                           className="w-full h-full bg-black"
+                          referrerPolicy="strict-origin-when-cross-origin"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
                         />
