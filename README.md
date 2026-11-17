@@ -167,4 +167,4 @@ npx tsc --noEmit && npm run build
 
 ## 📄 License
 
-Released under the [MIT License](LICENSE).
+Released under the [GPL-3.0 license](LICENSE).
