@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-17
+
+### Added
+- **2P Rooms TabStationToo (PS2) & Sorted Desktop/Mobile Emulator Lists**: Enabled all 18 emulators (sorted alphabetically, including `Sony PlayStation 2 (TabStationToo)`, `GameCube`, `Dreamcast`, `Saturn`, `SGB`, `SGG`) in Desktop 2P Rooms while keeping Mobile 2P Rooms focused on the sorted 12-system list (`GB`, `GBA`, `GBC`, `N64`, `NES`, `Sega 32X`, `Genesis`, `SMS`, `Neo Geo`, `PSX`, `SGB`, `SNES`). Wired recursive nested-iframe canvas capture and `VAULT_MP_P1_INPUT` / `VAULT_MP_P2_INPUT` Port 1/2 pad forwarding into TabStationToo (`api.pad()`).
+
+### Fixed
+- **Neutral Repository Branding**: Generalized remaining site branding strings in auth pages, mailer templates, and scripts to `ROM Vault`.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added

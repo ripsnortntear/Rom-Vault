@@ -34,6 +34,7 @@ import {
   RoomChatMessage,
   MultiplayerSignal,
   SUPPORTED_MULTIPLAYER_SYSTEMS,
+  MOBILE_MULTIPLAYER_SYSTEMS,
   isSupportedMultiplayerSystem,
   isLinkCableSystem,
   getLinkCableAllowedSystems,
@@ -61,6 +62,24 @@ interface MultiplayerModalProps {
 }
 
 const MULTIPLAYER_SYSTEMS = SUPPORTED_MULTIPLAYER_SYSTEMS;
+
+function findCanvasInIframe(iframe: HTMLIFrameElement | null): HTMLCanvasElement | null {
+  try {
+    const doc = iframe?.contentDocument;
+    if (!doc) return null;
+    const direct =
+      (doc.querySelector("#mobile-emulator-container canvas") as HTMLCanvasElement | null) ||
+      (doc.querySelector("canvas#screen") as HTMLCanvasElement | null) ||
+      (doc.querySelector("canvas") as HTMLCanvasElement | null);
+    if (direct && direct.width > 0) return direct;
+    const nested = doc.querySelectorAll("iframe");
+    for (let i = 0; i < nested.length; i++) {
+      const found = findCanvasInIframe(nested[i] as HTMLIFrameElement);
+      if (found) return found;
+    }
+  } catch {}
+  return null;
+}
 
 /**
  * Standard Libretro Button Map for Player 2 (Port 1):
@@ -193,6 +212,24 @@ export function MultiplayerModal({
   const [guestGameSearchQuery, setGuestGameSearchQuery] = useState<string>("");
   const [selectedGuestSystemId, setSelectedGuestSystemId] = useState<string>("");
   const [mobileLobbyTab, setMobileLobbyTab] = useState<"setup" | "chat">("setup");
+
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
+  useEffect(() => {
+    const checkMobile = () => {
+      const coarse =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      setIsMobileViewport(window.innerWidth < 768 || coarse);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const availableSystems = useMemo(
+    () => (isMobileViewport ? MOBILE_MULTIPLAYER_SYSTEMS : MULTIPLAYER_SYSTEMS),
+    [isMobileViewport]
+  );
 
   const isLinkMode = Boolean(activeRoom && isLinkCableSystem(activeRoom.systemId));
 
@@ -334,16 +371,20 @@ export function MultiplayerModal({
         }
       } catch {}
 
-      // Also notify MobileEmulatorView inside iframe so input telemetry is recorded
+      // Also notify MobileEmulatorView & any nested standalone iframe (e.g. TabStationToo)
       try {
-        iframeWin.postMessage(
-          {
-            type: port === 0 ? "VAULT_MP_P1_INPUT" : "VAULT_MP_P2_INPUT",
-            buttonIndex,
-            value,
-          },
-          "*"
-        );
+        const msg = {
+          type: port === 0 ? "VAULT_MP_P1_INPUT" : "VAULT_MP_P2_INPUT",
+          buttonIndex,
+          value,
+        };
+        iframeWin.postMessage(msg, "*");
+        const nestedFrames = hostIframeRef.current?.contentDocument?.querySelectorAll("iframe");
+        if (nestedFrames) {
+          for (let i = 0; i < nestedFrames.length; i++) {
+            (nestedFrames[i] as HTMLIFrameElement).contentWindow?.postMessage(msg, "*");
+          }
+        }
       } catch {}
     },
     []
@@ -616,10 +657,7 @@ export function MultiplayerModal({
         streamAttachTimer = setInterval(async () => {
           if (streamAttached) return;
           try {
-            const iframeDoc = hostIframeRef.current?.contentDocument;
-            const canvas = iframeDoc?.querySelector(
-              "#mobile-emulator-container canvas"
-            ) as HTMLCanvasElement | null;
+            const canvas = findCanvasInIframe(hostIframeRef.current);
             if (canvas && typeof canvas.captureStream === "function") {
               streamAttached = true;
               const stream = canvas.captureStream(30);
@@ -696,10 +734,7 @@ export function MultiplayerModal({
 
       frameRelayTimer = setInterval(() => {
         try {
-          const iframeDoc = hostIframeRef.current?.contentDocument;
-          const srcCanvas = iframeDoc?.querySelector(
-            "#mobile-emulator-container canvas"
-          ) as HTMLCanvasElement | null;
+          const srcCanvas = findCanvasInIframe(hostIframeRef.current);
           if (srcCanvas && ctx && srcCanvas.width > 0) {
             ctx.drawImage(srcCanvas, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
             const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.52);
@@ -1397,7 +1432,7 @@ export function MultiplayerModal({
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-white/10 text-sm text-white focus:outline-none focus:border-emerald-500/60"
                   >
-                    {MULTIPLAYER_SYSTEMS.map((sys) => (
+                    {availableSystems.map((sys) => (
                       <option key={sys.id} value={sys.id}>
                         {sys.label} — {sys.core}
                       </option>
@@ -2001,7 +2036,7 @@ export function MultiplayerModal({
                           }}
                           className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-white/10 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500/60"
                         >
-                          {MULTIPLAYER_SYSTEMS.map((sys) => (
+                          {availableSystems.map((sys) => (
                             <option key={sys.id} value={sys.id}>
                               {sys.label} ({sys.core})
                             </option>

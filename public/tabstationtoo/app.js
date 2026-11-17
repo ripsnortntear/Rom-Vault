@@ -6733,6 +6733,33 @@
 	const PAD_INPUTS = ['Up', 'Right', 'Down', 'Left', 'Triangle', 'Circle', 'Cross', 'Square', 'Select', 'Start',
 		'L1', 'L2', 'R1', 'R2', 'L3', 'R3', 'Analog', 'LUp', 'LRight', 'LDown', 'LLeft', 'RUp', 'RRight', 'RDown', 'RLeft'];
 	const PAD_INDEX = Object.fromEntries(PAD_INPUTS.map((name, i) => [name, i]));
+	const LIBRETRO_TO_PS2_PAD = [
+		PAD_INDEX.Cross,    // 0: B / Cross
+		PAD_INDEX.Square,   // 1: Y / Square
+		PAD_INDEX.Select,   // 2: Select
+		PAD_INDEX.Start,    // 3: Start
+		PAD_INDEX.Up,       // 4: D-Pad Up
+		PAD_INDEX.Down,     // 5: D-Pad Down
+		PAD_INDEX.Left,     // 6: D-Pad Left
+		PAD_INDEX.Right,    // 7: D-Pad Right
+		PAD_INDEX.Circle,   // 8: A / Circle
+		PAD_INDEX.Triangle, // 9: X / Triangle
+		PAD_INDEX.L1,       // 10: L1
+		PAD_INDEX.R1,       // 11: R1
+		PAD_INDEX.L2,       // 12: L2
+		PAD_INDEX.R2,       // 13: R2
+	];
+	window.addEventListener('message', (ev) => {
+		const data = ev && ev.data;
+		if (!data || (data.type !== 'VAULT_MP_P1_INPUT' && data.type !== 'VAULT_MP_P2_INPUT')) return;
+		if (typeof api === 'undefined' || !api || typeof api.pad !== 'function') return;
+		const ps2Input = LIBRETRO_TO_PS2_PAD[Number(data.buttonIndex)];
+		if (ps2Input === undefined) return;
+		const port = data.type === 'VAULT_MP_P2_INPUT' ? 1 : 0;
+		try {
+			api.pad(port, ps2Input, data.value ? 1 : 0);
+		} catch {}
+	});
 	// Host key name (KEY_NAMES) -> the pad input it plays, as it comes. The player changes it on the controllers
 	// under the console (keyBinds, saved); KEY_PAD is what plays now. The Keys drawer shows the same layout.
 	const DEFAULT_KEY_PAD = {

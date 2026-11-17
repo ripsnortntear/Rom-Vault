@@ -107,30 +107,53 @@ export interface SupportedMultiplayerSystem {
 }
 
 /**
- * Supported initial console emulator cores for 2-player multiplayer rooms.
- * Dreamcast (flycast) and Sega Saturn (yabause/kronos) are explicitly removed and unsupported for 2P netplay rooms.
+ * All 18 playable console/arcade emulator systems supported in Desktop 2P Rooms,
+ * sorted alphabetically by display label.
  */
 export const SUPPORTED_MULTIPLAYER_SYSTEMS: ReadonlyArray<SupportedMultiplayerSystem> = [
-  { id: "snes", label: "Super Nintendo (SNES)", core: "snes9x (Libretro)" },
-  { id: "nes", label: "Nintendo Entertainment System (NES)", core: "fceumm (Libretro)" },
-  { id: "genesis", label: "Sega Genesis / Mega Drive", core: "genesis_plus_gx (Libretro)" },
-  { id: "n64", label: "Nintendo 64 (N64)", core: "mupen64plus_next (Libretro)" },
-  { id: "psx", label: "Sony PlayStation (PS1)", core: "pcsx_rearmed (Libretro)" },
   { id: "mame", label: "Arcade (MAME)", core: "mame2003_plus (Libretro)" },
-  { id: "neogeo", label: "SNK Neo Geo", core: "fbneo (Libretro)" },
+  { id: "gb", label: "Game Boy (GB)", core: "gambatte (Libretro)" },
   { id: "gba", label: "Game Boy Advance (GBA)", core: "mgba (Libretro)" },
   { id: "gbc", label: "Game Boy Color (GBC)", core: "gambatte (Libretro)" },
-  { id: "gb", label: "Game Boy (GB)", core: "gambatte (Libretro)" },
-  { id: "sms", label: "Sega Master System", core: "smsplus (Libretro)" },
+  { id: "n64", label: "Nintendo 64 (N64)", core: "mupen64plus_next (Libretro)" },
+  { id: "nes", label: "Nintendo Entertainment System (NES)", core: "fceumm (Libretro)" },
+  { id: "gamecube", label: "Nintendo GameCube", core: "gecko (Dolphin WASM)" },
   { id: "sega32x", label: "Sega 32X", core: "picodrive (Libretro)" },
+  { id: "dreamcast", label: "Sega Dreamcast", core: "flycast (Libretro)" },
+  { id: "sgg", label: "Sega Game Gear", core: "genesis_plus_gx (Libretro)" },
+  { id: "genesis", label: "Sega Genesis / Mega Drive", core: "genesis_plus_gx (Libretro)" },
+  { id: "sms", label: "Sega Master System", core: "smsplus (Libretro)" },
+  { id: "saturn", label: "Sega Saturn", core: "yabause (Libretro)" },
+  { id: "neogeo", label: "SNK Neo Geo", core: "fbneo (Libretro)" },
+  { id: "psx", label: "Sony PlayStation (PS1)", core: "pcsx_rearmed (Libretro)" },
+  { id: "ps2", label: "Sony PlayStation 2 (TabStationToo)", core: "tabstationtoo (PCSX2 WASM)" },
+  { id: "sgb", label: "Super Game Boy (SGB)", core: "gambatte (Libretro)" },
+  { id: "snes", label: "Super Nintendo (SNES)", core: "snes9x (Libretro)" },
 ];
 
-export const UNSUPPORTED_MULTIPLAYER_SYSTEMS = ["dreamcast", "saturn"] as const;
+export const MOBILE_MULTIPLAYER_SYSTEM_IDS = new Set<string>([
+  "snes",
+  "nes",
+  "genesis",
+  "n64",
+  "psx",
+  "neogeo",
+  "gba",
+  "gbc",
+  "sgb",
+  "gb",
+  "sms",
+  "sega32x",
+]);
+
+export const MOBILE_MULTIPLAYER_SYSTEMS: ReadonlyArray<SupportedMultiplayerSystem> =
+  SUPPORTED_MULTIPLAYER_SYSTEMS.filter((s) => MOBILE_MULTIPLAYER_SYSTEM_IDS.has(s.id));
+
+export const UNSUPPORTED_MULTIPLAYER_SYSTEMS = [] as const;
 
 export function isSupportedMultiplayerSystem(systemId: string | null | undefined): boolean {
   if (!systemId) return false;
   const norm = systemId.toLowerCase().trim();
-  if (norm === "dreamcast" || norm === "saturn") return false;
   return SUPPORTED_MULTIPLAYER_SYSTEMS.some((sys) => sys.id === norm);
 }
 
