@@ -1,6 +1,6 @@
 /**
  * Jellyfin API Integration & Single Sign-On Account Provisioning
- * Synchronizes user accounts, roles, and passwords between OldsmarChaos SSO and Jellyfin
+ * Synchronizes user accounts, roles, and passwords between ROM Vault SSO and Jellyfin
  * so users can authenticate on native Smart TV clients, Roku, Apple TV, and mobile apps.
  */
 

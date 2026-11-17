@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { getSafeRedirectUrl } from "./lib/auth/redirect";
 
-describe("OldsmarChaos SSO Redirect Flow & Safety Suite", () => {
+describe("ROM Vault SSO Redirect Flow & Safety Suite", () => {
   it("defaults to portal root '/' when no redirect parameter is provided", () => {
     expect(getSafeRedirectUrl(null)).toBe("/");
     expect(getSafeRedirectUrl(undefined)).toBe("/");

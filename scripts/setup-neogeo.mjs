@@ -90,7 +90,7 @@ async function downloadFile(url, destPath) {
 }
 
 async function main() {
-  console.log("=== OldsmarChaos Neo Geo Arcade Integration ===");
+  console.log("=== ROM Vault Neo Geo Arcade Integration ===");
 
   // Connect to MariaDB
   const connection = await mysql.createConnection({

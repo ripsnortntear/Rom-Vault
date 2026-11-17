@@ -48,7 +48,7 @@ export default function ForgotPasswordPage(): React.ReactElement {
           <Link
             href="/"
             className="flex items-center gap-3 group transition transform hover:scale-[1.02] mb-3"
-            title="OldsmarChaos Portal Home"
+            title="ROM Vault Portal Home"
           >
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-cyan-400/30 text-2xl font-black text-white">
               ⚡
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage(): React.ReactElement {
         <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
           <h1 className="text-xl font-bold text-white mb-2">Reset Password</h1>
           <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
-            Enter your registered email address and we will dispatch a secure link to reset your OldsmarChaos account password.
+            Enter your registered email address and we will dispatch a secure link to reset your ROM Vault account password.
           </p>
 
           {successMessage && (

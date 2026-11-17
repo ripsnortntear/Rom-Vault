@@ -79,7 +79,7 @@ function RegisterForm(): React.ReactElement {
           <Link
             href="/"
             className="flex items-center gap-3 group transition transform hover:scale-[1.02] mb-3"
-            title="OldsmarChaos Portal Home"
+            title="ROM Vault Portal Home"
           >
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-cyan-400/30 text-2xl font-black text-white">
               ⚡
@@ -240,7 +240,7 @@ function RegisterForm(): React.ReactElement {
                     </>
                   ) : (
                     <>
-                      <span>Create OldsmarChaos Account</span>
+                      <span>Create ROM Vault Account</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -265,9 +265,9 @@ function RegisterForm(): React.ReactElement {
             href="/"
             className="text-zinc-400 hover:text-cyan-400 transition flex items-center gap-1 font-medium"
           >
-            <span>&larr;</span> Return to OldsmarChaos Home
+            <span>&larr;</span> Return to ROM Vault Home
           </a>
-          <span>OldsmarChaos Unified Authentication &bull; Chaos in Harmony</span>
+          <span>ROM Vault Unified Authentication</span>
         </div>
       </div>
     </div>

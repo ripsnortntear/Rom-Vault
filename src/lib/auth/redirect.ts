@@ -1,5 +1,5 @@
 /**
- * Safely resolves post-authentication redirects for OldsmarChaos Single-Sign-On.
+ * Safely resolves post-authentication redirects for ROM Vault Single-Sign-On.
  * Defaults to portal home ("/") rather than scoped sub-apps unless explicitly requested.
  */
 export function getSafeRedirectUrl(param: string | null | undefined): string {

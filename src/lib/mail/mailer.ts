@@ -47,21 +47,21 @@ export async function sendVerificationEmail(
 ): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
   const verifyUrl = `${APP_URL}/auth/verify?token=${encodeURIComponent(verificationToken)}`;
 
-  const subject = "Verify your OldsmarChaos account";
+  const subject = "Verify your ROM Vault account";
 
   const plainText = `Hello ${username},
 
-Welcome to the OldsmarChaos platform! Please verify your email address.
+Welcome to the ROM Vault platform! Please verify your email address.
 
 Click the link below or copy and paste it into your browser:
 ${verifyUrl}
 
 This verification link will expire in 24 hours. Once your email is verified, your account registration will be reviewed by an administrator for approval within 24 hours. You will receive an automated email as soon as a decision is made.
 
-If you did not create an OldsmarChaos account, you can safely ignore this email.
+If you did not create an ROM Vault account, you can safely ignore this email.
 
 Best regards,
-The OldsmarChaos Team
+The ROM Vault Team
 ${APP_URL}
 `;
 
@@ -93,7 +93,7 @@ ${APP_URL}
     <div class="content">
       <h1>Verify Email Address</h1>
       <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
-      <p>Welcome to <strong>OldsmarChaos</strong>! To proceed with your account registration, please verify your email address below.</p>
+      <p>Welcome to <strong>ROM Vault</strong>! To proceed with your account registration, please verify your email address below.</p>
       <div class="button-container">
         <a href="${verifyUrl}" class="btn" target="_blank">Verify Email Address</a>
       </div>
@@ -105,7 +105,7 @@ ${APP_URL}
       <p style="margin-top: 12px; font-size: 12px; color: #71717a;">This verification link is valid for 24 hours. If you did not create this account, please disregard this message.</p>
     </div>
     <div class="footer">
-      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="${new URL(APP_URL).origin}" style="color: #ef4444; text-decoration: none;">${new URL(APP_URL).hostname}</a>
+      ROM Vault &bull; Retro Gaming Preservation &bull; <a href="${new URL(APP_URL).origin}" style="color: #ef4444; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>
@@ -235,11 +235,11 @@ export async function sendAccountApprovedEmail(
   username: string
 ): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
   const loginUrl = `${APP_URL}/auth/login`;
-  const subject = "Your OldsmarChaos Account Has Been Approved!";
+  const subject = "Your ROM Vault Account Has Been Approved!";
 
   const plainText = `Hello ${username},
 
-Great news! Your OldsmarChaos account registration has been reviewed and approved by an administrator.
+Great news! Your ROM Vault account registration has been reviewed and approved by an administrator.
 
 You can now log in to access the ROM Vault, Minecraft server, Jellyfin media, and other platform services:
 ${loginUrl}
@@ -247,7 +247,7 @@ ${loginUrl}
 If you have any questions or encounter any issues, please reply to this email or contact ${SMTP_USER}.
 
 Best regards,
-OldsmarChaos Administration
+ROM Vault Administration
 `;
 
   const html = `
@@ -286,7 +286,7 @@ OldsmarChaos Administration
       <p style="font-size: 13px; color: #71717a;">Direct link: <a href="${loginUrl}" style="color: #34d399;">${loginUrl}</a></p>
     </div>
     <div class="footer">
-      OldsmarChaos &bull; Chaos in Harmony &bull; <a href="${new URL(APP_URL).origin}" style="color: #34d399; text-decoration: none;">${new URL(APP_URL).hostname}</a>
+      ROM Vault &bull; Retro Gaming Preservation &bull; <a href="${new URL(APP_URL).origin}" style="color: #34d399; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>
@@ -321,18 +321,18 @@ export async function sendAccountDeniedEmail(
   username: string,
   reason?: string
 ): Promise<{ success: boolean; messageId?: string; simulated?: boolean }> {
-  const subject = "OldsmarChaos Account Registration Update";
+  const subject = "ROM Vault Account Registration Update";
 
   const plainText = `Hello ${username},
 
-Thank you for your interest in OldsmarChaos.
+Thank you for your interest in ROM Vault.
 
 Your account registration request was reviewed by an administrator and was not approved at this time.
 ${reason ? `Reason: ${reason}\n` : ""}
 If you believe this decision was made in error or have additional questions, please reach out to our team at ${SMTP_USER}.
 
 Best regards,
-OldsmarChaos Administration
+ROM Vault Administration
 `;
 
   const html = `
@@ -361,12 +361,12 @@ OldsmarChaos Administration
     <div class="content">
       <h1>Account Registration Status</h1>
       <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
-      <p>Your request to register an account on the OldsmarChaos platform was reviewed by an administrator and was not approved at this time.</p>
+      <p>Your request to register an account on the ROM Vault platform was reviewed by an administrator and was not approved at this time.</p>
       ${reason ? `<div class="reason-box"><strong>Administrator Note:</strong> ${escapeHtml(reason)}</div>` : ""}
       <p>If you believe this decision was made in error or wish to appeal, please contact us at <a href="mailto:${SMTP_USER}" style="color: #ef4444;">${SMTP_USER}</a>.</p>
     </div>
     <div class="footer">
-      OldsmarChaos Administration &bull; <a href="${new URL(APP_URL).origin}" style="color: #ef4444; text-decoration: none;">${new URL(APP_URL).hostname}</a>
+      ROM Vault Administration &bull; <a href="${new URL(APP_URL).origin}" style="color: #ef4444; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>
@@ -409,8 +409,8 @@ export async function sendAdminRegistrationNotificationEmail(newUser: {
   const approvalUrl = `${APP_URL}/admin/users`;
   const statusText = newUser.status || (newUser.isEmailVerified ? "Email Confirmed - Ready for Approval" : "Pending Administrator Approval");
   const subject = newUser.isEmailVerified
-    ? `[OldsmarChaos] Account Email Verified - Ready for Approval: ${newUser.username}`
-    : `[OldsmarChaos] New Account Registration - Approval Required: ${newUser.username}`;
+    ? `[ROM Vault] Account Email Verified - Ready for Approval: ${newUser.username}`
+    : `[ROM Vault] New Account Registration - Approval Required: ${newUser.username}`;
 
   const regDate = newUser.registeredAt
     ? new Date(newUser.registeredAt).toLocaleString("en-US", {
@@ -422,7 +422,7 @@ export async function sendAdminRegistrationNotificationEmail(newUser: {
 
   const plainText = `Hello,
 
-A new user account has registered on the OldsmarChaos platform and requires administrator review.
+A new user account has registered on the ROM Vault platform and requires administrator review.
 
 Account Details:
 - Username: ${newUser.username}
@@ -431,11 +431,11 @@ Account Details:
 - IP Address: ${newUser.ipAddress || "Unknown"}
 - Status: ${statusText}
 
-To review, approve, or deny this account, visit the OldsmarChaos User Management dashboard:
+To review, approve, or deny this account, visit the ROM Vault User Management dashboard:
 ${approvalUrl}
 
 Best regards,
-OldsmarChaos Automated Administration
+ROM Vault Automated Administration
 ${new URL(APP_URL).origin}
 `;
 
@@ -473,7 +473,7 @@ ${new URL(APP_URL).origin}
     <div class="content">
       <div class="badge">Approval Required</div>
       <h1>New User Registration</h1>
-      <p>A new user account has registered on the OldsmarChaos platform and requires administrator approval.</p>
+      <p>A new user account has registered on the ROM Vault platform and requires administrator approval.</p>
       
       <div class="info-card">
         <div class="info-row">
@@ -506,7 +506,7 @@ ${new URL(APP_URL).origin}
       <div class="link-box">${approvalUrl}</div>
     </div>
     <div class="footer">
-      OldsmarChaos Automated Administration &bull; <a href="${new URL(APP_URL).origin}" style="color: #00f0ff; text-decoration: none;">${new URL(APP_URL).hostname}</a>
+      ROM Vault Automated Administration &bull; <a href="${new URL(APP_URL).origin}" style="color: #00f0ff; text-decoration: none;">${new URL(APP_URL).hostname}</a>
     </div>
   </div>
 </body>

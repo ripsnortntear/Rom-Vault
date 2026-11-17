@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
     const session = await getCurrentSession();
     if (!session || !session.user) {
-      // User is not logged in to OldsmarChaos: redirect to login with return path
+      // User is not logged in to ROM Vault: redirect to login with return path
       const currentUrl = req.url;
       const loginUrl = new URL("/roms/auth/login", req.url);
       loginUrl.searchParams.set("redirect", currentUrl);

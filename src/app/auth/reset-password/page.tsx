@@ -74,7 +74,7 @@ function ResetPasswordForm(): React.ReactElement {
         <Link
           href="/"
           className="flex items-center gap-3 group transition transform hover:scale-[1.02] mb-3"
-          title="OldsmarChaos Portal Home"
+          title="ROM Vault Portal Home"
         >
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-cyan-400/30 text-2xl font-black text-white">
             ⚡
@@ -83,7 +83,7 @@ function ResetPasswordForm(): React.ReactElement {
             OLDSMAR<span className="text-cyan-400">CHAOS</span>
           </span>
         </Link>
-        <p className="text-xs text-zinc-400">Set a New OldsmarChaos Account Password</p>
+        <p className="text-xs text-zinc-400">Set a New ROM Vault Account Password</p>
       </div>
 
       <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
@@ -108,7 +108,7 @@ function ResetPasswordForm(): React.ReactElement {
           <>
             <h1 className="text-xl font-bold text-white mb-2">Create New Password</h1>
             <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
-              Choose a strong password for your unified OldsmarChaos account.
+              Choose a strong password for your unified ROM Vault account.
             </p>
 
             {errorMessage && (
